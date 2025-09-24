@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepFlow 升级包构建工具</title>
+    <!-- 引入Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* 深色主题样式 */
+        body {
+            background-color: #1e1e1e;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background-color: #2c2c2c;
+            border: none;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        /* 表单样式 */
+        .form-select,
+        .form-control {
+            background-color: #3a3a3a;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 6px;
+        }
+
+        .form-select option {
+            background-color: #1e1e1e;
+        }
+
+        /* 进度条 */
+        .progress {
+            height: 28px;
+            border-radius: 14px;
+            background-color: #3a3a3a;
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            border-radius: 14px;
+            transition: width 0.5s ease;
+        }
+
+        /* 日志容器 */
+        .log-container {
+            height: 350px;
+            overflow-y: auto;
+            background-color: #3a3a3a;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: "Consolas", "Microsoft YaHei", monospace;
+            font-size: 14px;
+            border: 1px solid #444;
+            line-height: 1.6;
+        }
+
+        /* 日志类型样式 */
+        .log-time {
+            color: #90caf9;
+        }
+
+        .log-info {
+            color: #e0e0e0;
+        }
+
+        .log-success {
+            color: #4caf50;
+            font-weight: 500;
+        }
+
+        .log-error {
+            color: #f44336;
+            font-weight: bold;
+        }
+
+        /* 按钮样式 */
+        .btn {
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        /* 提示框 */
+        .alert {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            max-width: 600px;
+            background-color: #2c2c2c;
+            border-color: #444;
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 class="text-center mb-5">DeepFlow 升级包构建工具</h1>
+        <div class="card">
+            <!-- 版本选择表单 -->
+            <form id="buildForm">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">当前Patch版本</label>
+                        <select class="form-select" id="currentVersion" required>
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">目标Patch版本</label>
+                        <select class="form-select" id="targetVersion" required disabled>
+                            <option value="">请先选择当前版本
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 py-3 fs-5" disabled>
+                    开始构建
+                </button>
+            </form>
+
+            <!-- 构建进度与日志区域（默认隐藏） -->
+            <div id="progressSection" class="mt-4" style="display: none;">
+                <!-- 进度条 -->
+                <div class="progress">
+                    <div id="progressBar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated"
+                        role="progressbar" style="width: 0%" aria-valuenow="0">0%</div>
+                </div>
+                <!-- 日志容器 -->
+                <div class="log-container mt-3" id="logOutput"></div>
+                <!-- 下载区域（默认隐藏） -->
+                <div id="downloadSection" class="text-center mt-4" style="display: none;">
+                    <a id="downloadLink" class="btn btn-success py-3 px-6 fs-5" target="_blank">
+                        📥 下载升级包
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let versionData = [];  // 存储从后端获取的版本列表
+        let eventSource = null;  // SSE连接对象
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchVersions();  // 获取版本列表
+            initEventListeners();  // 绑定事件监听
+        });
+
+        /**
+         * 从后端获取版本列表
+         */
+        async function fetchVersions() {
+            const currentSelect = document.getElementById('currentVersion');
+            currentSelect.innerHTML = '<option value="">加载中...</option>';
+
+            try {
+                const res = await fetch('/versions');
+                const data = await res.json();
+
+                if (data.success && data.versions) {
+                    versionData = data.versions;
+                    renderVersionOptions();  // 渲染版本下拉框
+                } else {
+                    showAlert('获取版本失败', data.message || '未知错误', 'error');
+                    currentSelect.innerHTML = '<option value="">加载失败</option>';
+                }
+            } catch (err) {
+                showAlert('网络错误', `获取版本失败：${err.message}`, 'error');
+                currentSelect.innerHTML = '<option value="">网络异常</option>';
+            }
+        }
+
+        /**
+         * 渲染版本下拉框选项
+         */
+        function renderVersionOptions() {
+            const currentSelect = document.getElementById('currentVersion');
+            const targetSelect = document.getElementById('targetVersion');
+            const buildBtn = document.querySelector('button[type="submit"]');
+
+            // 重置下拉框
+            currentSelect.innerHTML = '<option value="">请选择当前版本</option>';
+            targetSelect.innerHTML = '<option value="">请选择目标版本</option>';
+            targetSelect.disabled = true;
+            buildBtn.disabled = true;
+
+            // 按日期排序并添加选项
+            const sortedVersions = [...versionData].sort((a, b) => a.date.localeCompare(b.date));
+            sortedVersions.forEach(ver => {
+                const opt = document.createElement('option');
+                opt.value = ver.value;
+                opt.textContent = ver.display;
+                opt.dataset.date = ver.date;  // 存储日期用于后续筛选
+                currentSelect.appendChild(opt);
+            });
+        }
+
+        /**
+         * 初始化所有事件监听
+         */
+        function initEventListeners() {
+            // 当前版本选择变化：更新目标版本可选范围
+            document.getElementById('currentVersion').addEventListener('change', updateTargetVersionOptions);
+            // 目标版本选择变化：检查构建按钮是否可启用
+            document.getElementById('targetVersion').addEventListener('change', checkBuildBtnStatus);
+            // 构建表单提交：触发构建流程
+            document.getElementById('buildForm').addEventListener('submit', startBuildProcess);
+            // 下载链接点击：校验文件是否存在
+            document.getElementById('downloadLink').addEventListener('click', checkDownloadFile);
+        }
+
+        /**
+         * 根据当前版本更新目标版本可选范围（仅显示更新的版本）
+         */
+        function updateTargetVersionOptions() {
+            const currentOpt = document.getElementById('currentVersion').selectedOptions[0];
+            const targetSelect = document.getElementById('targetVersion');
+            targetSelect.innerHTML = '<option value="">请选择目标版本</option>';
+            targetSelect.disabled = true;
+
+            if (!currentOpt || !currentOpt.dataset.date) return;
+
+            // 筛选出日期晚于当前版本的目标版本
+            const currentDate = currentOpt.dataset.date;
+            const validTargets = versionData.filter(ver => ver.date > currentDate);
+
+            if (validTargets.length === 0) {
+                targetSelect.innerHTML = '<option value="">暂无更新版本</option>';
+            } else {
+                validTargets.forEach(ver => {
+                    const opt = document.createElement('option');
+                    opt.value = ver.value;
+                    opt.textContent = ver.display;
+                    opt.dataset.date = ver.date;
+                    targetSelect.appendChild(opt);
+                });
+                targetSelect.disabled = false;
+            }
+
+            checkBuildBtnStatus();  // 重新检查构建按钮状态
+        }
+
+        /**
+         * 检查构建按钮是否可启用（需同时选择当前和目标版本）
+         */
+        function checkBuildBtnStatus() {
+            const currentVal = document.getElementById('currentVersion').value;
+            const targetVal = document.getElementById('targetVersion').value;
+            const buildBtn = document.querySelector('button[type="submit"]');
+            buildBtn.disabled = !(currentVal && targetVal);
+        }
+
+        /**
+         * 启动构建流程（建立SSE连接，接收实时进度）
+         */
+        function startBuildProcess(e) {
+            e.preventDefault();  // 阻止表单默认提交
+
+            const currentVersion = document.getElementById('currentVersion').value;
+            const targetVersion = document.getElementById('targetVersion').value;
+            const buildBtn = document.querySelector('button[type="submit"]');
+            const progressSection = document.getElementById('progressSection');
+            const logOutput = document.getElementById('logOutput');
+            const downloadSection = document.getElementById('downloadSection');
+
+            // 初始化UI状态
+            buildBtn.disabled = true;
+            buildBtn.textContent = '构建中...';
+            progressSection.style.display = 'block';
+            logOutput.innerHTML = '';
+            downloadSection.style.display = 'none';
+            updateProgressBar(0, '构建任务已启动，等待后端响应...');
+
+            // 关闭之前的SSE连接（避免重复连接）
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
+            // 建立SSE连接，监听构建进度
+            eventSource = new EventSource(`/build?current=${encodeURIComponent(currentVersion)}&target=${encodeURIComponent(targetVersion)}`);
+
+            // 接收后端发送的状态消息
+            eventSource.onmessage = function (event) {
+                try {
+                    const statusData = JSON.parse(event.data);
+                    handleBuildStatus(statusData);  // 处理构建状态
+                } catch (err) {
+                    addLog(`消息解析失败：${err.message}`, 'error');
+                }
+            };
+
+            // SSE连接异常处理
+            eventSource.onerror = function (err) {
+                addLog(`SSE连接异常：${err.type}`, 'error');
+                resetBuildState();  // 重置构建状态
+            };
+        }
+
+        /**
+         * 处理后端返回的构建状态
+         */
+        function handleBuildStatus(statusData) {
+            const buildBtn = document.querySelector('button[type="submit"]');
+            const downloadLink = document.getElementById('downloadLink');
+            const downloadSection = document.getElementById('downloadSection');
+
+            switch (statusData.status) {
+                case 'progress':
+                    // 进度更新
+                    updateProgressBar(statusData.percent, statusData.message);
+                    addLog(statusData.message, 'info');
+                    break;
+                case 'complete':
+                    // 构建完成
+                    updateProgressBar(100, statusData.message);
+                    addLog(statusData.message, 'success');
+                    // 显示下载链接
+                    downloadLink.href = statusData.download_url;
+                    downloadSection.style.display = 'block';
+                    // 重置按钮状态
+                    buildBtn.disabled = false;
+                    buildBtn.textContent = '开始构建';
+                    // 关闭SSE连接
+                    if (eventSource) {
+                        eventSource.close();
+                        eventSource = null;
+                    }
+                    break;
+                case 'error':
+                    // 构建失败
+                    updateProgressBar(0, statusData.message);
+                    addLog(statusData.message, 'error');
+                    resetBuildState();  // 重置状态
+                    break;
+                default:
+                    addLog(`未知状态：${statusData.status}`, 'info');
+            }
+        }
+
+        /**
+         * 更新进度条
+         */
+        function updateProgressBar(percent, message) {
+            const progressBar = document.getElementById('progressBar');
+            const safePercent = Math.max(0, Math.min(100, percent));  // 确保进度在0-100之间
+
+            // 更新进度条样式和文本
+            progressBar.style.width = `${safePercent}%`;
+            progressBar.textContent = `${safePercent}%`;
+            progressBar.setAttribute('aria-valuenow', safePercent);
+
+            // 根据状态切换进度条颜色
+            if (message.includes('失败')) {
+                progressBar.className = 'progress-bar bg-danger progress-bar-striped';
+            } else if (safePercent === 100) {
+                progressBar.className = 'progress-bar bg-success progress-bar-striped';
+            } else {
+                progressBar.className = 'progress-bar bg-primary progress-bar-striped progress-bar-animated';
+            }
+        }
+
+        /**
+         * 添加日志到日志容器
+         */
+        function addLog(message, type = 'info') {
+            const logOutput = document.getElementById('logOutput');
+            const logDiv = document.createElement('div');
+            const timeStamp = new Date().toTimeString().slice(0, 8);  // 提取时分秒
+
+            // 根据日志类型设置样式
+            if (type === 'error') {
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-error">❌ ${message}</span>`;
+            } else if (type === 'success') {
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-success">✅ ${message}</span>`;
+            } else {
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-info">ℹ️ ${message}</span>`;
+            }
+
+            logOutput.appendChild(logDiv);
+            // 滚动到最新日志
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
+        /**
+         * 重置构建状态（失败或异常时）
+         */
+        function resetBuildState() {
+            const buildBtn = document.querySelector('button[type="submit"]');
+            buildBtn.disabled = false;
+            buildBtn.textContent = '开始构建';
+            // 关闭SSE连接
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+        }
+
+        /**
+         * 校验下载文件是否存在（避免无效下载）
+         */
+        async function checkDownloadFile(e) {
+            const downloadLink = this;
+            const downloadUrl = downloadLink.href;
+
+            // 临时禁用下载按钮，显示加载状态
+            downloadLink.classList.add('disabled');
+            downloadLink.textContent = '校验文件中...';
+
+            try {
+                // 发送HEAD请求校验文件（不下载完整文件）
+                const res = await fetch(downloadUrl, { method: 'HEAD' });
+                if (res.ok) {
+                    // 文件存在，恢复按钮状态
+                    downloadLink.classList.remove('disabled');
+                    downloadLink.textContent = '📥 下载升级包';
+                } else {
+                    // 文件不存在，阻止下载
+                    e.preventDefault();
+                    downloadLink.classList.remove('disabled');
+                    downloadLink.textContent = '📥 下载升级包';
+                    showAlert('下载失败', `文件不存在或已过期（状态码：${res.status}）`, 'error');
+                }
+            } catch (err) {
+                // 网络错误，阻止下载
+                e.preventDefault();
+                downloadLink.classList.remove('disabled');
+                downloadLink.textContent = '📥 下载升级包';
+                showAlert('网络错误', `校验文件失败：${err.message}`, 'error');
+            }
+        }
+
+        /**
+         * 显示提示框（成功/错误）
+         */
+        function showAlert(title, message, type = 'info') {
+            // 创建提示框元素
+            const alertDiv = document.createElement('div');
+            const alertClass = type === 'error' ? 'alert-danger' : 'alert-info';
+            alertDiv.className = `alert ${alertClass} alert-dismissible fade show`;
+            alertDiv.role = 'alert';
+            alertDiv.innerHTML = `
+                                            <h5 class="alert-heading">${title}</h5>
+                                            <p>${message}</p>
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        `;
+
+            // 添加到页面并显示
+            document.querySelector('.container').prepend(alertDiv);
+            const alertInstance = new bootstrap.Alert(alertDiv);
+
+            // 5秒后自动关闭
+            setTimeout(() => {
+                alertInstance.close();
+                alertDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+
+</html>

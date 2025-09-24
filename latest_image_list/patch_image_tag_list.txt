@@ -1,0 +1,2 @@
+deepflow-server:v6.6.5470
+manager:v6.6.736
