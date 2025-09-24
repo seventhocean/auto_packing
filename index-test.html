@@ -10,7 +10,7 @@
     <!-- 引入Font Awesome -->
     <link rel="stylesheet" href="all.min.css">
     <style>
-        /* 深色色主题样式 */
+        /* 深色主题样式 */
         body {
             background-color: #1e1e1e;
             color: #fff;
@@ -20,10 +20,8 @@
         }
 
         .container {
-            max-width: 1600px;
-            /* 加宽容器最大宽度 */
+            max-width: 1200px;
             margin: 0 auto;
-            padding: 0 15px;
         }
 
         .card {
@@ -33,26 +31,6 @@
             border-radius: 10px;
             padding: 30px;
             margin-bottom: 30px;
-        }
-
-        /* 表单标题和描述文字 - 确保白色 */
-        .form-label,
-        .section-title,
-        .section-desc {
-            color: #ffffff !important;
-            /* 强制白色 */
-            font-weight: 500;
-        }
-
-        .section-title {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .section-desc {
-            font-size: 0.95rem;
-            margin-bottom: 1rem;
-            opacity: 0.9;
         }
 
         /* 表单样式 */
@@ -144,8 +122,6 @@
             border-radius: 6px;
             padding: 15px;
             margin-top: 10px;
-            width: 100%;
-            /* 确保宽度100% */
         }
 
         .file-item {
@@ -166,8 +142,6 @@
             white-space: nowrap;
             margin-right: 10px;
             flex-grow: 1;
-            color: #ffffff;
-            /* 文件名白色 */
         }
 
         /* 使用教程按钮 */
@@ -230,10 +204,6 @@
                 bottom: 20px;
                 right: 20px;
             }
-
-            .container {
-                max-width: 100%;
-            }
         }
     </style>
 </head>
@@ -245,17 +215,17 @@
             <div class="row">
                 <!-- 左侧：现有版本选择表单 -->
                 <div class="col-md-6 pe-md-4">
-                    <h3 class="section-title">构建新升级包</h3>
+                    <h3 class="mb-4">构建新升级包</h3>
                     <form id="buildForm">
                         <div class="row mb-4">
                             <div class="col-md-12">
-                                <label class="form-label">当前Patch版本</label>
+                                <label class="form-label fw-bold">当前Patch版本</label>
                                 <select class="form-select" id="currentVersion" required>
                                     <option value="">加载中...</option>
                                 </select>
                             </div>
                             <div class="col-md-12 mt-3">
-                                <label class="form-label">目标Patch版本</label>
+                                <label class="form-label fw-bold">目标Patch版本</label>
                                 <select class="form-select" id="targetVersion" required disabled>
                                     <option value="">请先选择当前版本
                                 </select>
@@ -269,14 +239,13 @@
 
                 <!-- 右侧：新增的已有文件列表表单 -->
                 <div class="col-md-6 ps-md-4">
-                    <h3 class="section-title">已有升级包</h3>
-                    <p class="section-desc">可直接下载以下已生成的升级包，避免重复构建</p>
+                    <h3 class="mb-4">已有升级包</h3>
+                    <p class="text-muted mb-2">可直接下载以下已生成的升级包，避免重复构建</p>
                     <div class="existing-files-container" id="existingFilesContainer">
-                        <div class="text-center text-white" id="filesLoading"> <!-- 加载提示改为白色 -->
+                        <div class="text-center text-muted" id="filesLoading">
                             <i class="fas fa-spinner fa-spin"></i> 加载中...
                         </div>
-                        <div id="noFilesMessage" style="display: none; text-align: center; color: white;">
-                            <!-- 无文件提示改为白色 -->
+                        <div id="noFilesMessage" style="display: none; text-align: center;">
                             暂无已生成的升级包
                         </div>
                         <div id="filesList" style="display: none;"></div>
@@ -351,7 +320,7 @@
     </div>
 
     <!-- 引入Bootstrap JS -->
-    <script src="bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let versionData = [];  // 存储从后端获取的版本列表
         let eventSource = null;  // SSE连接对象
@@ -359,7 +328,7 @@
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
             fetchVersions();  // 获取版本列表
-            fetchExistingFiles();  // 获取已有升级包列表
+            fetchExistingFiles();  // 新增：获取已有升级包列表
             initEventListeners();  // 绑定事件监听
         });
 
@@ -388,7 +357,7 @@
         }
 
         /**
-         * 从后端获取已有升级包列表
+         * 新增：从后端获取已有升级包列表
          */
         async function fetchExistingFiles() {
             const filesLoading = document.getElementById('filesLoading');
@@ -396,6 +365,7 @@
             const filesList = document.getElementById('filesList');
 
             try {
+                // 假设后端新增了一个接口返回已有文件列表
                 const res = await fetch('/existing-packages');
                 const data = await res.json();
 
@@ -428,7 +398,7 @@
                             <div class="file-name" title="${file.name}">
                                 <i class="fas fa-file-archive me-2"></i>
                                 ${displayText}
-                                <span class="text-white ms-2" style="font-size: 0.8em;">(${fileSizeMB} MB)</span>
+                                <span class="text-muted ms-2" style="font-size: 0.8em;">(${fileSizeMB} MB)</span>
                             </div>
                             <a href="/download-existing/${encodeURIComponent(file.name)}" 
                                class="btn btn-sm btn-outline-light download-existing-btn"
@@ -458,7 +428,7 @@
         }
 
         /**
-         * 渲染版本下拉框选项（关键：不做二次排序，直接用后端返回顺序）
+         * 渲染版本下拉框选项
          */
         function renderVersionOptions() {
             const currentSelect = document.getElementById('currentVersion');
@@ -471,17 +441,16 @@
             targetSelect.disabled = true;
             buildBtn.disabled = true;
 
-            // 🌟 关键修改：直接使用后端返回的列表（已按序号排序），不做任何排序
-            // 移除原有的 const sortedVersions = [...versionData].sort(...) 逻辑
-            versionData.forEach(ver => {
+            // 按日期排序并添加选项
+            const sortedVersions = [...versionData].sort((a, b) => a.date.localeCompare(b.date));
+            sortedVersions.forEach(ver => {
                 const opt = document.createElement('option');
                 opt.value = ver.value;
                 opt.textContent = ver.display;
-                opt.dataset.date = ver.date;  // 保留日期数据（仅用于后续筛选目标版本）
+                opt.dataset.date = ver.date;  // 存储日期用于后续筛选
                 currentSelect.appendChild(opt);
             });
         }
-
 
         /**
          * 初始化所有事件监听
@@ -498,51 +467,34 @@
         }
 
         /**
-         * 根据当前版本更新目标版本可选范围（按序号筛选，仅保留序号高于当前版本的目标版本）
+         * 根据当前版本更新目标版本可选范围（仅显示更新的版本）
          */
         function updateTargetVersionOptions() {
-            const currentSelect = document.getElementById('currentVersion');
-            const currentOpt = currentSelect.selectedOptions[0];
+            const currentOpt = document.getElementById('currentVersion').selectedOptions[0];
             const targetSelect = document.getElementById('targetVersion');
             targetSelect.innerHTML = '<option value="">请选择目标版本</option>';
             targetSelect.disabled = true;
 
-            if (!currentOpt) return;
+            if (!currentOpt || !currentOpt.dataset.date) return;
 
-            // 从当前选中版本的display文本中提取序号
-            const currentDisplay = currentOpt.textContent;
-            const currentSeqMatch = currentDisplay.match(/^(\d{2})-/);
-            if (!currentSeqMatch) {
-                // 如果无法提取序号，保持禁用状态
-                return;
-            }
-            const currentSeq = parseInt(currentSeqMatch[1], 10);
-
-            // 筛选：仅保留序号高于当前版本的目标版本，沿用后端返回的顺序
-            const validTargets = versionData.filter(ver => {
-                // 从版本数据中提取序号
-                const seqMatch = ver.display.match(/^(\d{2})-/);
-                if (!seqMatch) return false;
-                const verSeq = parseInt(seqMatch[1], 10);
-                return verSeq > currentSeq;
-            });
+            // 筛选出日期晚于当前版本的目标版本
+            const currentDate = currentOpt.dataset.date;
+            const validTargets = versionData.filter(ver => ver.date > currentDate);
 
             if (validTargets.length === 0) {
                 targetSelect.innerHTML = '<option value="">暂无更新版本</option>';
             } else {
-                // 直接渲染筛选后的列表（顺序与后端返回一致）
                 validTargets.forEach(ver => {
                     const opt = document.createElement('option');
                     opt.value = ver.value;
                     opt.textContent = ver.display;
-                    opt.dataset.seq = ver.seq_num; // 存储序号用于可能的后续处理
-                    opt.dataset.date = ver.date;    // 仍保留日期数据
+                    opt.dataset.date = ver.date;
                     targetSelect.appendChild(opt);
                 });
                 targetSelect.disabled = false;
             }
 
-            checkBuildBtnStatus();
+            checkBuildBtnStatus();  // 重新检查构建按钮状态
         }
 
         /**
@@ -738,7 +690,7 @@
         }
 
         /**
-         * 校验已有文件下载
+         * 新增：校验已有文件下载
          */
         async function checkExistingFileDownload(e) {
             const downloadBtn = this;

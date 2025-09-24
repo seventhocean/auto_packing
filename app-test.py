@@ -8,48 +8,48 @@ import json
 import shutil
 from flask import Flask, request, Response, jsonify, send_file, abort
 import traceback
-from urllib.parse import quote
-from wsgiref.util import FileWrapper  # 用于流式传输
+from urllib.parse import quote, unquote
 
 # 初始化Flask应用
 app = Flask(__name__, static_folder='.', static_url_path='')
 build_status = {}  # 存储构建任务状态（SSE实时更新用）
+build_semaphore = threading.Semaphore(3)  # 限制最大并发任务数为3
 
 # -------------------------- 基础配置（与项目结构对齐） --------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMAGE_TAR_DIR = os.path.join(BASE_DIR, 'image_tar')       # 镜像/升级包目录
+IMAGE_TAR_ROOT = os.path.join(BASE_DIR, 'images')       # 镜像临时存储根目录（按任务分目录）
+UPGRADE_PACKAGE_DIR = os.path.join(BASE_DIR, 'upgrade_packages')  # 最终升级包存储目录（TAR.GZ）
 LATEST_LIST_DIR = os.path.join(BASE_DIR, 'latest_image_list')  # 镜像列表目录
 PATCH_LIST_PATH = os.path.join(LATEST_LIST_DIR, 'patch_image_tag_list.txt')  # 镜像列表文件
 PULL_SCRIPT_PATH = os.path.join(BASE_DIR, 'pull_save.sh') # 镜像拉取脚本
 LOG_DIR = os.path.join(BASE_DIR, 'logs')                  # 日志目录
-# 新增：生成patch_list.txt的脚本路径
-PATCH_LIST_SCRIPT_PATH = os.path.join(BASE_DIR, 'get_patch_image_tag_list.sh')  # 替换为实际脚本路径
+# 生成patch_list.txt的脚本路径（需替换为实际路径）
+PATCH_LIST_SCRIPT_PATH = os.path.join(BASE_DIR, 'get_patch_image_tag_list.sh')
 
-# 确保目录存在（首次运行自动创建）
-for dir_path in [IMAGE_TAR_DIR, LATEST_LIST_DIR, LOG_DIR]:
+# 确保目录存在（首次运行自动创建，避免手动创建）
+for dir_path in [IMAGE_TAR_ROOT, UPGRADE_PACKAGE_DIR, LATEST_LIST_DIR, LOG_DIR]:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
+        write_log(f"自动创建目录：{dir_path}")
 
 
-# -------------------------- 工具函数 --------------------------
+# -------------------------- 工具函数（新增文件列表处理） --------------------------
 def write_log(content, level="INFO"):
     """写日志（含时间戳，同时输出到文件和控制台）"""
     log_file = os.path.join(LOG_DIR, 'app.log')
     timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
     log_line = f"[{timestamp}] [{level}] {content}\n"
-    # 写入文件
+    # 写入文件（追加模式，避免覆盖历史日志）
     with open(log_file, 'a', encoding='utf-8') as f:
         f.write(log_line)
-    # 打印到控制台
+    # 打印到控制台（便于实时查看）
     print(log_line.strip())
 
-
 def get_oss_versions():
-    """从OSS获取x86_64架构的补丁版本列表（供前端下拉框）
-    前端显示格式：01-20250430-26798-BUG（去掉末尾的_x86_64）
+    """从OSS获取x86_64架构的补丁版本列表（供前端下拉框用）
+    按文件名前缀序号（01~16）排序，前端直接沿用此顺序，无需二次排序
     """
     try:
-        # 调用ossutil列出目标目录下的文件（仅当前目录，不递归子目录）
         result = subprocess.run(
             ["ossutil", "ls", "-d", "oss://df-patch-no-delete/patch/6.6/6.6.9/"],
             stdout=subprocess.PIPE,
@@ -59,334 +59,540 @@ def get_oss_versions():
         )
         
         versions = []
-        seen_versions = set()  # 去重：避免同一版本（去后缀后）重复添加
+        seen_versions = set()
         
         for line in result.stdout.split('\n'):
             line = line.strip()
-            # 筛选条件：仅保留x86_64架构的.tar.gz文件，排除目录行
             if line and ".tar.gz" in line and "x86_64" in line and not line.endswith('/'):
-                # 步骤1：提取文件名（如"01-20250430-26798-BUG_x86_64.tar.gz"）
+                # 提取完整文件名（如"01-20250430-26798-BUG_x86_64.tar.gz"）
                 file_name = line.split('/')[-1]
-                # 步骤2：去掉.tar.gz后缀（得到"01-20250430-26798-BUG_x86_64"）
+                # 1. 先提取序号（从原始文件名提取，避免后续处理丢失）
+                seq_match = re.search(r'^(\d{2})-', file_name)
+                seq_num = int(seq_match.group(1)) if seq_match else 99  # 异常序号放最后
+                
+                # 2. 处理前端显示的版本名（去掉.tar.gz和_x86_64）
                 version_with_arch = file_name[:-len(".tar.gz")]
-                # 步骤3：去掉末尾的"_x86_64"（得到前端需要的格式，如"01-20250430-26798-BUG"）
-                # rstrip('_x86_64') 确保仅从末尾移除，避免影响中间包含的"x86_64"（若有）
                 display_version = version_with_arch.rstrip('_x86_64')
                 
-                # 去重：基于去后缀后的版本字符串，避免重复添加
                 if display_version not in seen_versions:
                     seen_versions.add(display_version)
-                    # 提取日期部分（如"20250430"），用于按时间排序
                     date_match = re.search(r'(\d{8})', display_version)
-                    date_str = date_match.group(1) if date_match else ""
-                    
                     versions.append({
-                        'value': display_version,  # 下拉框值（与显示值一致）
-                        'display': display_version,  # 前端显示文本（无_x86_64）
-                        'date': date_str  # 排序用的日期
+                        'value': display_version,
+                        'display': display_version,
+                        'seq_num': seq_num,  # 后端排序依据（前端无需使用）
+                        'date': date_match.group(1) if date_match else ""  # 仅存储，不排序
                     })
         
-        # 按日期升序排序（确保版本按时间先后排列）
-        versions.sort(key=lambda x: x['date'])
-        write_log(f"从OSS获取x86_64版本成功，共{len(versions)}个有效版本")
+        # 后端严格按序号升序排序（01→16），前端直接用此顺序
+        versions.sort(key=lambda x: x['seq_num'])
+        write_log(f"OSS版本按序号排序完成，共{len(versions)}个版本")
         return versions
     
-    except subprocess.CalledProcessError as e:
-        # 捕获ossutil命令执行错误（如路径不存在、权限不足）
-        error_msg = f"OSS命令执行失败：{e.stderr.strip()}"
-        write_log(error_msg, level="ERROR")
-        return []
     except Exception as e:
-        # 捕获其他异常（如解析失败、网络问题）
         error_msg = f"OSS版本获取失败：{str(e)}"
         write_log(error_msg, level="ERROR")
         return []
 
+def get_existing_packages():
+    """新增：获取UPGRADE_PACKAGE_DIR目录下的所有tar.gz升级包列表
+    返回格式：[{name: 文件名, size: 文件大小(字节)}, ...]
+    """
+    try:
+        # 1. 筛选目录下所有.tar.gz文件（仅文件，排除目录）
+        package_pattern = os.path.join(UPGRADE_PACKAGE_DIR, "*.tar.gz")
+        package_files = glob.glob(package_pattern)
+        
+        # 2. 处理每个文件，提取名称和大小
+        packages = []
+        for file_path in package_files:
+            if os.path.isfile(file_path):  # 再次确认是文件（避免符号链接等异常）
+                file_name = os.path.basename(file_path)
+                file_size = os.path.getsize(file_path)  # 单位：字节
+                packages.append({
+                    "name": file_name,
+                    "size": file_size
+                })
+        
+        # 3. 按文件修改时间降序排序（最新生成的包排在前面）
+        packages.sort(key=lambda x: os.path.getmtime(os.path.join(UPGRADE_PACKAGE_DIR, x["name"])), reverse=True)
+        write_log(f"获取已有升级包成功，共{len(packages)}个有效包")
+        return packages
+    
+    except Exception as e:
+        error_msg = f"获取已有升级包列表失败：{str(e)}"
+        write_log(error_msg, level="ERROR")
+        return []
+
+
+def validate_package_filename(filename):
+    """新增：校验文件名合法性（防止目录遍历攻击）
+    规则：1. 仅允许.tar.gz后缀；2. 不包含../等路径字符；3. 文件必须在UPGRADE_PACKAGE_DIR目录内
+    """
+    # 1. 禁止空文件名
+    if not filename:
+        return False, "文件名不能为空"
+    
+    # 2. 仅允许.tar.gz后缀
+    if not filename.endswith(".tar.gz"):
+        return False, "仅支持.tar.gz格式的升级包"
+    
+    # 3. 禁止包含路径分隔符（防止目录遍历，如../../etc/passwd.tar.gz）
+    if "/" in filename or "\\" in filename:
+        return False, "文件名不允许包含路径分隔符"
+    
+    # 4. 计算绝对路径，确保在安全目录内
+    safe_dir_abs = os.path.abspath(UPGRADE_PACKAGE_DIR)
+    file_path_abs = os.path.abspath(os.path.join(UPGRADE_PACKAGE_DIR, filename))
+    if not file_path_abs.startswith(safe_dir_abs):
+        return False, "文件不在允许的下载目录内"
+    
+    # 5. 确认文件存在且是普通文件
+    if not os.path.exists(file_path_abs) or not os.path.isfile(file_path_abs):
+        return False, "文件不存在或不是有效文件"
+    
+    return True, file_path_abs  # 校验通过，返回文件绝对路径
+
 
 def run_build_task(task_id, current_version, target_version):
-    """核心构建任务：执行构建list脚本→拉取镜像→打包升级包"""
-    try:
-        # 1. 初始化任务状态
-        build_status[task_id] = {
-            "status": "progress",
-            "percent": 0,
-            "message": "初始化构建任务，检查依赖"
-        }
-        write_log(f"任务[{task_id}]启动：{current_version} → {target_version}")
-        time.sleep(1)
+    """核心构建任务：执行构建list脚本→拉取镜像→打包TAR.GZ格式升级包"""
+    with build_semaphore:  # 控制并发任务数量
+        # 1. 创建任务专属目录（用版本+任务ID命名，确保唯一性，避免文件冲突）
+        task_dir_name = f"{current_version}_to_{target_version}_{task_id}"
+        task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
+        # 确保任务目录存在（不存在则创建，存在则清空历史残留）
+        if os.path.exists(task_image_dir):
+            shutil.rmtree(task_image_dir)
+        os.makedirs(task_image_dir, exist_ok=True)
 
-        # 2. 检查核心依赖（新增生成patch_list脚本的检查）
-        if not os.path.exists(PATCH_LIST_SCRIPT_PATH):
-            raise Exception(f"生成patch_list脚本缺失：{PATCH_LIST_SCRIPT_PATH}")
-        if not os.path.exists(PULL_SCRIPT_PATH):
-            raise Exception(f"拉取脚本缺失：{PULL_SCRIPT_PATH}")
-        
-        build_status[task_id] = {
-            "status": "progress",
-            "percent": 10,
-            "message": "依赖检查通过，开始执行构建list脚本"
-        }
-        time.sleep(1)
+        # 创建任务专属日志文件（记录脚本详细输出，避免实时刷屏）
+        task_log_path = os.path.join(LOG_DIR, f"task_{task_id}.log")
 
-        # 3. 执行构建list脚本（生成patch_list.txt）
-        build_status[task_id] = {
-            "status": "progress",
-            "percent": 20,
-            "message": f"执行生成patch_list脚本，参数：{current_version} {target_version}"
-        }
-        
-        # 执行脚本：bash 脚本路径 current_version target_version
-        script_result = subprocess.run(
-            ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        
-        # 验证脚本执行结果（检查是否生成了patch_list.txt）
-        if not os.path.exists(PATCH_LIST_PATH):
-            raise Exception(f"脚本执行失败：未生成{PATCH_LIST_PATH}文件")
-        
-        write_log(f"生成patch_list脚本执行成功！输出：\n{script_result.stdout}")
-        build_status[task_id] = {
-            "status": "progress",
-            "percent": 40,
-            "message": "patch_list.txt生成完成，开始拉取镜像"
-        }
-        time.sleep(1)
+        try:
+            # 2. 初始化任务状态（SSE实时推送用）
+            build_status[task_id] = {
+                "status": "progress",
+                "percent": 0,
+                "message": "初始化构建任务，检查核心依赖"
+            }
+            write_log(f"任务[{task_id}]启动：版本升级 {current_version} → {target_version}")
+            time.sleep(1)  # 预留SSE状态推送时间，避免前端接收延迟
 
-        # 4. 调用pull_save.sh拉取镜像（使用新生成的patch_list.txt）
-        pull_result = subprocess.run(
-            ["/bin/bash", PULL_SCRIPT_PATH, "-d", IMAGE_TAR_DIR],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        write_log(f"镜像拉取输出：\n{pull_result.stdout}")
-        build_status[task_id] = {
-            "status": "progress",
-            "percent": 70,
-            "message": "镜像拉取完成，开始打包升级包"
-        }
-        time.sleep(2)
+            # 3. 检查核心依赖脚本（缺失则直接终止任务）
+            dependencies = [
+                (PATCH_LIST_SCRIPT_PATH, "生成patch_list的Shell脚本"),
+                (PULL_SCRIPT_PATH, "镜像拉取的Shell脚本")
+            ]
+            for dep_path, dep_desc in dependencies:
+                if not os.path.exists(dep_path):
+                    raise Exception(f"核心依赖缺失：{dep_desc}路径不存在 → {dep_path}")
+            
+            build_status[task_id] = {
+                "status": "progress",
+                "percent": 10,
+                "message": "所有依赖检查通过，开始生成镜像列表"
+            }
+            write_log(f"任务[{task_id}]依赖检查通过：所有Shell脚本均存在")
+            time.sleep(1)
 
-        # 5. 打包升级包（含镜像.tar + 新生成的patch_list.txt）
-        os.chdir(IMAGE_TAR_DIR)
-        tar_files = glob.glob("*.tar")  # 获取所有镜像文件
-        if not tar_files:
-            raise Exception(f"镜像目录{IMAGE_TAR_DIR}无镜像文件（拉取失败）")
-        
-        # 复制新生成的镜像列表到打包目录
-        temp_patch_list = os.path.join(IMAGE_TAR_DIR, 'patch_image_tag_list.txt')
-        shutil.copy2(PATCH_LIST_PATH, temp_patch_list)
-        tar_files.append(temp_patch_list)
+            # 4. 执行get_patch_image_tag_list.sh，生成镜像拉取清单
+            build_status[task_id] = {
+                "status": "progress",
+                "percent": 20,
+                "message": f"执行镜像列表生成脚本，参数：{current_version} {target_version}"
+            }
+            # 调用Shell脚本，传递当前版本和目标版本参数
+            with open(task_log_path, 'a', encoding='utf-8') as f:
+                script_result = subprocess.run(
+                    ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version],
+                    check=True,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True
+                )
+            # 验证脚本执行结果：必须生成patch_image_tag_list.txt
+            if not os.path.exists(PATCH_LIST_PATH):
+                raise Exception(f"镜像列表脚本执行失败：未在{LATEST_LIST_DIR}生成patch_image_tag_list.txt")
+            
+            # 读取并记录脚本输出日志
+            with open(task_log_path, 'r', encoding='utf-8') as f:
+                script_log = f.read()
+            write_log(f"任务[{task_id}]镜像列表生成成功！脚本输出：\n{script_log}")
+            build_status[task_id] = {
+                "status": "progress",
+                "percent": 40,
+                "message": "镜像拉取清单生成完成，开始拉取镜像文件"
+            }
+            time.sleep(1)
 
-        # 生成升级包文件名
-        upgrade_package = f"upgrade_{current_version}_to_{target_version}_{task_id}.zip"
-        upgrade_path = os.path.join(IMAGE_TAR_DIR, upgrade_package)
+            # 5. 执行pull_save.sh，拉取镜像到任务专属目录
+            build_status[task_id] = {
+                "status": "progress",
+                "percent": 50,
+                "message": f"正在拉取镜像，存储路径：{task_image_dir}"
+            }
+            # 调用拉取脚本，指定任务专属目录（确保镜像仅属于当前任务）
+            with open(task_log_path, 'a', encoding='utf-8') as f:
+                pull_result = subprocess.run(
+                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir],
+                    check=True,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True
+                )
+            # 验证镜像拉取结果：任务目录必须有.tar文件
+            tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
+            if not tar_files:
+                raise Exception(f"镜像拉取失败：任务目录{task_image_dir}无任何.tar镜像文件")
+            
+            # 读取并记录拉取日志
+            with open(task_log_path, 'r', encoding='utf-8') as f:
+                pull_log = f.read()
+            write_log(f"任务[{task_id}]镜像拉取成功！共拉取{len(tar_files)}个镜像，输出日志：\n{pull_log}")
+            build_status[task_id] = {
+                "status": "progress",
+                "percent": 70,
+                "message": f"镜像拉取完成（{len(tar_files)}个），开始打包TAR.GZ升级包"
+            }
+            time.sleep(2)  # 预留状态更新时间，避免前端进度跳变
 
-        # 执行打包
-        zip_result = subprocess.run(
-            ["zip", "-j", upgrade_path] + tar_files,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        write_log(f"打包输出：\n{zip_result.stdout}")
+            # 6. 打包TAR.GZ升级包（仅包含当前任务的镜像+镜像列表）
+            # 6.1 复制镜像列表到任务目录（与镜像文件同目录，便于打包）
+            temp_patch_list = os.path.join(task_image_dir, "patch_image_tag_list.txt")
+            shutil.copy2(PATCH_LIST_PATH, temp_patch_list)
+            # 6.2 确定待打包文件（镜像文件+临时列表文件）
+            files_to_pack = tar_files + [temp_patch_list]
+            # 6.3 生成升级包路径和名称（用版本关系命名，直观识别）
+            upgrade_package = f"{current_version}_to_{target_version}.tar.gz"
+            upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
+            # 6.4 执行TAR.GZ打包（--transform确保解包后无嵌套目录）
+            with open(task_log_path, 'a', encoding='utf-8') as f:
+                tar_result = subprocess.run(
+                    [
+                        "tar", "-czf", upgrade_path,  # 核心参数：创建gzip压缩包
+                        "--transform", "s/.*\///",    # 关键：仅保留文件名，删除路径前缀
+                        *files_to_pack                # 待打包的所有文件
+                    ],
+                    check=True,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True
+                )
+            # 6.5 验证打包结果（检查升级包是否存在且非空）
+            if not os.path.exists(upgrade_path) or os.path.getsize(upgrade_path) == 0:
+                raise Exception(f"打包失败：升级包{upgrade_path}不存在或为空文件")
+            
+            # 读取并记录打包日志
+            with open(task_log_path, 'r', encoding='utf-8') as f:
+                tar_log = f.read()
+            write_log(f"任务[{task_id}]打包日志：\n{tar_log}")
+            
+            # 6.6 清理临时文件（仅保留最终升级包）
+            os.remove(temp_patch_list)
+            write_log(f"任务[{task_id}]TAR.GZ打包成功！升级包信息：")
+            write_log(f"  包路径：{upgrade_path}")
+            write_log(f"  包大小：{os.path.getsize(upgrade_path)/1024/1024:.2f}MB")
+            write_log(f"  包含文件：{len(files_to_pack)}个（{len(tar_files)}个镜像 + 1个列表）")
 
-        # 清理临时文件
-        os.remove(temp_patch_list)
+            # 7. 任务完成：更新状态并记录日志
+            build_status[task_id] = {
+                "status": "complete",
+                "percent": 100,
+                "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+1个列表）",
+                "complete": True,
+                "error": False,
+                "download_url": f"/download/{task_id}",
+                "package_path": upgrade_path,
+                "package_name": upgrade_package,
+                "package_format": "tar.gz",  # 标记包格式，便于前端显示
+                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2)  # 包大小（MB）
+            }
+            write_log(f"任务[{task_id}]完全结束：{current_version}→{target_version}升级包构建完成")
+            
+            # 成功后延迟10秒删除状态，给前端足够时间获取最终状态
+            time.sleep(10)
+            if task_id in build_status:
+                del build_status[task_id]
 
-        # 6. 构建完成
-        build_status[task_id] = {
-            "status": "complete",
-            "percent": 100,
-            "message": f"构建成功！含{len(tar_files)-1}个镜像+1个列表文件",
-            "complete": True,
-            "download_url": f"/download/{task_id}",
-            "package_path": upgrade_path,
-            "package_name": upgrade_package
-        }
-        write_log(f"任务[{task_id}]完成，升级包：{upgrade_package}")
+        except Exception as e:
+            # 8. 任务失败：捕获异常并更新状态
+            error_msg = str(e)
+            build_status[task_id] = {
+                "status": "error",
+                "percent": 0,
+                "message": f"构建失败：{error_msg}",
+                "complete": True,
+                "error": True
+            }
+            write_log(f"任务[{task_id}]失败：{error_msg}", level="ERROR")
+            # 打印异常堆栈，便于问题排查
+            traceback.print_exc()
+            
+            # 失败后延迟5秒删除状态，给前端足够时间接收错误状态
+            time.sleep(5)
+            if task_id in build_status:
+                del build_status[task_id]
 
-    except Exception as e:
-        # 构建失败处理
-        error_msg = str(e)
-        build_status[task_id] = {
-            "status": "error",
-            "percent": 0,
-            "message": f"构建失败：{error_msg}",
-            "complete": True,
-            "error": True
-        }
-        write_log(f"任务[{task_id}]失败：{error_msg}", level="ERROR")
+        finally:
+            # 9. 最终清理：无论成功/失败，都删除任务专属镜像目录（节省磁盘空间）
+            if os.path.exists(task_image_dir):
+                try:
+                    shutil.rmtree(task_image_dir)
+                    write_log(f"任务[{task_id}]临时目录清理完成：{task_image_dir}")
+                except Exception as clean_e:
+                    # 清理失败不影响任务结果，但需记录日志（避免磁盘空间泄漏）
+                    clean_error_msg = f"任务[{task_id}]临时目录清理失败：{str(clean_e)}"
+                    write_log(clean_error_msg, level="WARNING")
+            
+            # 清理任务日志文件
+            if os.path.exists(task_log_path):
+                try:
+                    os.remove(task_log_path)
+                    write_log(f"任务[{task_id}]临时日志文件已清理")
+                except Exception as log_e:
+                    write_log(f"任务[{task_id}]临时日志清理失败：{str(log_e)}", level="WARNING")
 
 
 # -------------------------- Flask路由 --------------------------
 @app.route('/')
 def index():
-    """前端页面入口"""
+    """前端页面入口（返回静态HTML）"""
     return send_file('index.html')
 
+# -------------------------- 新增接口：获取已有升级包列表 --------------------------
+@app.route('/existing-packages', methods=['GET'])
+def api_existing_packages():
+    """
+    前端调用：获取UPGRADE_PACKAGE_DIR目录下所有已生成的tar.gz升级包
+    返回格式：
+    {
+        "success": true/false,
+        "files": [
+            {"name": "v1_to_v2.tar.gz", "size": 1024000},  # size单位：字节
+            ...
+        ],
+        "message": "成功/失败描述"
+    }
+    """
+    try:
+        # 调用工具函数获取文件列表
+        packages = get_existing_packages()
+        return jsonify({
+            "success": True,
+            "files": packages,
+            "message": f"共获取到{len(packages)}个已生成的升级包"
+        })
+    except Exception as e:
+        error_msg = f"获取已有升级包列表失败：{str(e)}"
+        write_log(error_msg, level="ERROR")
+        return jsonify({
+            "success": False,
+            "files": [],
+            "message": error_msg
+        }), 500
 
-@app.route('/versions')
-def versions():
-    """获取版本列表接口（前端下拉框用）"""
+
+# -------------------------- 新增接口：下载已有升级包 --------------------------
+@app.route('/download-existing/<filename>', methods=['GET'])
+def api_download_existing(filename):
+    """
+    前端调用：直接下载已生成的升级包（通过文件名定位）
+    安全校验：防止目录遍历攻击，仅允许下载UPGRADE_PACKAGE_DIR内的tar.gz文件
+    """
+    # 1. 解码URL编码的文件名（处理文件名中的特殊字符，如空格、下划线）
+    try:
+        filename = unquote(filename)
+    except Exception as e:
+        error_msg = f"文件名解码失败：{str(e)}"
+        write_log(error_msg, level="ERROR")
+        abort(400, description=error_msg)
+
+    # 2. 执行安全校验（核心：防止目录遍历，确保文件合法性）
+    valid, result = validate_package_filename(filename)
+    if not valid:
+        error_msg = f"文件下载校验失败：{result}"
+        write_log(error_msg, level="WARNING")  # 用WARNING级别，区分正常错误和恶意请求
+        abort(403, description=error_msg)  # 403 Forbidden：拒绝非法请求
+
+    # 3. 校验通过，执行下载（使用send_file返回文件流，支持断点续传）
+    file_path = result  # 校验通过后，result是文件绝对路径
+    try:
+        # 配置下载响应：设置文件名（保持原始名称）、MIME类型（tar.gz标准类型）
+        response = send_file(
+            file_path,
+            as_attachment=True,  # 强制浏览器下载（而非预览）
+            attachment_filename=filename,
+            mimetype='application/gzip'  # tar.gz对应的MIME类型
+        )
+        # 补充响应头：支持断点续传（优化大文件下载体验）
+        response.headers['Accept-Ranges'] = 'bytes'
+        write_log(f"已有升级包下载成功：文件名={filename}，路径={file_path}")
+        return response
+    except Exception as e:
+        error_msg = f"文件下载失败：{str(e)}"
+        write_log(error_msg, level="ERROR")
+        abort(500, description=error_msg)
+
+
+# -------------------------- 原有接口：获取版本列表（兼容前端） --------------------------
+@app.route('/versions', methods=['GET'])
+def api_get_versions():
+    """原有接口：从OSS获取版本列表，供前端下拉框选择"""
     versions = get_oss_versions()
-    return jsonify({'success': True, 'versions': versions})
+    if versions:
+        return jsonify({
+            "success": True,
+            "versions": versions,
+            "message": f"成功获取{len(versions)}个版本"
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "versions": [],
+            "message": "未获取到有效版本（可能是OSS连接失败或无x86_64版本）"
+        }), 500
 
 
-@app.route('/build')
-def build():
-    """构建接口（SSE实时返回进度）"""
-    # 获取前端参数
-    current = request.args.get('current')
-    target = request.args.get('target')
-    if not current or not target:
-        return jsonify({'success': False, 'message': "请选择当前版本和目标版本"}), 400
+# -------------------------- 新增接口：查询任务状态 --------------------------
+@app.route('/task-status/<task_id>', methods=['GET'])
+def api_task_status(task_id):
+    """查询指定任务的当前状态"""
+    if task_id in build_status:
+        return jsonify({
+            "success": True,
+            "status": build_status[task_id]
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "message": "任务不存在或已过期"
+        }), 404
+
+
+# -------------------------- 原有接口：构建任务（兼容前端SSE） --------------------------
+@app.route('/build', methods=['GET'])
+def api_build():
+    """原有接口：启动构建任务，通过SSE实时推送进度"""
+    # 检查并发任务数
+    if build_semaphore._value == 0:
+        return jsonify({
+            "success": False,
+            "message": "当前构建任务已达上限，请稍后再试"
+        }), 429  # 429 Too Many Requests
     
-    # 生成任务ID（时间戳）
-    task_id = f"task_{int(time.time())}"
-    # 启动构建线程
+    # 1. 获取前端传递的版本参数
+    current_version = request.args.get('current')
+    target_version = request.args.get('target')
+    
+    # 2. 参数校验（防止空参数或无效版本）
+    if not current_version or not target_version:
+        return jsonify({"success": False, "message": "缺少必要参数：current或target版本不能为空"}), 400
+    if current_version == target_version:
+        return jsonify({"success": False, "message": "当前版本与目标版本不能相同"}), 400
+
+    # 3. 生成唯一任务ID（时间戳+版本缩写，确保唯一性）
+    timestamp = int(time.time())
+    # 版本缩写：取版本字符串前8位（避免ID过长）
+    current_abbr = current_version[:8] if len(current_version) >=8 else current_version
+    target_abbr = target_version[:8] if len(target_version) >=8 else target_version
+    task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}"
+
+    # 4. 启动异步构建任务（用线程避免阻塞SSE连接）
     build_thread = threading.Thread(
         target=run_build_task,
-        args=(task_id, current, target),
-        daemon=True
+        args=(task_id, current_version, target_version),
+        daemon=True  # 守护线程：主进程退出时自动销毁，避免残留线程
     )
     build_thread.start()
 
-    # SSE生成器：实时推送状态
-    def sse_generator():
-        last_percent = -1
+    # 5. 建立SSE连接，实时推送进度
+    def generate_sse():
+        # 初始状态推送：先尝试获取任务状态，若不存在则重试2次
+        retry_count = 0
+        initial_status = None
+        while retry_count < 2 and not initial_status:
+            initial_status = build_status.get(task_id, {
+                'status': 'progress',
+                'percent': 0,
+                'message': '任务初始化中...'
+            })
+            if not initial_status:
+                time.sleep(0.5)  # 重试间隔0.5秒
+                retry_count += 1
+        yield f"data: {json.dumps(initial_status)}\n\n"
+        
+        # 循环推送状态：增加“任务不存在时的重试”
         while True:
             if task_id not in build_status:
-                time.sleep(0.3)
-                continue
+                # 重试3次，若仍不存在则判定过期（避免微小延迟误判）
+                retry = 0
+                while retry < 3:
+                    if task_id in build_status:
+                        break
+                    time.sleep(0.5)
+                    retry += 1
+                if task_id not in build_status:
+                    yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': '任务状态已过期，请刷新页面重试'})}\n\n"
+                    break
             
-            status = build_status[task_id]
-            # 状态变化或任务结束时推送
-            if status["percent"] != last_percent or status["status"] in ["complete", "error"]:
-                last_percent = status["percent"]
-                yield f"data: {json.dumps(status)}\n\n"
+            task_status = build_status[task_id]
+            yield f"data: {json.dumps(task_status)}\n\n"
             
-            # 任务结束，关闭连接
-            if status.get("complete"):
-                yield "event: close\ndata: 任务结束\n\n"
+            # 任务完成（成功/失败），终止循环
+            if task_status.get('complete', False):
                 break
-            time.sleep(1)
+            
+            # 控制推送频率（1秒/次，避免频繁请求占用资源）
+            time.sleep(10)
 
-    # 返回SSE响应
-    return Response(
-        sse_generator(),
-        mimetype='text/event-stream',
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
-    )
+    # 设置SSE响应头：禁用缓存、指定格式
+    return Response(generate_sse(), mimetype='text/event-stream')
 
 
-@app.route('/download/<task_id>')
-def download(task_id):
-    global build_status
-    # 配置：设置每次读取的块大小（10MB）
-    CHUNK_SIZE = 100 * 1024 * 1024  # 10MB
-    # 安全目录：限制只能下载此目录内的文件
-    SAFE_DIR = "/home/auto_packing_no_delete/image_tar"
+# -------------------------- 原有接口：下载新构建的包（兼容） --------------------------
+@app.route('/download/<task_id>', methods=['GET'])
+def api_download(task_id):
+    """原有接口：下载新构建的升级包（通过任务ID定位）"""
+    # 1. 从任务状态中获取包路径（仅允许未清理的活跃任务）
+    if task_id not in build_status:
+        error_msg = f"任务{task_id}不存在或已过期（请重新构建）"
+        write_log(error_msg, level="WARNING")
+        return jsonify({"success": False, "message": error_msg}), 404
 
+    task_status = build_status[task_id]
+    if task_status.get('status') != 'complete' or not task_status.get('package_path'):
+        error_msg = f"任务{task_id}未构建完成，无法下载"
+        write_log(error_msg, level="WARNING")
+        return jsonify({"success": False, "message": error_msg}), 400
+
+    # 2. 校验包路径合法性（避免任务状态被篡改）
+    package_path = task_status['package_path']
+    if not os.path.exists(package_path) or not package_path.endswith('.tar.gz'):
+        error_msg = f"任务{task_id}的升级包无效（路径不存在或格式错误）"
+        write_log(error_msg, level="ERROR")
+        return jsonify({"success": False, "message": error_msg}), 500
+
+    # 3. 执行下载（与新增接口逻辑一致，确保体验统一）
     try:
-        # 1. 检查任务状态
-        if task_id not in build_status or build_status[task_id]['status'] != 'complete':
-            msg = f"任务{task_id}不存在或未完成"
-            write_log(f"下载失败：{msg}", "ERROR")
-            return msg, 404
-
-        status = build_status[task_id]
-        package_path = status.get('package_path')
-        package_name = status.get('package_name', f"upgrade_{task_id}.zip")
-
-        # 2. 安全校验
-        if not package_path:
-            return "升级包路径未配置", 500
-            
-        # 转换为绝对路径并检查是否在安全目录内
-        abs_path = os.path.abspath(package_path)
-        if not abs_path.startswith(os.path.abspath(SAFE_DIR)):
-            write_log(f"非法下载请求：{abs_path}", "ERROR")
-            abort(403)  # 禁止访问目录外文件
-
-        # 3. 文件存在性和权限检查
-        if not os.path.exists(abs_path):
-            return f"文件不存在：{package_name}", 404
-            
-        if not os.access(abs_path, os.R_OK):
-            write_log(f"无读取权限：{abs_path}", "ERROR")
-            return "服务器无权限读取文件", 500
-
-        # 4. 获取文件大小
-        file_size = os.path.getsize(abs_path)
-
-        # 5. 处理续传请求
-        range_header = request.headers.get('Range', None)
-        start = 0
-        end = file_size - 1
-
-        if range_header:
-            # 解析Range请求头
-            range_str = range_header.split('=')[1]
-            if '-' in range_str:
-                start_str, end_str = range_str.split('-')
-                start = int(start_str) if start_str else 0
-                end = int(end_str) if end_str else file_size - 1
-
-            # 验证范围有效性
-            if start < 0 or end >= file_size or start > end:
-                return "无效的请求范围", 416
-
-        # 6. 文件名编码
-        encoded_name = quote(package_name, safe='')
-
-        # 7. 构建响应头
-        headers = {
-            'Content-Type': 'application/zip',
-            'Content-Disposition': f"attachment; filename=\"{encoded_name}\"; filename*=UTF-8''{encoded_name}",
-            'Accept-Ranges': 'bytes',
-            'Content-Length': str(end - start + 1),
-        }
-
-        # 8. 处理部分内容响应
-        status_code = 206 if range_header else 200
-        if range_header:
-            headers['Content-Range'] = f"bytes {start}-{end}/{file_size}"
-
-        # 9. 流式传输文件
-        def file_stream():
-            with open(abs_path, 'rb') as f:
-                f.seek(start)
-                while True:
-                    read_size = min(CHUNK_SIZE, end - f.tell() + 1)
-                    if read_size <= 0:
-                        break
-                    chunk = f.read(read_size)
-                    if not chunk:
-                        break
-                    yield chunk
-
-        write_log(f"开始下载任务{task_id}：{package_name}（大小：{file_size/1024/1024:.2f}MB）", "INFO")
-        return Response(file_stream(), headers=headers, status=status_code)
-
+        response = send_file(
+            package_path,
+            as_attachment=True,
+            attachment_filename=task_status['package_name'],
+            mimetype='application/gzip'
+        )
+        response.headers['Accept-Ranges'] = 'bytes'
+        write_log(f"新构建包下载成功：任务ID={task_id}，文件名={task_status['package_name']}")
+        return response
     except Exception as e:
-        error_msg = f"下载异常：{str(e)}"
-        write_log(f"{error_msg}\n堆栈：{traceback.format_exc()}", "ERROR")
-        return f"下载失败：{str(e)}", 500
-    
+        error_msg = f"新构建包下载失败：{str(e)}"
+        write_log(error_msg, level="ERROR")
+        return jsonify({"success": False, "message": error_msg}), 500
 
 
-# -------------------------- 启动服务 --------------------------
+# -------------------------- 应用启动入口 --------------------------
 if __name__ == '__main__':
-    write_log("="*50)
-    write_log("DeepFlow升级包构建服务启动")
-    write_log(f"服务地址：http://0.0.0.0:8000")
-    write_log(f"基础目录：{BASE_DIR}")
-    write_log("="*50)
-    app.run(host='0.0.0.0', port=8000, debug=False)  # 生产环境关闭debug
+    # 生产环境建议用Gunicorn+Nginx部署，此处为开发/测试用
+    write_log("DeepFlow升级包构建服务启动成功！")
+    write_log(f"服务配置：升级包存储目录={UPGRADE_PACKAGE_DIR}，日志目录={LOG_DIR}")
+    # 允许外部访问（host='0.0.0.0'），端口可根据需求调整（默认8000）
+    app.run(host='0.0.0.0', port=8000, threaded=True)  # threaded=True：支持多线程处理SSE连接
