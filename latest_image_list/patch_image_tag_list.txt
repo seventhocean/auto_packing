@@ -1,1 +1,1 @@
-statistics:v6.6.2331
+deepflow-server:v6.6.5622

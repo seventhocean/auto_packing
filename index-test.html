@@ -3,133 +3,463 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>DeepFlow 升级包构建工具</title>
-    <!-- 引入Bootstrap -->
-    <link href="bootstrap.min.css" rel="stylesheet">
-    <!-- 引入Font Awesome -->
+    <!-- 引入外部资源 -->
+    <link rel="stylesheet" href="bootstrap.min.css">
     <link rel="stylesheet" href="all.min.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
-        /* 深色主题样式 */
+        /* 基础样式重置与全局配置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        :root {
+            --primary-color: #5176f1;
+            --primary-light: #7393ff;
+            --primary-dark: #3a5ed9;
+            --success-color: #4caf50;
+            --success-light: #66bb6a;
+            --danger-color: #f44336;
+            --danger-light: #ef5350;
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2c2c2c;
+            --bg-tertiary: #3a3a3a;
+            --border-color: #444;
+            --text-primary: #fcfcfc;
+            --text-secondary: #e0e0e0;
+            --text-tertiary: #9e9e9e;
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-full: 50%;
+            --transition-fast: 0.2s ease;
+            --transition-normal: 0.3s ease;
+            --transition-slow: 0.5s ease;
+        }
+
+        /* 页面基础样式 */
         body {
-            background-color: #1e1e1e;
-            color: #fff;
+            background-color: var(--bg-primary);
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(81, 118, 241, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(76, 175, 80, 0.05) 0%, transparent 20%);
+            color: var(--text-primary);
             min-height: 100vh;
             padding: 20px 0;
-            position: relative;
+            font-family: "Inter", "Microsoft YaHei", "PingFang SC", sans-serif;
+            line-height: 1.6;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1600px;
             margin: 0 auto;
+            padding: 0 15px;
         }
 
+        /* 标题样式 */
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 600;
+            background: linear-gradient(120deg, var(--primary-light), var(--text-primary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-align: center;
+            margin-bottom: 2.5rem;
+            position: relative;
+            padding-bottom: 1rem;
+        }
+
+        h1::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+            border-radius: 3px;
+        }
+
+        /* 卡片样式 */
         .card {
-            background-color: #2c2c2c;
+            background-color: var(--bg-secondary);
             border: none;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
-            border-radius: 10px;
+            box-shadow: var(--shadow-md);
+            border-radius: var(--radius-md);
             padding: 30px;
             margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
         }
 
-        /* 表单样式 */
+        .card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+        }
+
+        /* 表单相关样式 */
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title i {
+            color: var(--primary-color);
+            font-size: 1.2em;
+        }
+
+        .section-desc {
+            font-size: 0.95rem;
+            color: var(--text-tertiary);
+            margin-bottom: 1.5rem;
+            line-height: 1.7;
+        }
+
+        .form-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
         .form-select,
         .form-control {
-            background-color: #3a3a3a;
-            color: #fff;
-            border: 1px solid #444;
-            border-radius: 6px;
+            background-color: var(--bg-tertiary);
+            color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            transition: var(--transition-normal);
+        }
+
+        .form-select:focus,
+        .form-control:focus {
+            background-color: var(--bg-tertiary);
+            color: var(--primary-light);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(81, 118, 241, 0.2);
+            outline: none;
         }
 
         .form-select option {
-            background-color: #1e1e1e;
+            background-color: var(--bg-primary);
+            color: var(--text-secondary);
+            padding: 0.5rem;
         }
 
-        /* 进度条 */
+        .form-select option:checked {
+            background-color: var(--primary-dark);
+            color: white;
+        }
+
+        /* 进度条样式 */
         .progress {
             height: 28px;
-            border-radius: 14px;
-            background-color: #3a3a3a;
+            border-radius: var(--radius-lg);
+            background-color: var(--bg-tertiary);
             margin: 20px 0;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         .progress-bar {
-            border-radius: 14px;
-            transition: width 0.5s ease;
+            border-radius: var(--radius-lg);
+            transition: width var(--transition-slow), background-color var(--transition-normal);
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+            box-shadow: 0 0 10px rgba(81, 118, 241, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            color: white;
         }
 
-        /* 日志容器 */
+        .progress-bar.bg-success {
+            background: linear-gradient(90deg, var(--success-color), var(--success-light));
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
+        }
+
+        .progress-bar.bg-danger {
+            background: linear-gradient(90deg, var(--danger-color), var(--danger-light));
+            box-shadow: 0 0 10px rgba(244, 67, 54, 0.4);
+        }
+
+        /* 呼吸动画效果 */
+        @keyframes breathe {
+
+            0%,
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 10px rgba(81, 118, 241, 0.4);
+            }
+
+            50% {
+                opacity: 0.8;
+                box-shadow: 0 0 15px rgba(81, 118, 241, 0.6);
+            }
+        }
+
+        .progress-bar-animated {
+            animation: breathe 2s infinite ease-in-out;
+        }
+
+        /* 日志容器样式 */
         .log-container {
-            height: 350px;
+            height: 220px;
             overflow-y: auto;
-            background-color: #3a3a3a;
-            border-radius: 8px;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
             padding: 15px;
-            font-family: "Consolas", "Microsoft YaHei", monospace;
+            font-family: "Consolas", "Monaco", monospace;
             font-size: 14px;
-            border: 1px solid #444;
-            line-height: 1.6;
+            border: 1px solid var(--border-color);
+            line-height: 1.7;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 自定义滚动条 */
+        .log-container::-webkit-scrollbar,
+        .existing-files-container::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .log-container::-webkit-scrollbar-track,
+        .existing-files-container::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        .log-container::-webkit-scrollbar-thumb,
+        .existing-files-container::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+            transition: var(--transition-fast);
+        }
+
+        .log-container::-webkit-scrollbar-thumb:hover,
+        .existing-files-container::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
         }
 
         /* 日志类型样式 */
         .log-time {
             color: #90caf9;
+            font-weight: 500;
         }
 
         .log-info {
-            color: #e0e0e0;
+            color: var(--text-secondary);
         }
 
         .log-success {
-            color: #4caf50;
+            color: var(--success-light);
             font-weight: 500;
         }
 
         .log-error {
-            color: #f44336;
+            color: var(--danger-light);
             font-weight: bold;
+        }
+
+        /* 日志条目动画 */
+        .log-entry {
+            opacity: 0;
+            transform: translateY(5px);
+            animation: logFadeIn 0.3s forwards ease;
+        }
+
+        @keyframes logFadeIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* 按钮样式 */
         .btn {
-            transition: all 0.3s ease;
+            transition: var(--transition-normal);
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+            padding: 0.6rem 1.2rem;
+            font-size: 0.95rem;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            box-shadow: var(--shadow-md);
         }
 
-        /* 提示框 */
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* 按钮主题样式 */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: white;
+        }
+
+        .btn-primary:disabled {
+            background: linear-gradient(135deg, #4a69bd, #5c6bc0);
+            color: rgba(255, 255, 255, 0.7);
+            transform: none;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #388e3c, var(--success-color));
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: linear-gradient(135deg, var(--success-color), var(--success-light));
+            color: white;
+        }
+
+        .btn-outline-light {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: var(--text-secondary);
+        }
+
+        .btn-outline-light:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.5);
+            color: white;
+        }
+
+        .btn-outline-light:disabled {
+            border-color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.5);
+            transform: none;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #555, #666);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: linear-gradient(135deg, #666, #777);
+            color: white;
+        }
+
+        /* 提示框样式 */
         .alert {
             position: fixed;
             top: 20px;
             left: 50%;
-            transform: translateX(-50%);
+            transform: translateX(-50%) translateY(-20px);
+            opacity: 0;
             z-index: 1000;
             max-width: 600px;
-            background-color: #2c2c2c;
-            border-color: #444;
-            color: #fff;
+            background-color: var(--bg-secondary);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-lg);
+            padding: 1.2rem;
+            transition: var(--transition-normal);
+        }
+
+        .alert.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .alert-heading {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .alert-info .alert-heading {
+            color: var(--primary-light);
+        }
+
+        .alert-danger .alert-heading {
+            color: var(--danger-light);
+        }
+
+        .alert p {
+            margin-bottom: 0;
+            color: var(--text-secondary);
+        }
+
+        .btn-close {
+            color: var(--text-tertiary);
+            opacity: 0.7;
+        }
+
+        .btn-close:hover {
+            color: white;
+            opacity: 1;
         }
 
         /* 已有文件列表样式 */
         .existing-files-container {
-            max-height: 180px;
+            max-height: 260px;
             overflow-y: auto;
-            background-color: #3a3a3a;
-            border-radius: 6px;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
             padding: 15px;
             margin-top: 10px;
+            width: 100%;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         .file-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #444;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            transition: var(--transition-fast);
+        }
+
+        .file-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            padding-left: 8px;
+            border-radius: var(--radius-sm);
         }
 
         .file-item:last-child {
@@ -142,6 +472,21 @@
             white-space: nowrap;
             margin-right: 10px;
             flex-grow: 1;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-name i {
+            color: var(--primary-color);
+            opacity: 0.8;
+        }
+
+        .file-size {
+            color: var(--text-tertiary);
+            font-size: 0.85rem;
+            margin-left: 8px;
         }
 
         /* 使用教程按钮 */
@@ -151,32 +496,72 @@
             right: 30px;
             width: 60px;
             height: 60px;
-            border-radius: 50%;
+            border-radius: var(--radius-full);
             font-size: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            box-shadow: var(--shadow-md);
             z-index: 999;
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: var(--transition-normal);
+        }
+
+        .tutorial-btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: var(--shadow-lg);
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+        }
+
+        .tutorial-btn:active {
+            transform: translateY(-1px);
         }
 
         /* 教程模态框样式 */
-        .modal-content {
-            background-color: #2c2c2c;
-            color: #fff;
-            border: none;
-            border-radius: 10px;
+        .modal {
+            backdrop-filter: blur(5px);
         }
 
-        .modal-header,
+        .modal-content {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            border: none;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            border-color: var(--border-color);
+            padding: 1.2rem 1.5rem;
+            background: linear-gradient(90deg, var(--bg-secondary), var(--bg-tertiary));
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--primary-light);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
         .modal-footer {
-            border-color: #444;
+            border-color: var(--border-color);
+            padding: 1rem 1.5rem;
+            background: linear-gradient(90deg, var(--bg-tertiary), var(--bg-secondary));
         }
 
         .tutorial-step {
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #444;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .tutorial-step:last-child {
@@ -186,15 +571,81 @@
         }
 
         .tutorial-step h5 {
-            color: #90caf9;
+            color: var(--primary-light);
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tutorial-step h5 i {
+            background-color: rgba(81, 118, 241, 0.2);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .tutorial-step p {
+            color: var(--text-secondary);
             margin-bottom: 10px;
+            line-height: 1.7;
+        }
+
+        .tutorial-step ul {
+            padding-left: 1.5rem;
+            margin-bottom: 0;
+        }
+
+        .tutorial-step li {
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            line-height: 1.7;
+        }
+
+        .tutorial-step li:last-child {
+            margin-bottom: 0;
+        }
+
+        /* 加载动画 */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         /* 响应式调整 */
         @media (max-width: 768px) {
-            .existing-files-container {
-                max-height: 150px;
-                margin-top: 20px;
+            h1 {
+                font-size: 1.8rem;
+                margin-bottom: 1.8rem;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .section-title {
+                font-size: 1.3rem;
+            }
+
+            .existing-files-container,
+            .log-container {
+                max-height: 180px;
             }
 
             .tutorial-btn {
@@ -204,48 +655,67 @@
                 bottom: 20px;
                 right: 20px;
             }
+
+            .modal-body {
+                padding: 1rem;
+            }
+
+            .modal-title {
+                font-size: 1.1rem;
+            }
+
+            .btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1 class="text-center mb-5">DeepFlow 升级包构建工具</h1>
+        <h1>DeepFlow 升级包构建工具</h1>
         <div class="card">
             <div class="row">
                 <!-- 左侧：现有版本选择表单 -->
                 <div class="col-md-6 pe-md-4">
-                    <h3 class="mb-4">构建新升级包</h3>
+                    <h3 class="section-title">
+                        <i class="fas fa-cogs"></i> 构建新升级包
+                    </h3>
+                    <p class="section-desc">选择当前使用的版本和目标升级版本，系统将自动生成差异升级包</p>
                     <form id="buildForm">
                         <div class="row mb-4">
                             <div class="col-md-12">
-                                <label class="form-label fw-bold">当前Patch版本</label>
+                                <label class="form-label">当前Patch版本</label>
                                 <select class="form-select" id="currentVersion" required>
                                     <option value="">加载中...</option>
                                 </select>
                             </div>
                             <div class="col-md-12 mt-3">
-                                <label class="form-label fw-bold">目标Patch版本</label>
+                                <label class="form-label">目标Patch版本</label>
                                 <select class="form-select" id="targetVersion" required disabled>
                                     <option value="">请先选择当前版本
                                 </select>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary w-100 py-3 fs-5" disabled>
-                            开始构建
+                            <i class="fas fa-play"></i> 开始构建
                         </button>
                     </form>
                 </div>
 
                 <!-- 右侧：新增的已有文件列表表单 -->
                 <div class="col-md-6 ps-md-4">
-                    <h3 class="mb-4">已有升级包</h3>
-                    <p class="text-muted mb-2">可直接下载以下已生成的升级包，避免重复构建</p>
+                    <h3 class="section-title">
+                        <i class="fas fa-box-archive"></i> 已有升级包
+                    </h3>
+                    <p class="section-desc">可直接下载以下已生成的升级包，避免重复构建，节省时间和资源</p>
                     <div class="existing-files-container" id="existingFilesContainer">
-                        <div class="text-center text-muted" id="filesLoading">
-                            <i class="fas fa-spinner fa-spin"></i> 加载中...
+                        <div class="text-center text-white" id="filesLoading">
+                            <span class="loading-spinner"></span> 加载中...
                         </div>
-                        <div id="noFilesMessage" style="display: none; text-align: center;">
+                        <div id="noFilesMessage"
+                            style="display: none; text-align: center; color: var(--text-secondary);">
                             暂无已生成的升级包
                         </div>
                         <div id="filesList" style="display: none;"></div>
@@ -265,7 +735,7 @@
                 <!-- 下载区域（默认隐藏） -->
                 <div id="downloadSection" class="text-center mt-4" style="display: none;">
                     <a id="downloadLink" class="btn btn-success py-3 px-6 fs-5" target="_blank">
-                        📥 下载升级包
+                        <i class="fas fa-download"></i> 下载升级包
                     </a>
                 </div>
             </div>
@@ -273,7 +743,7 @@
     </div>
 
     <!-- 使用教程按钮 -->
-    <button type="button" class="btn btn-info tutorial-btn" data-bs-toggle="modal" data-bs-target="#tutorialModal">
+    <button type="button" class="tutorial-btn" data-bs-toggle="modal" data-bs-target="#tutorialModal">
         <i class="fas fa-question"></i>
     </button>
 
@@ -287,11 +757,11 @@
                 </div>
                 <div class="modal-body">
                     <div class="tutorial-step">
-                        <h5>1. 查看已有升级包</h5>
+                        <h5><i class="fas fa-search"></i> 1. 查看已有升级包</h5>
                         <p>页面右侧会显示所有已生成的升级包，文件名格式为"当前版本_to_目标版本.tar.gz"。如果已有您需要的升级包，可以直接点击右侧的"下载"按钮获取，无需重复构建。</p>
                     </div>
                     <div class="tutorial-step">
-                        <h5>2. 构建新升级包</h5>
+                        <h5><i class="fas fa-wrench"></i> 2. 构建新升级包</h5>
                         <p>如果没有您需要的升级包，请在左侧表单进行以下操作：</p>
                         <ul>
                             <li>从"当前Patch版本"下拉框选择您当前使用的版本</li>
@@ -300,27 +770,30 @@
                         </ul>
                     </div>
                     <div class="tutorial-step">
-                        <h5>3. 查看构建进度</h5>
+                        <h5><i class="fas fa-spinner"></i> 3. 查看构建进度</h5>
                         <p>构建过程中，进度条会显示当前进度，下方日志区域会实时展示构建详情。构建完成后，会显示下载按钮，点击即可获取升级包。</p>
                     </div>
                     <div class="tutorial-step">
-                        <h5>4. 注意事项</h5>
+                        <h5><i class="fas fa-exclamation-circle"></i> 4. 注意事项</h5>
                         <ul>
                             <li>构建过程中请勿关闭或刷新页面</li>
+                            <li>构建生成包会存在90秒,请及时点击【下载升级包】下载,90秒后可在【已有升级包】区域下载</li>
                             <li>升级包生成后会保存在服务器，您可以在"已有升级包"区域再次下载</li>
                             <li>如果构建失败，请查看日志信息排查问题后重试</li>
                         </ul>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">我知道了</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-check"></i> 我知道了
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- 引入Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="bootstrap.bundle.min.js"></script>
     <script>
         let versionData = [];  // 存储从后端获取的版本列表
         let eventSource = null;  // SSE连接对象
@@ -328,7 +801,7 @@
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
             fetchVersions();  // 获取版本列表
-            fetchExistingFiles();  // 新增：获取已有升级包列表
+            fetchExistingFiles();  // 获取已有升级包列表
             initEventListeners();  // 绑定事件监听
         });
 
@@ -337,7 +810,7 @@
          */
         async function fetchVersions() {
             const currentSelect = document.getElementById('currentVersion');
-            currentSelect.innerHTML = '<option value="">加载中...</option>';
+            currentSelect.innerHTML = '<option value=""><span class="loading-spinner"></span> 加载中...</option>';
 
             try {
                 const res = await fetch('/versions');
@@ -357,7 +830,7 @@
         }
 
         /**
-         * 新增：从后端获取已有升级包列表
+         * 从后端获取已有升级包列表
          */
         async function fetchExistingFiles() {
             const filesLoading = document.getElementById('filesLoading');
@@ -365,7 +838,6 @@
             const filesList = document.getElementById('filesList');
 
             try {
-                // 假设后端新增了一个接口返回已有文件列表
                 const res = await fetch('/existing-packages');
                 const data = await res.json();
 
@@ -396,14 +868,14 @@
 
                         fileItem.innerHTML = `
                             <div class="file-name" title="${file.name}">
-                                <i class="fas fa-file-archive me-2"></i>
+                                <i class="fas fa-file-archive"></i>
                                 ${displayText}
-                                <span class="text-muted ms-2" style="font-size: 0.8em;">(${fileSizeMB} MB)</span>
+                                <span class="file-size">(${fileSizeMB} MB)</span>
                             </div>
                             <a href="/download-existing/${encodeURIComponent(file.name)}" 
                                class="btn btn-sm btn-outline-light download-existing-btn"
                                data-filename="${file.name}">
-                                <i class="fas fa-download me-1"></i> 下载
+                                <i class="fas fa-download"></i> 下载
                             </a>
                         `;
                         filesList.appendChild(fileItem);
@@ -428,7 +900,7 @@
         }
 
         /**
-         * 渲染版本下拉框选项
+         * 渲染版本下拉框选项（关键：不做二次排序，直接用后端返回顺序）
          */
         function renderVersionOptions() {
             const currentSelect = document.getElementById('currentVersion');
@@ -441,16 +913,16 @@
             targetSelect.disabled = true;
             buildBtn.disabled = true;
 
-            // 按日期排序并添加选项
-            const sortedVersions = [...versionData].sort((a, b) => a.date.localeCompare(b.date));
-            sortedVersions.forEach(ver => {
+            // 直接使用后端返回的列表（已按序号排序），不做任何排序
+            versionData.forEach(ver => {
                 const opt = document.createElement('option');
                 opt.value = ver.value;
                 opt.textContent = ver.display;
-                opt.dataset.date = ver.date;  // 存储日期用于后续筛选
+                opt.dataset.date = ver.date;  // 保留日期数据（仅用于后续筛选目标版本）
                 currentSelect.appendChild(opt);
             });
         }
+
 
         /**
          * 初始化所有事件监听
@@ -467,34 +939,51 @@
         }
 
         /**
-         * 根据当前版本更新目标版本可选范围（仅显示更新的版本）
+         * 根据当前版本更新目标版本可选范围（按序号筛选，仅保留序号高于当前版本的目标版本）
          */
         function updateTargetVersionOptions() {
-            const currentOpt = document.getElementById('currentVersion').selectedOptions[0];
+            const currentSelect = document.getElementById('currentVersion');
+            const currentOpt = currentSelect.selectedOptions[0];
             const targetSelect = document.getElementById('targetVersion');
             targetSelect.innerHTML = '<option value="">请选择目标版本</option>';
             targetSelect.disabled = true;
 
-            if (!currentOpt || !currentOpt.dataset.date) return;
+            if (!currentOpt) return;
 
-            // 筛选出日期晚于当前版本的目标版本
-            const currentDate = currentOpt.dataset.date;
-            const validTargets = versionData.filter(ver => ver.date > currentDate);
+            // 从当前选中版本的display文本中提取序号
+            const currentDisplay = currentOpt.textContent;
+            const currentSeqMatch = currentDisplay.match(/^(\d{2})-/);
+            if (!currentSeqMatch) {
+                // 如果无法提取序号，保持禁用状态
+                return;
+            }
+            const currentSeq = parseInt(currentSeqMatch[1], 10);
+
+            // 筛选：仅保留序号高于当前版本的目标版本，沿用后端返回的顺序
+            const validTargets = versionData.filter(ver => {
+                // 从版本数据中提取序号
+                const seqMatch = ver.display.match(/^(\d{2})-/);
+                if (!seqMatch) return false;
+                const verSeq = parseInt(seqMatch[1], 10);
+                return verSeq > currentSeq;
+            });
 
             if (validTargets.length === 0) {
                 targetSelect.innerHTML = '<option value="">暂无更新版本</option>';
             } else {
+                // 直接渲染筛选后的列表（顺序与后端返回一致）
                 validTargets.forEach(ver => {
                     const opt = document.createElement('option');
                     opt.value = ver.value;
                     opt.textContent = ver.display;
-                    opt.dataset.date = ver.date;
+                    opt.dataset.seq = ver.seq_num; // 存储序号用于可能的后续处理
+                    opt.dataset.date = ver.date;    // 仍保留日期数据
                     targetSelect.appendChild(opt);
                 });
                 targetSelect.disabled = false;
             }
 
-            checkBuildBtnStatus();  // 重新检查构建按钮状态
+            checkBuildBtnStatus();
         }
 
         /**
@@ -522,7 +1011,7 @@
 
             // 初始化UI状态
             buildBtn.disabled = true;
-            buildBtn.textContent = '构建中...';
+            buildBtn.innerHTML = '<span class="loading-spinner"></span> 构建中...';
             progressSection.style.display = 'block';
             logOutput.innerHTML = '';
             downloadSection.style.display = 'none';
@@ -577,7 +1066,7 @@
                     downloadSection.style.display = 'block';
                     // 重置按钮状态
                     buildBtn.disabled = false;
-                    buildBtn.textContent = '开始构建';
+                    buildBtn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
                     // 关闭SSE连接
                     if (eventSource) {
                         eventSource.close();
@@ -625,6 +1114,7 @@
         function addLog(message, type = 'info') {
             const logOutput = document.getElementById('logOutput');
             const logDiv = document.createElement('div');
+            logDiv.className = 'log-entry';
             const timeStamp = new Date().toTimeString().slice(0, 8);  // 提取时分秒
 
             // 根据日志类型设置样式
@@ -647,7 +1137,7 @@
         function resetBuildState() {
             const buildBtn = document.querySelector('button[type="submit"]');
             buildBtn.disabled = false;
-            buildBtn.textContent = '开始构建';
+            buildBtn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
             // 关闭SSE连接
             if (eventSource) {
                 eventSource.close();
@@ -664,7 +1154,7 @@
 
             // 临时禁用下载按钮，显示加载状态
             downloadLink.classList.add('disabled');
-            downloadLink.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> 校验中...';
+            downloadLink.innerHTML = '<span class="loading-spinner"></span> 校验中...';
 
             try {
                 // 发送HEAD请求校验文件（不下载完整文件）
@@ -672,25 +1162,25 @@
                 if (res.ok) {
                     // 文件存在，恢复按钮状态
                     downloadLink.classList.remove('disabled');
-                    downloadLink.innerHTML = '📥 下载升级包';
+                    downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
                 } else {
                     // 文件不存在，阻止下载
                     e.preventDefault();
                     downloadLink.classList.remove('disabled');
-                    downloadLink.innerHTML = '📥 下载升级包';
+                    downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
                     showAlert('下载失败', `文件不存在或已过期（状态码：${res.status}）`, 'error');
                 }
             } catch (err) {
                 // 网络错误，阻止下载
                 e.preventDefault();
                 downloadLink.classList.remove('disabled');
-                downloadLink.innerHTML = '📥 下载升级包';
+                downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
                 showAlert('网络错误', `校验文件失败：${err.message}`, 'error');
             }
         }
 
         /**
-         * 新增：校验已有文件下载
+         * 校验已有文件下载
          */
         async function checkExistingFileDownload(e) {
             const downloadBtn = this;
@@ -699,7 +1189,7 @@
 
             // 临时禁用下载按钮，显示加载状态
             downloadBtn.classList.add('disabled');
-            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> 校验中...';
+            downloadBtn.innerHTML = '<span class="loading-spinner"></span> 校验中...';
 
             try {
                 // 发送HEAD请求校验文件（不下载完整文件）
@@ -707,12 +1197,12 @@
                 if (res.ok) {
                     // 文件存在，恢复按钮状态
                     downloadBtn.classList.remove('disabled');
-                    downloadBtn.innerHTML = '<i class="fas fa-download me-1"></i> 下载';
+                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
                 } else {
                     // 文件不存在，阻止下载
                     e.preventDefault();
                     downloadBtn.classList.remove('disabled');
-                    downloadBtn.innerHTML = '<i class="fas fa-download me-1"></i> 下载';
+                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
                     showAlert('下载失败', `文件 "${filename}" 不存在或已被删除`, 'error');
                     // 刷新文件列表
                     fetchExistingFiles();
@@ -721,7 +1211,7 @@
                 // 网络错误，阻止下载
                 e.preventDefault();
                 downloadBtn.classList.remove('disabled');
-                downloadBtn.innerHTML = '<i class="fas fa-download me-1"></i> 下载';
+                downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
                 showAlert('网络错误', `校验文件失败：${err.message}`, 'error');
             }
         }
@@ -733,22 +1223,35 @@
             // 创建提示框元素
             const alertDiv = document.createElement('div');
             const alertClass = type === 'error' ? 'alert-danger' : 'alert-info';
-            alertDiv.className = `alert ${alertClass} alert-dismissible fade show`;
+            alertDiv.className = `alert ${alertClass} alert-dismissible fade`;
             alertDiv.role = 'alert';
+
+            // 根据类型设置图标
+            const icon = type === 'error' ? 'exclamation-circle' : 'info-circle';
+
             alertDiv.innerHTML = `
-                <h5 class="alert-heading">${title}</h5>
+                <h5 class="alert-heading"><i class="fas fa-${icon}"></i> ${title}</h5>
                 <p>${message}</p>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             `;
 
             // 添加到页面并显示
             document.querySelector('.container').prepend(alertDiv);
+
+            // 触发Bootstrap的显示动画
+            setTimeout(() => {
+                alertDiv.classList.add('show');
+            }, 10);
+
             const alertInstance = new bootstrap.Alert(alertDiv);
 
             // 5秒后自动关闭
             setTimeout(() => {
                 alertInstance.close();
-                alertDiv.remove();
+                // 移除元素以清理DOM
+                setTimeout(() => {
+                    alertDiv.remove();
+                }, 300);
             }, 5000);
         }
     </script>

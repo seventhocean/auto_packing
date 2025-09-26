@@ -30,6 +30,3 @@ BASE_DIR/                  # 服务根目录
     └── app.log            # 服务日志
 
 
-
-
-corn -w 1 -b 0.0.0.0:8000 --timeout 60 app:app
