@@ -1,1418 +1,461 @@
-[2025-09-26 10:34:47] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:34:47] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:34:53] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:34:54] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:35:29] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:35:35] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:36:42] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:36:42] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:36:49] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:36:49] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:37:34] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:37:34] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:37:58] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:37:58] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:38:02] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:38:03] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:41:47] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:41:47] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:41:52] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:41:53] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:44:51] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:44:52] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:47:42] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:47:42] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:48:00] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:48:01] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:48:36] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:48:36] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:48:39] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:48:40] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:50:01] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:50:02] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:55:15] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:55:15] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:55:18] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:55:24] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:56:06] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:56:06] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:56:09] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:56:10] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 10:57:20] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 10:57:20] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 10:57:24] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 10:57:30] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 11:00:32] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 11:00:32] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 11:00:36] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 11:00:37] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 11:01:15] [INFO] 任务[build_01-20250_to_02-20250_1758855675]启动：版本升级 01-20250430-26798-BUG → 02-20250507-4570-BUG
-[2025-09-26 11:01:16] [INFO] 任务[build_01-20250_to_02-20250_1758855675]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 11:01:17] [INFO] 任务[build_01-20250_to_02-20250_1758855675]镜像列表生成成功！脚本输出：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-
-[2025-09-26 11:01:59] [INFO] 任务[build_01-20250_to_02-20250_1758855675]镜像拉取成功！共拉取2个镜像，输出日志：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-[2025-09-26 11:01:18] [1;33m开始登录镜像仓库：hub.deepflow.yunshan.net[0m
-Login Succeeded
-[2025-09-26 11:01:26] [1;32m仓库登录成功[0m
-[2025-09-26 11:01:26] [1;33m开始从列表文件拉取镜像：/home/auto_packing_no_delete/latest_image_list/patch_image_tag_list.txt[0m
-[2025-09-26 11:01:26] [1;33m镜像保存目录：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675[0m
-[2025-09-26 11:01:26] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470[0m
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:98b6e7e0724b484911ee4473e7732702d7891d5366e57ca8487feda7bb052b02:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:f1938846b06a1e8593bcca342511dc29366d809b93ce73d49725c72c38f5dfa8: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.5 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:98b6e7e0724b484911ee4473e7732702d7891d5366e57ca8487feda7bb052b02:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:f1938846b06a1e8593bcca342511dc29366d809b93ce73d49725c72c38f5dfa8: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:92cfa6a49dce0944bb9bed214ad94fd9c8ea6a68a39d6d0b228e4b6515ea7136:   done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.6 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:01:33] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470[0m
-[2025-09-26 11:01:33] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675/deepflow-server_v6.6.5470.tar[0m
-[2025-09-26 11:01:45] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675/deepflow-server_v6.6.5470.tar[0m
-[2025-09-26 11:01:45] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/manager:v6.6.736[0m
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736:                                 resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:96a131c512da3fd821650d46ca113a8c8fd83631650fb09fea13ad2c020ab2b2: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.0 s                                                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736:                                    resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:96a131c512da3fd821650d46ca113a8c8fd83631650fb09fea13ad2c020ab2b2:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:2e92a0c1da57e14d3c112adacffb30b2ef57a5e65d8485a4e41cfdf2a240de9c: done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:f532d6c4c8d38ad22f206f58633c1c6e90845690845e43570e51de987049d7d0:   done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.1 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:01:46] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/manager:v6.6.736[0m
-[2025-09-26 11:01:46] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675/manager_v6.6.736.tar[0m
-[2025-09-26 11:01:59] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675/manager_v6.6.736.tar[0m
-[2025-09-26 11:01:59] [1;32m===== 所有镜像处理完成！=====[0m
-[2025-09-26 11:01:59] [1;37m镜像保存目录：[0;36m/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675[0m
-[2025-09-26 11:01:59] [1;37m日志文件路径：[0;36m/home/auto_packing_no_delete/logs/pull_save.log[0m
-
-[2025-09-26 11:02:29] [INFO] 任务[build_01-20250_to_02-20250_1758855675]打包日志：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-[2025-09-26 11:01:18] [1;33m开始登录镜像仓库：hub.deepflow.yunshan.net[0m
-Login Succeeded
-[2025-09-26 11:01:26] [1;32m仓库登录成功[0m
-[2025-09-26 11:01:26] [1;33m开始从列表文件拉取镜像：/home/auto_packing_no_delete/latest_image_list/patch_image_tag_list.txt[0m
-[2025-09-26 11:01:26] [1;33m镜像保存目录：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675[0m
-[2025-09-26 11:01:26] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470[0m
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:98b6e7e0724b484911ee4473e7732702d7891d5366e57ca8487feda7bb052b02:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:f1938846b06a1e8593bcca342511dc29366d809b93ce73d49725c72c38f5dfa8: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.5 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:98b6e7e0724b484911ee4473e7732702d7891d5366e57ca8487feda7bb052b02:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:f1938846b06a1e8593bcca342511dc29366d809b93ce73d49725c72c38f5dfa8: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:92cfa6a49dce0944bb9bed214ad94fd9c8ea6a68a39d6d0b228e4b6515ea7136:   done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.6 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:01:33] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470[0m
-[2025-09-26 11:01:33] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675/deepflow-server_v6.6.5470.tar[0m
-[2025-09-26 11:01:45] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675/deepflow-server_v6.6.5470.tar[0m
-[2025-09-26 11:01:45] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/manager:v6.6.736[0m
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736:                                 resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:96a131c512da3fd821650d46ca113a8c8fd83631650fb09fea13ad2c020ab2b2: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.0 s                                                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736:                                    resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:96a131c512da3fd821650d46ca113a8c8fd83631650fb09fea13ad2c020ab2b2:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:2e92a0c1da57e14d3c112adacffb30b2ef57a5e65d8485a4e41cfdf2a240de9c: done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:f532d6c4c8d38ad22f206f58633c1c6e90845690845e43570e51de987049d7d0:   done           |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.1 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:01:46] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/manager:v6.6.736[0m
-[2025-09-26 11:01:46] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675/manager_v6.6.736.tar[0m
-[2025-09-26 11:01:59] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675/manager_v6.6.736.tar[0m
-[2025-09-26 11:01:59] [1;32m===== 所有镜像处理完成！=====[0m
-[2025-09-26 11:01:59] [1;37m镜像保存目录：[0;36m/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675[0m
-[2025-09-26 11:01:59] [1;37m日志文件路径：[0;36m/home/auto_packing_no_delete/logs/pull_save.log[0m
-tar: Removing leading `/' from member names
-
-[2025-09-26 11:02:29] [INFO] 任务[build_01-20250_to_02-20250_1758855675]TAR.GZ打包成功！升级包信息：
-[2025-09-26 11:02:29] [INFO]   包路径：/home/auto_packing_no_delete/upgrade_packages/01-20250430-26798-BUG_to_02-20250507-4570-BUG.tar.gz
-[2025-09-26 11:02:29] [INFO]   包大小：190.52MB
-[2025-09-26 11:02:29] [INFO]   包含文件：3个（2个镜像 + 1个列表）
-[2025-09-26 11:02:29] [INFO] 任务[build_01-20250_to_02-20250_1758855675]完全结束：01-20250430-26798-BUG→02-20250507-4570-BUG升级包构建完成
-[2025-09-26 11:02:35] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 11:03:06] [INFO] 新构建包下载成功：任务ID=build_01-20250_to_02-20250_1758855675，文件名=01-20250430-26798-BUG_to_02-20250507-4570-BUG.tar.gz
-[2025-09-26 11:03:07] [INFO] 新构建包下载成功：任务ID=build_01-20250_to_02-20250_1758855675，文件名=01-20250430-26798-BUG_to_02-20250507-4570-BUG.tar.gz
-[2025-09-26 11:04:00] [INFO] 任务[build_01-20250_to_02-20250_1758855675]临时目录清理完成：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758855675
-[2025-09-26 11:04:00] [INFO] 任务[build_01-20250_to_02-20250_1758855675]临时日志文件已清理
-[2025-09-26 11:24:56] [WARNING] 任务build_01-20250_to_02-20250_1758855675不存在或已过期（请重新构建）
-[2025-09-26 11:24:56] [WARNING] 任务build_01-20250_to_02-20250_1758855675不存在或已过期（请重新构建）
-[2025-09-26 11:25:03] [WARNING] 任务build_01-20250_to_02-20250_1758855675不存在或已过期（请重新构建）
-[2025-09-26 11:25:03] [WARNING] 任务build_01-20250_to_02-20250_1758855675不存在或已过期（请重新构建）
-[2025-09-26 11:37:12] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 11:37:12] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 11:37:15] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 11:37:16] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 11:37:20] [INFO] 任务[build_01-20250_to_02-20250_1758857840]启动：版本升级 01-20250430-26798-BUG → 02-20250507-4570-BUG
-[2025-09-26 11:37:21] [INFO] 任务[build_01-20250_to_02-20250_1758857840]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 11:37:23] [INFO] 任务[build_01-20250_to_02-20250_1758857840]镜像列表生成成功！脚本输出：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-
-[2025-09-26 11:37:57] [INFO] 任务[build_01-20250_to_02-20250_1758857840]镜像拉取成功！共拉取2个镜像，输出日志：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-[2025-09-26 11:37:24] [1;33m开始登录镜像仓库：hub.deepflow.yunshan.net[0m
-Login Succeeded
-[2025-09-26 11:37:32] [1;32m仓库登录成功[0m
-[2025-09-26 11:37:32] [1;33m开始从列表文件拉取镜像：/home/auto_packing_no_delete/latest_image_list/patch_image_tag_list.txt[0m
-[2025-09-26 11:37:32] [1;33m镜像保存目录：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840[0m
-[2025-09-26 11:37:32] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470[0m
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:98b6e7e0724b484911ee4473e7732702d7891d5366e57ca8487feda7bb052b02:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:f1938846b06a1e8593bcca342511dc29366d809b93ce73d49725c72c38f5dfa8: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:92cfa6a49dce0944bb9bed214ad94fd9c8ea6a68a39d6d0b228e4b6515ea7136:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.7 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:98b6e7e0724b484911ee4473e7732702d7891d5366e57ca8487feda7bb052b02:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:f1938846b06a1e8593bcca342511dc29366d809b93ce73d49725c72c38f5dfa8: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:92cfa6a49dce0944bb9bed214ad94fd9c8ea6a68a39d6d0b228e4b6515ea7136:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.8 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:37:34] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470[0m
-[2025-09-26 11:37:34] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840/deepflow-server_v6.6.5470.tar[0m
-[2025-09-26 11:37:44] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840/deepflow-server_v6.6.5470.tar[0m
-[2025-09-26 11:37:44] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/manager:v6.6.736[0m
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736:                                    resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:96a131c512da3fd821650d46ca113a8c8fd83631650fb09fea13ad2c020ab2b2:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:2e92a0c1da57e14d3c112adacffb30b2ef57a5e65d8485a4e41cfdf2a240de9c: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:f532d6c4c8d38ad22f206f58633c1c6e90845690845e43570e51de987049d7d0:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.2 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736:                                    resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:96a131c512da3fd821650d46ca113a8c8fd83631650fb09fea13ad2c020ab2b2:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:2e92a0c1da57e14d3c112adacffb30b2ef57a5e65d8485a4e41cfdf2a240de9c: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:f532d6c4c8d38ad22f206f58633c1c6e90845690845e43570e51de987049d7d0:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.3 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:37:45] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/manager:v6.6.736[0m
-[2025-09-26 11:37:45] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840/manager_v6.6.736.tar[0m
-[2025-09-26 11:37:57] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840/manager_v6.6.736.tar[0m
-[2025-09-26 11:37:57] [1;32m===== 所有镜像处理完成！=====[0m
-[2025-09-26 11:37:57] [1;37m镜像保存目录：[0;36m/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840[0m
-[2025-09-26 11:37:57] [1;37m日志文件路径：[0;36m/home/auto_packing_no_delete/logs/pull_save.log[0m
-
-[2025-09-26 11:38:32] [INFO] 任务[build_01-20250_to_02-20250_1758857840]打包日志：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-[2025-09-26 11:37:24] [1;33m开始登录镜像仓库：hub.deepflow.yunshan.net[0m
-Login Succeeded
-[2025-09-26 11:37:32] [1;32m仓库登录成功[0m
-[2025-09-26 11:37:32] [1;33m开始从列表文件拉取镜像：/home/auto_packing_no_delete/latest_image_list/patch_image_tag_list.txt[0m
-[2025-09-26 11:37:32] [1;33m镜像保存目录：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840[0m
-[2025-09-26 11:37:32] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470[0m
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:98b6e7e0724b484911ee4473e7732702d7891d5366e57ca8487feda7bb052b02:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:f1938846b06a1e8593bcca342511dc29366d809b93ce73d49725c72c38f5dfa8: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:92cfa6a49dce0944bb9bed214ad94fd9c8ea6a68a39d6d0b228e4b6515ea7136:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.7 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:98b6e7e0724b484911ee4473e7732702d7891d5366e57ca8487feda7bb052b02:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:f1938846b06a1e8593bcca342511dc29366d809b93ce73d49725c72c38f5dfa8: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:92cfa6a49dce0944bb9bed214ad94fd9c8ea6a68a39d6d0b228e4b6515ea7136:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.8 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:37:34] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5470[0m
-[2025-09-26 11:37:34] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840/deepflow-server_v6.6.5470.tar[0m
-[2025-09-26 11:37:44] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840/deepflow-server_v6.6.5470.tar[0m
-[2025-09-26 11:37:44] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/manager:v6.6.736[0m
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736:                                    resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:96a131c512da3fd821650d46ca113a8c8fd83631650fb09fea13ad2c020ab2b2:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:2e92a0c1da57e14d3c112adacffb30b2ef57a5e65d8485a4e41cfdf2a240de9c: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:f532d6c4c8d38ad22f206f58633c1c6e90845690845e43570e51de987049d7d0:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.2 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/manager:v6.6.736:                                    resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:96a131c512da3fd821650d46ca113a8c8fd83631650fb09fea13ad2c020ab2b2:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:2e92a0c1da57e14d3c112adacffb30b2ef57a5e65d8485a4e41cfdf2a240de9c: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:f532d6c4c8d38ad22f206f58633c1c6e90845690845e43570e51de987049d7d0:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.3 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:37:45] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/manager:v6.6.736[0m
-[2025-09-26 11:37:45] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840/manager_v6.6.736.tar[0m
-[2025-09-26 11:37:57] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840/manager_v6.6.736.tar[0m
-[2025-09-26 11:37:57] [1;32m===== 所有镜像处理完成！=====[0m
-[2025-09-26 11:37:57] [1;37m镜像保存目录：[0;36m/home/auto_packing_no_delete/images/01-20250430-26798-BUG_to_02-20250507-4570-BUG_build_01-20250_to_02-20250_1758857840[0m
-[2025-09-26 11:37:57] [1;37m日志文件路径：[0;36m/home/auto_packing_no_delete/logs/pull_save.log[0m
-tar: Removing leading `/' from member names
-
-[2025-09-26 11:38:32] [INFO] 任务[build_01-20250_to_02-20250_1758857840]TAR.GZ打包成功！升级包信息：
-[2025-09-26 11:38:32] [INFO]   包路径：/home/auto_packing_no_delete/upgrade_packages/01-20250430-26798-BUG_to_02-20250507-4570-BUG.tar.gz
-[2025-09-26 11:38:32] [INFO]   包大小：190.52MB
-[2025-09-26 11:38:32] [INFO]   包含文件：3个（2个镜像 + 1个列表）
-[2025-09-26 11:38:32] [INFO] 任务[build_01-20250_to_02-20250_1758857840]完全结束：01-20250430-26798-BUG→02-20250507-4570-BUG升级包构建完成
-[2025-09-26 11:44:41] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 11:44:41] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 11:44:51] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 11:44:51] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 11:45:14] [INFO] 任务[build_78-20250_to_79-20250_1758858314]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
-[2025-09-26 11:45:15] [INFO] 任务[build_78-20250_to_79-20250_1758858314]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 11:45:17] [INFO] 任务[build_78-20250_to_79-20250_1758858314]镜像列表生成成功！脚本输出：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-
-[2025-09-26 11:45:35] [INFO] 任务[build_78-20250_to_79-20250_1758858314]镜像拉取成功！共拉取1个镜像，输出日志：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-[2025-09-26 11:45:18] [1;33m开始登录镜像仓库：hub.deepflow.yunshan.net[0m
-Login Succeeded
-[2025-09-26 11:45:21] [1;32m仓库登录成功[0m
-[2025-09-26 11:45:21] [1;33m开始从列表文件拉取镜像：/home/auto_packing_no_delete/latest_image_list/patch_image_tag_list.txt[0m
-[2025-09-26 11:45:21] [1;33m镜像保存目录：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314[0m
-[2025-09-26 11:45:21] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622[0m
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:e2113d7d64dc0bac7c393fac9eddc4b6b96b9b261f54a3cbfc4861ad609b315c:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.7 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:e2113d7d64dc0bac7c393fac9eddc4b6b96b9b261f54a3cbfc4861ad609b315c:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.8 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:45:23] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622[0m
-[2025-09-26 11:45:23] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314/deepflow-server_v6.6.5622.tar[0m
-[2025-09-26 11:45:35] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314/deepflow-server_v6.6.5622.tar[0m
-[2025-09-26 11:45:35] [1;32m===== 所有镜像处理完成！=====[0m
-[2025-09-26 11:45:35] [1;37m镜像保存目录：[0;36m/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314[0m
-[2025-09-26 11:45:35] [1;37m日志文件路径：[0;36m/home/auto_packing_no_delete/logs/pull_save.log[0m
-
-[2025-09-26 11:45:51] [INFO] 任务[build_78-20250_to_79-20250_1758858314]打包日志：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-[2025-09-26 11:45:18] [1;33m开始登录镜像仓库：hub.deepflow.yunshan.net[0m
-Login Succeeded
-[2025-09-26 11:45:21] [1;32m仓库登录成功[0m
-[2025-09-26 11:45:21] [1;33m开始从列表文件拉取镜像：/home/auto_packing_no_delete/latest_image_list/patch_image_tag_list.txt[0m
-[2025-09-26 11:45:21] [1;33m镜像保存目录：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314[0m
-[2025-09-26 11:45:21] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622[0m
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:e2113d7d64dc0bac7c393fac9eddc4b6b96b9b261f54a3cbfc4861ad609b315c:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.7 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:e2113d7d64dc0bac7c393fac9eddc4b6b96b9b261f54a3cbfc4861ad609b315c:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 1.8 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 11:45:23] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622[0m
-[2025-09-26 11:45:23] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314/deepflow-server_v6.6.5622.tar[0m
-[2025-09-26 11:45:35] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314/deepflow-server_v6.6.5622.tar[0m
-[2025-09-26 11:45:35] [1;32m===== 所有镜像处理完成！=====[0m
-[2025-09-26 11:45:35] [1;37m镜像保存目录：[0;36m/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314[0m
-[2025-09-26 11:45:35] [1;37m日志文件路径：[0;36m/home/auto_packing_no_delete/logs/pull_save.log[0m
-tar: Removing leading `/' from member names
-
-[2025-09-26 11:45:51] [INFO] 任务[build_78-20250_to_79-20250_1758858314]TAR.GZ打包成功！升级包信息：
-[2025-09-26 11:45:51] [INFO]   包路径：/home/auto_packing_no_delete/upgrade_packages/78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 11:45:51] [INFO]   包大小：95.71MB
-[2025-09-26 11:45:51] [INFO]   包含文件：2个（1个镜像 + 1个列表）
-[2025-09-26 11:45:51] [INFO] 任务[build_78-20250_to_79-20250_1758858314]完全结束：78-20250919-5186-BUG→79-20250919-5189-BUG升级包构建完成，请在90秒内下载升级包
-[2025-09-26 11:45:55] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 11:47:22] [INFO] 任务[build_78-20250_to_79-20250_1758858314]临时目录清理完成：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758858314
-[2025-09-26 11:47:22] [INFO] 任务[build_78-20250_to_79-20250_1758858314]临时日志文件已清理
-[2025-09-26 11:53:23] [WARNING] 任务build_78-20250_to_79-20250_1758858314不存在或已过期（请重新构建）
-[2025-09-26 11:53:23] [WARNING] 任务build_78-20250_to_79-20250_1758858314不存在或已过期（请重新构建）
-[2025-09-26 11:54:04] [WARNING] 任务build_78-20250_to_79-20250_1758858314不存在或已过期（请重新构建）
-[2025-09-26 11:54:04] [WARNING] 任务build_78-20250_to_79-20250_1758858314不存在或已过期（请重新构建）
-[2025-09-26 11:57:39] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 11:57:39] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 11:57:43] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 11:57:44] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 12:42:30] [INFO] 任务[build_78-20250_to_79-20250_1758861750]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
-[2025-09-26 12:42:32] [INFO] 验证依赖：生成patch_list的Shell脚本存在
-[2025-09-26 12:42:32] [INFO] 验证依赖：镜像拉取的Shell脚本存在
-[2025-09-26 12:42:33] [INFO] 任务[build_78-20250_to_79-20250_1758861750]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 12:42:34] [INFO] 开始生成镜像列表，当前版本: 78-20250919-5186-BUG, 目标版本: 79-20250919-5189-BUG
-[2025-09-26 12:42:34] [INFO] 处理中...(16%)
-[2025-09-26 12:42:34] [INFO] 处理中...(18%)
-[2025-09-26 12:42:34] [INFO] 处理中...(20%)
-[2025-09-26 12:42:35] [INFO] 处理中...(22%)
-[2025-09-26 12:42:35] [INFO] 处理中...(24%)
-[2025-09-26 12:42:35] [INFO] 处理中...(25%)
-[2025-09-26 12:42:35] [INFO] 镜像列表生成成功，脚本输出已记录
-[2025-09-26 12:42:35] [INFO] 发现 1 个需要拉取的镜像
-[2025-09-26 12:42:36] [INFO] 开始拉取镜像，存储路径：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758861750
-[2025-09-26 12:42:56] [INFO] 处理中...(36%)
-[2025-09-26 12:42:56] [INFO] 处理中...(42%)
-[2025-09-26 12:42:57] [INFO] 处理中...(48%)
-[2025-09-26 12:42:57] [INFO] 处理中...(54%)
-[2025-09-26 12:42:58] [INFO] 处理中...(60%)
-[2025-09-26 12:42:58] [INFO] 处理中...(65%)
-[2025-09-26 12:42:59] [INFO] 镜像拉取成功！共拉取1个镜像
-[2025-09-26 12:42:59] [INFO] 准备打包 2 个文件
-[2025-09-26 12:43:16] [INFO] 处理中...(76%)
-[2025-09-26 12:43:16] [INFO] 处理中...(79%)
-[2025-09-26 12:43:17] [INFO] 处理中...(82%)
-[2025-09-26 12:43:17] [INFO] 处理中...(85%)
-[2025-09-26 12:43:17] [INFO] 处理中...(88%)
-[2025-09-26 12:43:18] [INFO] 处理中...(90%)
-[2025-09-26 12:43:18] [INFO] 升级包大小：95.71MB
-[2025-09-26 12:43:18] [INFO] 临时文件清理完成
-[2025-09-26 12:43:19] [INFO] 任务[build_78-20250_to_79-20250_1758861750]完全结束：78-20250919-5186-BUG→79-20250919-5189-BUG升级包构建完成，请在90秒内下载升级包
-[2025-09-26 12:43:19] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 12:43:23] [INFO] 新构建包下载成功：任务ID=build_78-20250_to_79-20250_1758861750，文件名=78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 12:43:24] [INFO] 新构建包下载成功：任务ID=build_78-20250_to_79-20250_1758861750，文件名=78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 12:44:49] [INFO] 任务临时目录清理完成：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758861750
-[2025-09-26 12:44:49] [INFO] 任务临时日志文件已清理
-[2025-09-26 12:46:58] [WARNING] 任务build_78-20250_to_79-20250_1758861750不存在或已过期（请重新构建）
-[2025-09-26 12:46:58] [WARNING] 任务build_78-20250_to_79-20250_1758861750不存在或已过期（请重新构建）
-[2025-09-26 14:00:54] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 14:00:55] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:04:44] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:04:44] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:04:56] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:04:57] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:08:23] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:08:23] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:08:26] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:08:26] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:08:52] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:08:52] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:08:55] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:08:55] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:08:56] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:08:56] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:08:56] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:08:57] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:09:33] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:09:33] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:09:35] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:09:36] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:09:37] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:09:37] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:09:37] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:09:38] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:11:20] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:11:21] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:12:03] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:12:03] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:12:06] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:12:12] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:15:53] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:15:53] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:15:56] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:16:02] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:16:21] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:16:21] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:16:24] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:16:25] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:19:00] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:19:00] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:19:03] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:19:04] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:20:33] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:20:33] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:20:36] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:20:37] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:20:50] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:20:50] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:20:51] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:20:56] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:24:50] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:24:50] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:24:54] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:24:55] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:25:08] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:25:09] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:25:52] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:25:52] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:25:54] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:25:56] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:25:57] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:26:05] [INFO] 任务[build_78-20250_to_79-20250_1758875165]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
-[2025-09-26 16:26:06] [INFO] 验证依赖：生成patch_list的Shell脚本存在
-[2025-09-26 16:26:07] [INFO] 验证依赖：镜像拉取的Shell脚本存在
-[2025-09-26 16:26:08] [INFO] 任务[build_78-20250_to_79-20250_1758875165]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 16:26:09] [INFO] 开始生成镜像列表，当前版本: 78-20250919-5186-BUG, 目标版本: 79-20250919-5189-BUG
-[2025-09-26 16:26:09] [INFO] 处理中...(16%)
-[2025-09-26 16:26:09] [INFO] 处理中...(18%)
-[2025-09-26 16:26:09] [INFO] 处理中...(20%)
-[2025-09-26 16:26:09] [INFO] 处理中...(22%)
-[2025-09-26 16:26:09] [INFO] 处理中...(24%)
-[2025-09-26 16:26:09] [INFO] 处理中...(25%)
-[2025-09-26 16:26:10] [INFO] 镜像列表生成成功，脚本输出已记录
-[2025-09-26 16:26:10] [INFO] 发现 1 个需要拉取的镜像
-[2025-09-26 16:26:11] [INFO] 开始拉取镜像，存储路径：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758875165
-[2025-09-26 16:26:11] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:26:30] [INFO] 处理中...(36%)
-[2025-09-26 16:26:31] [INFO] 处理中...(42%)
-[2025-09-26 16:26:31] [INFO] 处理中...(48%)
-[2025-09-26 16:26:32] [INFO] 处理中...(54%)
-[2025-09-26 16:26:33] [INFO] 处理中...(60%)
-[2025-09-26 16:26:33] [INFO] 处理中...(65%)
-[2025-09-26 16:26:33] [INFO] 镜像拉取成功！共拉取1个镜像
-[2025-09-26 16:26:34] [INFO] 准备打包 2 个文件
-[2025-09-26 16:26:51] [INFO] 处理中...(76%)
-[2025-09-26 16:26:52] [INFO] 处理中...(79%)
-[2025-09-26 16:26:52] [INFO] 处理中...(82%)
-[2025-09-26 16:26:52] [INFO] 处理中...(85%)
-[2025-09-26 16:26:53] [INFO] 处理中...(88%)
-[2025-09-26 16:26:53] [INFO] 处理中...(90%)
-[2025-09-26 16:26:53] [INFO] 升级包大小：95.71MB
-[2025-09-26 16:26:54] [INFO] 临时文件清理完成
-[2025-09-26 16:26:54] [INFO] 任务[build_78-20250_to_79-20250_1758875165]完全结束：78-20250919-5186-BUG→79-20250919-5189-BUG升级包构建完成，请在90秒内下载升级包
-[2025-09-26 16:26:54] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:27:08] [INFO] 新构建包下载成功：任务ID=build_78-20250_to_79-20250_1758875165，文件名=78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 16:27:08] [INFO] 新构建包下载成功：任务ID=build_78-20250_to_79-20250_1758875165，文件名=78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 16:27:28] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:27:33] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:28:24] [INFO] 任务临时目录清理完成：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758875165
-[2025-09-26 16:28:24] [INFO] 任务临时日志文件已清理
-[2025-09-26 16:41:44] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:41:44] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:42:34] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:42:34] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:42:37] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:42:38] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:42:56] [INFO] 任务[build_78-20250_to_79-20250_1758876176]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
-[2025-09-26 16:42:57] [INFO] 验证依赖：生成patch_list的Shell脚本存在
-[2025-09-26 16:42:58] [INFO] 验证依赖：镜像拉取的Shell脚本存在
-[2025-09-26 16:42:59] [INFO] 任务[build_78-20250_to_79-20250_1758876176]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 16:42:59] [INFO] 开始生成镜像列表，当前版本: 78-20250919-5186-BUG, 目标版本: 79-20250919-5189-BUG
-[2025-09-26 16:42:59] [INFO] 处理中...(16%)
-[2025-09-26 16:43:00] [INFO] 处理中...(18%)
-[2025-09-26 16:43:00] [INFO] 处理中...(20%)
-[2025-09-26 16:43:00] [INFO] 处理中...(22%)
-[2025-09-26 16:43:00] [INFO] 处理中...(24%)
-[2025-09-26 16:43:00] [INFO] 处理中...(25%)
-[2025-09-26 16:43:00] [INFO] 发现 1 个需要拉取的镜像
-[2025-09-26 16:43:02] [INFO] 开始拉取镜像，存储路径：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876176
-[2025-09-26 16:43:02] [INFO] 镜像拉取过程开始（详细日志见任务日志文件）
-[2025-09-26 16:43:30] [INFO] 处理中...(36%)
-[2025-09-26 16:43:30] [INFO] 处理中...(42%)
-[2025-09-26 16:43:31] [INFO] 处理中...(48%)
-[2025-09-26 16:43:31] [INFO] 处理中...(54%)
-[2025-09-26 16:43:32] [INFO] 处理中...(60%)
-[2025-09-26 16:43:33] [INFO] 处理中...(65%)
-[2025-09-26 16:43:33] [INFO] 镜像拉取成功！共拉取1个镜像
-[2025-09-26 16:43:33] [INFO] 准备打包 2 个文件
-[2025-09-26 16:43:34] [INFO] 开始打包升级包：78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 16:43:49] [INFO] 处理中...(76%)
-[2025-09-26 16:43:49] [INFO] 处理中...(79%)
-[2025-09-26 16:43:49] [INFO] 处理中...(82%)
-[2025-09-26 16:43:50] [INFO] 处理中...(85%)
-[2025-09-26 16:43:50] [INFO] 处理中...(88%)
-[2025-09-26 16:43:50] [INFO] 处理中...(90%)
-[2025-09-26 16:43:50] [INFO] 升级包大小：95.71MB
-[2025-09-26 16:43:51] [INFO] 临时文件清理完成
-[2025-09-26 16:43:51] [INFO] 任务[build_78-20250_to_79-20250_1758876176]完全结束：78-20250919-5186-BUG→79-20250919-5189-BUG升级包构建完成，请在90秒内下载升级包
-[2025-09-26 16:43:52] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:43:58] [INFO] 新构建包下载成功：任务ID=build_78-20250_to_79-20250_1758876176，文件名=78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 16:43:58] [INFO] 新构建包下载成功：任务ID=build_78-20250_to_79-20250_1758876176，文件名=78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 16:45:21] [INFO] 任务[build_78-20250_to_79-20250_1758876176]下载时间已过期
-[2025-09-26 16:45:21] [INFO] 任务临时目录清理完成：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876176
-[2025-09-26 16:45:21] [INFO] 任务临时日志文件已清理
-[2025-09-26 16:46:06] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:46:06] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:46:08] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:46:09] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:46:43] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:46:43] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:46:45] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:46:46] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:47:25] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:47:25] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:47:28] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:47:29] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:48:06] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:48:06] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:48:08] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:48:19] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:48:38] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:48:38] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:48:40] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:48:41] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:48:47] [INFO] 任务[build_78-20250_to_79-20250_1758876527]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
-[2025-09-26 16:48:48] [INFO] 任务[build_78-20250_to_79-20250_1758876527]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 16:48:50] [INFO] 任务[build_78-20250_to_79-20250_1758876527]镜像列表生成成功！脚本输出：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-
-[2025-09-26 16:49:16] [INFO] 任务[build_78-20250_to_79-20250_1758876527]镜像拉取成功！共拉取1个镜像，输出日志：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-[2025-09-26 16:48:51] [1;33m开始登录镜像仓库：hub.deepflow.yunshan.net[0m
-Login Succeeded
-[2025-09-26 16:48:54] [1;32m仓库登录成功[0m
-[2025-09-26 16:48:54] [1;33m开始从列表文件拉取镜像：/home/auto_packing_no_delete/latest_image_list/patch_image_tag_list.txt[0m
-[2025-09-26 16:48:54] [1;33m镜像保存目录：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876527[0m
-[2025-09-26 16:48:54] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622[0m
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                        resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.5 s                                                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.6 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:e2113d7d64dc0bac7c393fac9eddc4b6b96b9b261f54a3cbfc4861ad609b315c:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.7 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:e2113d7d64dc0bac7c393fac9eddc4b6b96b9b261f54a3cbfc4861ad609b315c:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.8 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 16:49:01] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622[0m
-[2025-09-26 16:49:01] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876527/deepflow-server_v6.6.5622.tar[0m
-[2025-09-26 16:49:16] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876527/deepflow-server_v6.6.5622.tar[0m
-[2025-09-26 16:49:16] [1;32m===== 所有镜像处理完成！=====[0m
-[2025-09-26 16:49:16] [1;37m镜像保存目录：[0;36m/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876527[0m
-[2025-09-26 16:49:16] [1;37m日志文件路径：[0;36m/home/auto_packing_no_delete/logs/pull_save.log[0m
-
-[2025-09-26 16:49:35] [INFO] 任务[build_78-20250_to_79-20250_1758876527]打包日志：
-[1;32m【INFO】开始生成镜像列表[0m
-[1;32m【SUCCESS】生成镜像列表完成[0m
-[2025-09-26 16:48:51] [1;33m开始登录镜像仓库：hub.deepflow.yunshan.net[0m
-Login Succeeded
-[2025-09-26 16:48:54] [1;32m仓库登录成功[0m
-[2025-09-26 16:48:54] [1;33m开始从列表文件拉取镜像：/home/auto_packing_no_delete/latest_image_list/patch_image_tag_list.txt[0m
-[2025-09-26 16:48:54] [1;33m镜像保存目录：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876527[0m
-[2025-09-26 16:48:54] [1;32m开始拉取镜像：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622[0m
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 0.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 1.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 2.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 3.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 4.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.5 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.6 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.7 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.8 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 5.9 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.0 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.1 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.2 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.3 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622: resolving      |[32m[0m--------------------------------------| 
-elapsed: 6.4 s                                          total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                        resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.5 s                                                                 total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.6 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:e2113d7d64dc0bac7c393fac9eddc4b6b96b9b261f54a3cbfc4861ad609b315c:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.7 s                                                                    total:   0.0 B (0.0 B/s)                                         
-hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622:                           resolved       |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-index-sha256:ee1efc91843f11a8ff93b180c6d65819bc1e51be9d3dd2f3b18275eda381c2d9:    exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-manifest-sha256:22eba0a792ecd3bd31b553b81a6977262c8020e97caa517cf45c08b4e3d09caa: exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-config-sha256:e2113d7d64dc0bac7c393fac9eddc4b6b96b9b261f54a3cbfc4861ad609b315c:   exists         |[32m++++++++++++++++++++++++++++++++++++++[0m| 
-elapsed: 6.8 s                                                                    total:   0.0 B (0.0 B/s)                                         
-[2025-09-26 16:49:01] [1;32m镜像拉取成功：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5622[0m
-[2025-09-26 16:49:01] [1;32m开始保存镜像到：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876527/deepflow-server_v6.6.5622.tar[0m
-[2025-09-26 16:49:16] [1;32m镜像保存成功：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876527/deepflow-server_v6.6.5622.tar[0m
-[2025-09-26 16:49:16] [1;32m===== 所有镜像处理完成！=====[0m
-[2025-09-26 16:49:16] [1;37m镜像保存目录：[0;36m/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876527[0m
-[2025-09-26 16:49:16] [1;37m日志文件路径：[0;36m/home/auto_packing_no_delete/logs/pull_save.log[0m
-tar: Removing leading `/' from member names
-
-[2025-09-26 16:49:35] [INFO] 任务[build_78-20250_to_79-20250_1758876527]TAR.GZ打包成功！升级包信息：
-[2025-09-26 16:49:35] [INFO]   包路径：/home/auto_packing_no_delete/upgrade_packages/78-20250919-5186-BUG_to_79-20250919-5189-BUG.tar.gz
-[2025-09-26 16:49:35] [INFO]   包大小：95.71MB
-[2025-09-26 16:49:35] [INFO]   包含文件：2个（1个镜像 + 1个列表）
-[2025-09-26 16:49:35] [INFO] 任务[build_78-20250_to_79-20250_1758876527]完全结束：78-20250919-5186-BUG→79-20250919-5189-BUG升级包构建完成，请在90秒内下载升级包
-[2025-09-26 16:49:38] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:50:31] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:50:31] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:51:26] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:51:32] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:51:38] [INFO] 任务[build_78-20250_to_79-20250_1758876698]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
-[2025-09-26 16:51:39] [INFO] 验证依赖：生成patch_list的Shell脚本存在
-[2025-09-26 16:51:40] [INFO] 验证依赖：镜像拉取的Shell脚本存在
-[2025-09-26 16:51:41] [INFO] 任务[build_78-20250_to_79-20250_1758876698]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 16:51:41] [INFO] 开始生成镜像列表，当前版本: 78-20250919-5186-BUG, 目标版本: 79-20250919-5189-BUG
-[2025-09-26 16:51:41] [INFO] 处理中...(16%)
-[2025-09-26 16:51:41] [INFO] 处理中...(18%)
-[2025-09-26 16:51:42] [INFO] 处理中...(20%)
-[2025-09-26 16:51:42] [INFO] 处理中...(22%)
-[2025-09-26 16:51:42] [INFO] 处理中...(24%)
-[2025-09-26 16:51:42] [INFO] 处理中...(25%)
-[2025-09-26 16:51:42] [INFO] 镜像列表生成成功，脚本输出已记录
-[2025-09-26 16:51:43] [INFO] 发现 1 个需要拉取的镜像
-[2025-09-26 16:51:43] [INFO] 开始拉取镜像，存储路径：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876698
-[2025-09-26 16:51:54] [ERROR] 任务失败：Command '['/bin/bash', '/home/auto_packing_no_delete/pull_save.sh', '-d', '/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876698']' returned non-zero exit status 1.
-[2025-09-26 16:51:59] [INFO] 任务临时目录清理完成：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876698
-[2025-09-26 16:51:59] [INFO] 任务临时日志文件已清理
-[2025-09-26 16:52:41] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:52:41] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:52:43] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:52:44] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:52:49] [INFO] 任务[build_78-20250_to_79-20250_1758876769]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
-[2025-09-26 16:52:50] [INFO] 验证依赖：生成patch_list的Shell脚本存在
-[2025-09-26 16:52:51] [INFO] 验证依赖：镜像拉取的Shell脚本存在
-[2025-09-26 16:52:52] [INFO] 任务[build_78-20250_to_79-20250_1758876769]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 16:52:52] [INFO] 开始生成镜像列表，当前版本: 78-20250919-5186-BUG, 目标版本: 79-20250919-5189-BUG
-[2025-09-26 16:52:52] [INFO] 处理中...(16%)
-[2025-09-26 16:52:53] [INFO] 处理中...(18%)
-[2025-09-26 16:52:53] [INFO] 处理中...(20%)
-[2025-09-26 16:52:53] [INFO] 处理中...(22%)
-[2025-09-26 16:52:53] [INFO] 处理中...(24%)
-[2025-09-26 16:52:53] [INFO] 处理中...(25%)
-[2025-09-26 16:52:53] [INFO] 镜像列表生成成功，脚本输出已记录
-[2025-09-26 16:52:54] [INFO] 发现 1 个需要拉取的镜像
-[2025-09-26 16:52:55] [INFO] 开始拉取镜像，存储路径：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876769
-[2025-09-26 16:53:13] [INFO] 处理中...(36%)
-[2025-09-26 16:53:13] [INFO] 处理中...(42%)
-[2025-09-26 16:53:14] [INFO] 处理中...(48%)
-[2025-09-26 16:53:15] [INFO] 处理中...(54%)
-[2025-09-26 16:53:15] [INFO] 处理中...(60%)
-[2025-09-26 16:53:16] [INFO] 处理中...(65%)
-[2025-09-26 16:53:16] [INFO] 镜像拉取成功！共拉取1个镜像
-[2025-09-26 16:53:16] [INFO] 准备打包 2 个文件
-[2025-09-26 16:53:35] [INFO] 处理中...(76%)
-[2025-09-26 16:53:35] [INFO] 处理中...(79%)
-[2025-09-26 16:53:35] [INFO] 处理中...(82%)
-[2025-09-26 16:53:36] [INFO] 处理中...(85%)
-[2025-09-26 16:53:36] [INFO] 处理中...(88%)
-[2025-09-26 16:53:36] [INFO] 处理中...(90%)
-[2025-09-26 16:53:36] [INFO] 升级包大小：95.71MB
-[2025-09-26 16:53:37] [INFO] 临时文件清理完成
-[2025-09-26 16:53:37] [INFO] 任务[build_78-20250_to_79-20250_1758876769]完全结束：78-20250919-5186-BUG→79-20250919-5189-BUG升级包构建完成，请在90秒内下载升级包
-[2025-09-26 16:53:38] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:55:08] [INFO] 任务临时目录清理完成：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758876769
-[2025-09-26 16:55:08] [INFO] 任务临时日志文件已清理
-[2025-09-26 16:59:08] [INFO] DeepFlow升级包构建服务启动成功！
-[2025-09-26 16:59:08] [INFO] 服务配置：升级包存储目录=/home/auto_packing_no_delete/upgrade_packages，日志目录=/home/auto_packing_no_delete/logs
-[2025-09-26 16:59:10] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 16:59:12] [INFO] OSS版本按序号排序完成，共78个版本
-[2025-09-26 16:59:16] [INFO] 任务[build_78-20250_to_79-20250_1758877156]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
-[2025-09-26 16:59:18] [INFO] 验证依赖：生成patch_list的Shell脚本存在
-[2025-09-26 16:59:18] [INFO] 验证依赖：镜像拉取的Shell脚本存在
-[2025-09-26 16:59:19] [INFO] 任务[build_78-20250_to_79-20250_1758877156]依赖检查通过：所有Shell脚本均存在
-[2025-09-26 16:59:20] [INFO] 开始生成镜像列表，当前版本: 78-20250919-5186-BUG, 目标版本: 79-20250919-5189-BUG
-[2025-09-26 16:59:20] [INFO] 处理中...(16%)
-[2025-09-26 16:59:20] [INFO] 处理中...(18%)
-[2025-09-26 16:59:20] [INFO] 处理中...(20%)
-[2025-09-26 16:59:21] [INFO] 处理中...(22%)
-[2025-09-26 16:59:21] [INFO] 处理中...(24%)
-[2025-09-26 16:59:21] [INFO] 处理中...(25%)
-[2025-09-26 16:59:21] [INFO] 镜像列表生成成功，脚本输出已记录
-[2025-09-26 16:59:22] [INFO] 发现 1 个需要拉取的镜像
-[2025-09-26 16:59:22] [INFO] 开始拉取镜像，存储路径：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758877156
-[2025-09-26 16:59:51] [INFO] 处理中...(36%)
-[2025-09-26 16:59:52] [INFO] 处理中...(42%)
-[2025-09-26 16:59:52] [INFO] 处理中...(48%)
-[2025-09-26 16:59:53] [INFO] 处理中...(54%)
-[2025-09-26 16:59:53] [INFO] 处理中...(60%)
-[2025-09-26 16:59:54] [INFO] 处理中...(65%)
-[2025-09-26 16:59:54] [INFO] 镜像拉取成功！共拉取1个镜像
-[2025-09-26 16:59:55] [INFO] 准备打包 2 个文件
-[2025-09-26 17:00:11] [INFO] 处理中...(76%)
-[2025-09-26 17:00:11] [INFO] 处理中...(79%)
-[2025-09-26 17:00:11] [INFO] 处理中...(82%)
-[2025-09-26 17:00:12] [INFO] 处理中...(85%)
-[2025-09-26 17:00:12] [INFO] 处理中...(88%)
-[2025-09-26 17:00:12] [INFO] 处理中...(90%)
-[2025-09-26 17:00:12] [INFO] 升级包大小：95.71MB
-[2025-09-26 17:00:13] [INFO] 临时文件清理完成
-[2025-09-26 17:00:13] [INFO] 任务[build_78-20250_to_79-20250_1758877156]完全结束：78-20250919-5186-BUG→79-20250919-5189-BUG升级包构建完成
-[2025-09-26 17:00:14] [INFO] 获取已有升级包成功，共6个有效包
-[2025-09-26 17:01:43] [INFO] 任务临时目录清理完成：/home/auto_packing_no_delete/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1758877156
-[2025-09-26 17:01:43] [INFO] 任务临时日志文件已清理
+[2025-09-28 23:39:13] [INFO] DeepFlow升级包构建服务启动成功！
+[2025-09-28 23:39:13] [INFO] 服务配置：升级包存储目录=/app/upgrade_packages，日志目录=/app/logs
+[2025-09-28 23:39:51] [INFO] DeepFlow升级包构建服务启动成功！
+[2025-09-28 23:39:51] [INFO] 服务配置：升级包存储目录=/app/upgrade_packages，日志目录=/app/logs
+[2025-09-28 23:40:07] [INFO] DeepFlow升级包构建服务启动成功！
+[2025-09-28 23:40:07] [INFO] 服务配置：升级包存储目录=/app/upgrade_packages，日志目录=/app/logs
+[2025-09-28 23:40:58] [INFO] 获取已有升级包成功，共10个有效包
+[2025-09-28 23:40:59] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-28 23:40:59] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-28 23:42:29] [INFO] 任务[build_37-20250_to_65-20250_1759074149]启动：版本升级 37-20250703-4818-BUG → 65-20250825-5011-BUG
+[2025-09-28 23:42:31] [INFO] 验证依赖：生成patch_list的Shell脚本存在
+[2025-09-28 23:42:31] [INFO] 验证依赖：镜像拉取的Shell脚本存在
+[2025-09-28 23:42:32] [INFO] 任务[build_37-20250_to_65-20250_1759074149]依赖检查通过：所有Shell脚本均存在
+[2025-09-28 23:42:33] [INFO] 开始生成镜像列表，当前版本: 37-20250703-4818-BUG, 目标版本: 65-20250825-5011-BUG
+[2025-09-28 23:42:33] [ERROR] 任务失败：Command '['/bin/bash', '/app/bin/get_patch_image_tag_list.sh', '37-20250703-4818-BUG', '65-20250825-5011-BUG']' returned non-zero exit status 1.
+[2025-09-28 23:43:23] [INFO] 任务临时目录清理完成：/app/images/37-20250703-4818-BUG_to_65-20250825-5011-BUG_build_37-20250_to_65-20250_1759074149
+[2025-09-28 23:43:23] [INFO] 任务临时日志文件已清理
+[2025-09-28 23:46:50] [INFO] 任务[build_37-20250_to_65-20250_1759074410]启动：版本升级 37-20250703-4818-BUG → 65-20250825-5011-BUG
+[2025-09-28 23:46:51] [INFO] 验证依赖：生成patch_list的Shell脚本存在
+[2025-09-28 23:46:52] [INFO] 验证依赖：镜像拉取的Shell脚本存在
+[2025-09-28 23:46:53] [INFO] 任务[build_37-20250_to_65-20250_1759074410]依赖检查通过：所有Shell脚本均存在
+[2025-09-28 23:46:54] [INFO] 开始生成镜像列表，当前版本: 37-20250703-4818-BUG, 目标版本: 65-20250825-5011-BUG
+[2025-09-28 23:46:54] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+[2025-09-28 23:46:54] [ERROR] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取失败，请检查！！！ [1;31m [0m
+[2025-09-28 23:46:54] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-28 23:46:54] [INFO] [get_patch_image_tag_list.sh] CURRENT_PATCH_VERSION_INDEX：36  [1;32m [0m
+[2025-09-28 23:46:54] [INFO] [get_patch_image_tag_list.sh] TARGET_PATCH_VERSION_INDEX：64 [1;32m [0m
+[2025-09-28 23:46:54] [ERROR] 任务失败：Command '['/bin/bash', '/app/bin/get_patch_image_tag_list.sh', '37-20250703-4818-BUG', '65-20250825-5011-BUG']' returned non-zero exit status 1.
+[2025-09-28 23:47:06] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+[2025-09-28 23:47:06] [ERROR] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取失败，请检查！！！ [1;31m [0m
+[2025-09-28 23:47:06] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-28 23:47:06] [INFO] [get_patch_image_tag_list.sh] CURRENT_PATCH_VERSION_INDEX：36  [1;32m [0m
+[2025-09-28 23:47:06] [INFO] [get_patch_image_tag_list.sh] TARGET_PATCH_VERSION_INDEX：64 [1;32m [0m
+[2025-09-28 23:47:44] [INFO] 任务临时目录清理完成：/app/images/37-20250703-4818-BUG_to_65-20250825-5011-BUG_build_37-20250_to_65-20250_1759074410
+[2025-09-28 23:47:44] [INFO] 任务临时日志文件已清理
+[2025-09-28 23:48:18] [INFO] 任务[build_37-20250_to_65-20250_1759074498]启动：版本升级 37-20250703-4818-BUG → 65-20250825-5011-BUG
+[2025-09-28 23:48:20] [INFO] 验证依赖：生成patch_list的Shell脚本存在
+[2025-09-28 23:48:20] [INFO] 验证依赖：镜像拉取的Shell脚本存在
+[2025-09-28 23:48:21] [INFO] 任务[build_37-20250_to_65-20250_1759074498]依赖检查通过：所有Shell脚本均存在
+[2025-09-28 23:48:22] [INFO] 开始生成镜像列表，当前版本: 37-20250703-4818-BUG, 目标版本: 65-20250825-5011-BUG
+[2025-09-28 23:48:22] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-28 23:48:22] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-28 23:48:22] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-28 23:48:22] [INFO] [get_patch_image_tag_list.sh] CURRENT_PATCH_VERSION_INDEX：36  [1;32m [0m
+[2025-09-28 23:48:22] [INFO] [get_patch_image_tag_list.sh] TARGET_PATCH_VERSION_INDEX：64 [1;32m [0m
+28
+[2025-09-28 23:48:22] [INFO] [get_patch_image_tag_list.sh] 获取需要更新的 Patch 列表 [1;32m [0m
+39-20250711-4813-BUG
+40-20250714-4827-BUG
+41-20250715-4855-BUG
+42-20250716-4789-BUG
+43-20250716-4518-FEATURE
+44-20250716-4759-FEATURE
+45-20250716-4711-BUG
+46-20250718-4872-FEATURE
+47-20250717-4859-BUG
+48-20250721-4843-FEATURE
+49-20250718-27064-BUG
+50-20250721-4877-BUG
+51-20250723-4892-BUG
+52-20250725-4897-BUG
+53-20250725-27067-BUG
+54-20250729-4896-BUG
+55-20250730-4778-BUG
+56-20250801-4936-BUG
+57-20250801-4932-BUG
+58-20250804-4887-BUG
+59-20250805-4867-FEATURE
+60-20250808-4667-FEATURE
+61-20250813-4871-FEATURE
+62-20250815-4924-BUG
+63-20250820-4871-FEATURE
+64-20250822-27070-FEATURE
+65-20250825-5011-BUG
+66-20250825-5018-FEATURE
+[2025-09-28 23:48:22] [INFO] [get_patch_image_tag_list.sh] 生成镜像列表完成 [1;32m [0m
+[2025-09-28 23:48:23] [INFO] 处理中...(16%)
+[2025-09-28 23:48:23] [INFO] 处理中...(18%)
+[2025-09-28 23:48:24] [INFO] 处理中...(20%)
+[2025-09-28 23:48:24] [INFO] 处理中...(22%)
+[2025-09-28 23:48:24] [INFO] 处理中...(24%)
+[2025-09-28 23:48:24] [INFO] 处理中...(25%)
+[2025-09-28 23:48:24] [INFO] 镜像列表生成成功，脚本输出已记录
+[2025-09-28 23:48:25] [INFO] 发现 9 个需要拉取的镜像
+[2025-09-28 23:48:25] [INFO] 开始拉取镜像，存储路径：/app/images/37-20250703-4818-BUG_to_65-20250825-5011-BUG_build_37-20250_to_65-20250_1759074498
+[2025-09-28 23:51:39] [INFO] 处理中...(36%)
+[2025-09-28 23:51:40] [INFO] 处理中...(42%)
+[2025-09-28 23:51:40] [INFO] 处理中...(48%)
+[2025-09-28 23:51:41] [INFO] 处理中...(54%)
+[2025-09-28 23:51:42] [INFO] 处理中...(60%)
+[2025-09-28 23:51:42] [INFO] 处理中...(65%)
+[2025-09-28 23:51:42] [INFO] 镜像拉取成功！共拉取9个镜像
+[2025-09-28 23:51:43] [INFO] 准备打包 11 个文件
+[2025-09-28 23:54:25] [INFO] 处理中...(76%)
+[2025-09-28 23:54:25] [INFO] 处理中...(79%)
+[2025-09-28 23:54:25] [INFO] 处理中...(82%)
+[2025-09-28 23:54:26] [INFO] 处理中...(85%)
+[2025-09-28 23:54:26] [INFO] 处理中...(88%)
+[2025-09-28 23:54:26] [INFO] 处理中...(90%)
+[2025-09-28 23:54:26] [INFO] 升级包大小：1008.22MB
+[2025-09-28 23:54:27] [INFO] 临时文件清理完成
+[2025-09-28 23:54:27] [INFO] 任务[build_37-20250_to_65-20250_1759074498]完全结束：37-20250703-4818-BUG→65-20250825-5011-BUG升级包构建完成，请在90秒内下载升级包
+[2025-09-28 23:54:28] [INFO] 获取已有升级包成功，共11个有效包
+[2025-09-28 23:55:58] [INFO] 任务临时目录清理完成：/app/images/37-20250703-4818-BUG_to_65-20250825-5011-BUG_build_37-20250_to_65-20250_1759074498
+[2025-09-28 23:55:58] [INFO] 任务临时日志文件已清理
+[2025-09-29 00:03:19] [INFO] 任务[build_37-20250_to_65-20250_1759075399]启动：版本升级 37-20250703-4818-BUG → 65-20250825-5011-BUG
+[2025-09-29 00:03:20] [INFO] 验证依赖：生成patch_list的Shell脚本存在
+[2025-09-29 00:03:21] [INFO] 验证依赖：镜像拉取的Shell脚本存在
+[2025-09-29 00:03:22] [INFO] 任务[build_37-20250_to_65-20250_1759075399]依赖检查通过：所有Shell脚本均存在
+[2025-09-29 00:03:22] [INFO] 开始生成镜像列表，当前版本: 37-20250703-4818-BUG, 目标版本: 65-20250825-5011-BUG
+[2025-09-29 00:03:22] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:03:22] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:03:22] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:03:23] [ERROR] 任务失败：Command '['/bin/bash', '/app/bin/get_patch_image_tag_list.sh', '37-20250703-4818-BUG', '65-20250825-5011-BUG']' returned non-zero exit status 1.
+[2025-09-29 00:03:43] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:03:43] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:03:43] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:04:13] [INFO] 任务临时目录清理完成：/app/images/37-20250703-4818-BUG_to_65-20250825-5011-BUG_build_37-20250_to_65-20250_1759075399
+[2025-09-29 00:04:13] [INFO] 任务临时日志文件已清理
+[2025-09-29 00:04:36] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:04:36] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:04:36] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:05:08] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:05:08] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:05:08] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:05:28] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:05:28] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:05:28] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:06:14] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:06:14] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:06:14] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:07:32] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:07:32] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:07:32] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:14:55] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:14:55] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:14:55] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:14:55] [INFO] [get_patch_image_tag_list.sh] 获取需要更新的 Patch 列表 [1;32m [0m
+39-20250711-4813-BUG
+40-20250714-4827-BUG
+41-20250715-4855-BUG
+42-20250716-4789-BUG
+43-20250716-4518-FEATURE
+44-20250716-4759-FEATURE
+45-20250716-4711-BUG
+46-20250718-4872-FEATURE
+47-20250717-4859-BUG
+48-20250721-4843-FEATURE
+49-20250718-27064-BUG
+50-20250721-4877-BUG
+51-20250723-4892-BUG
+52-20250725-4897-BUG
+53-20250725-27067-BUG
+54-20250729-4896-BUG
+55-20250730-4778-BUG
+56-20250801-4936-BUG
+57-20250801-4932-BUG
+58-20250804-4887-BUG
+59-20250805-4867-FEATURE
+60-20250808-4667-FEATURE
+61-20250813-4871-FEATURE
+62-20250815-4924-BUG
+63-20250820-4871-FEATURE
+64-20250822-27070-FEATURE
+65-20250825-5011-BUG
+66-20250825-5018-FEATURE
+[2025-09-29 00:14:55] [INFO] [get_patch_image_tag_list.sh] 生成镜像列表完成 [1;32m [0m
+[2025-09-29 00:15:39] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:15:39] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:15:39] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:15:39] [INFO] [get_patch_image_tag_list.sh] 获取需要更新的 Patch 列表 [1;32m [0m
+39-20250711-4813-BUG
+40-20250714-4827-BUG
+41-20250715-4855-BUG
+42-20250716-4789-BUG
+43-20250716-4518-FEATURE
+44-20250716-4759-FEATURE
+45-20250716-4711-BUG
+46-20250718-4872-FEATURE
+47-20250717-4859-BUG
+48-20250721-4843-FEATURE
+49-20250718-27064-BUG
+50-20250721-4877-BUG
+51-20250723-4892-BUG
+52-20250725-4897-BUG
+53-20250725-27067-BUG
+54-20250729-4896-BUG
+55-20250730-4778-BUG
+56-20250801-4936-BUG
+57-20250801-4932-BUG
+58-20250804-4887-BUG
+59-20250805-4867-FEATURE
+60-20250808-4667-FEATURE
+61-20250813-4871-FEATURE
+62-20250815-4924-BUG
+63-20250820-4871-FEATURE
+64-20250822-27070-FEATURE
+65-20250825-5011-BUG
+66-20250825-5018-FEATURE
+[2025-09-29 00:15:39] [INFO] [get_patch_image_tag_list.sh] 生成镜像列表完成 [1;32m [0m
+[2025-09-29 00:18:30] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:18:30] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:18:30] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:18:30] [INFO] [get_patch_image_tag_list.sh] 获取需要更新的 Patch 列表 [1;32m [0m
+38-20250709-4773-BUG
+39-20250711-4813-BUG
+40-20250714-4827-BUG
+41-20250715-4855-BUG
+42-20250716-4789-BUG
+43-20250716-4518-FEATURE
+44-20250716-4759-FEATURE
+45-20250716-4711-BUG
+46-20250718-4872-FEATURE
+47-20250717-4859-BUG
+48-20250721-4843-FEATURE
+49-20250718-27064-BUG
+50-20250721-4877-BUG
+51-20250723-4892-BUG
+52-20250725-4897-BUG
+53-20250725-27067-BUG
+54-20250729-4896-BUG
+55-20250730-4778-BUG
+56-20250801-4936-BUG
+57-20250801-4932-BUG
+58-20250804-4887-BUG
+59-20250805-4867-FEATURE
+60-20250808-4667-FEATURE
+61-20250813-4871-FEATURE
+62-20250815-4924-BUG
+63-20250820-4871-FEATURE
+64-20250822-27070-FEATURE
+65-20250825-5011-BUG
+[2025-09-29 00:18:30] [INFO] [get_patch_image_tag_list.sh] 生成镜像列表完成 [1;32m [0m
+[2025-09-29 00:24:01] [INFO] 任务[build_76-20250_to_77-20250_1759076641]启动：版本升级 76-20250912-5154-BUG → 77-20250916-5172-BUG
+[2025-09-29 00:24:03] [INFO] 验证依赖：生成patch_list的Shell脚本存在
+[2025-09-29 00:24:03] [INFO] 验证依赖：镜像拉取的Shell脚本存在
+[2025-09-29 00:24:04] [INFO] 任务[build_76-20250_to_77-20250_1759076641]依赖检查通过：所有Shell脚本均存在
+[2025-09-29 00:24:05] [INFO] 开始生成镜像列表，当前版本: 76-20250912-5154-BUG, 目标版本: 77-20250916-5172-BUG
+[2025-09-29 00:24:05] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 00:24:05] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 00:24:05] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 00:24:05] [INFO] [get_patch_image_tag_list.sh] 获取需要更新的 Patch 列表 [1;32m [0m
+77-20250916-5172-BUG
+[2025-09-29 00:24:05] [INFO] [get_patch_image_tag_list.sh] 生成镜像列表完成 [1;32m [0m
+[2025-09-29 00:24:06] [INFO] 处理中...(16%)
+[2025-09-29 00:24:06] [INFO] 处理中...(18%)
+[2025-09-29 00:24:07] [INFO] 处理中...(20%)
+[2025-09-29 00:24:07] [INFO] 处理中...(22%)
+[2025-09-29 00:24:07] [INFO] 处理中...(24%)
+[2025-09-29 00:24:07] [INFO] 处理中...(25%)
+[2025-09-29 00:24:07] [INFO] 镜像列表生成成功，脚本输出已记录
+[2025-09-29 00:24:08] [INFO] 发现 1 个需要拉取的镜像
+[2025-09-29 00:24:08] [INFO] 开始拉取镜像，存储路径：/app/images/76-20250912-5154-BUG_to_77-20250916-5172-BUG_build_76-20250_to_77-20250_1759076641
+[2025-09-29 00:24:47] [INFO] 处理中...(36%)
+[2025-09-29 00:24:48] [INFO] 处理中...(42%)
+[2025-09-29 00:24:48] [INFO] 处理中...(48%)
+[2025-09-29 00:24:49] [INFO] 处理中...(54%)
+[2025-09-29 00:24:50] [INFO] 处理中...(60%)
+[2025-09-29 00:24:50] [INFO] 处理中...(65%)
+[2025-09-29 00:24:50] [INFO] 镜像拉取成功！共拉取1个镜像
+[2025-09-29 00:24:51] [INFO] 准备打包 3 个文件
+[2025-09-29 00:25:13] [INFO] 处理中...(76%)
+[2025-09-29 00:25:14] [INFO] 处理中...(79%)
+[2025-09-29 00:25:14] [INFO] 处理中...(82%)
+[2025-09-29 00:25:14] [INFO] 处理中...(85%)
+[2025-09-29 00:25:14] [INFO] 处理中...(88%)
+[2025-09-29 00:25:15] [INFO] 处理中...(90%)
+[2025-09-29 00:25:15] [INFO] 升级包大小：123.30MB
+[2025-09-29 00:25:15] [INFO] 临时文件清理完成
+[2025-09-29 00:25:16] [INFO] 任务[build_76-20250_to_77-20250_1759076641]完全结束：76-20250912-5154-BUG→77-20250916-5172-BUG升级包构建完成，请在90秒内下载升级包
+[2025-09-29 00:25:17] [INFO] 获取已有升级包成功，共12个有效包
+[2025-09-29 00:25:42] [INFO] 新构建包下载成功：任务ID=build_76-20250_to_77-20250_1759076641，文件名=deepflow_patch_v669_76_77.tar.gz
+[2025-09-29 00:25:43] [INFO] 新构建包下载成功：任务ID=build_76-20250_to_77-20250_1759076641，文件名=deepflow_patch_v669_76_77.tar.gz
+[2025-09-29 00:26:46] [INFO] 任务临时目录清理完成：/app/images/76-20250912-5154-BUG_to_77-20250916-5172-BUG_build_76-20250_to_77-20250_1759076641
+[2025-09-29 00:26:46] [INFO] 任务临时日志文件已清理
+[2025-09-29 10:03:16] [INFO] 获取已有升级包成功，共12个有效包
+[2025-09-29 10:03:18] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 10:03:18] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 10:03:49] [INFO] 任务[build_78-20250_to_79-20250_1759111429]启动：版本升级 78-20250919-5186-BUG → 79-20250919-5189-BUG
+[2025-09-29 10:03:50] [INFO] 验证依赖：生成patch_list的Shell脚本存在
+[2025-09-29 10:03:51] [INFO] 验证依赖：镜像拉取的Shell脚本存在
+[2025-09-29 10:03:52] [INFO] 任务[build_78-20250_to_79-20250_1759111429]依赖检查通过：所有Shell脚本均存在
+[2025-09-29 10:03:52] [INFO] 开始生成镜像列表，当前版本: 78-20250919-5186-BUG, 目标版本: 79-20250919-5189-BUG
+[2025-09-29 10:03:52] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 10:03:52] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 10:03:52] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 10:03:52] [INFO] [get_patch_image_tag_list.sh] 获取需要更新的 Patch 列表 [1;32m [0m
+79-20250919-5189-BUG
+[2025-09-29 10:03:52] [INFO] [get_patch_image_tag_list.sh] 生成镜像列表完成 [1;32m [0m
+[2025-09-29 10:03:53] [INFO] 处理中...(16%)
+[2025-09-29 10:03:54] [INFO] 处理中...(18%)
+[2025-09-29 10:03:54] [INFO] 处理中...(20%)
+[2025-09-29 10:03:54] [INFO] 处理中...(22%)
+[2025-09-29 10:03:54] [INFO] 处理中...(24%)
+[2025-09-29 10:03:54] [INFO] 处理中...(25%)
+[2025-09-29 10:03:55] [INFO] 镜像列表生成成功，脚本输出已记录
+[2025-09-29 10:03:55] [INFO] 发现 4 个需要拉取的镜像
+[2025-09-29 10:03:56] [INFO] 开始拉取镜像，存储路径：/app/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1759111429
+[2025-09-29 10:06:26] [INFO] 处理中...(36%)
+[2025-09-29 10:06:27] [INFO] 处理中...(42%)
+[2025-09-29 10:06:28] [INFO] 处理中...(48%)
+[2025-09-29 10:06:28] [INFO] 处理中...(54%)
+[2025-09-29 10:06:29] [INFO] 处理中...(60%)
+[2025-09-29 10:06:29] [INFO] 处理中...(65%)
+[2025-09-29 10:06:30] [INFO] 镜像拉取成功！共拉取4个镜像
+[2025-09-29 10:06:30] [INFO] 准备打包 6 个文件
+[2025-09-29 10:07:48] [INFO] 处理中...(76%)
+[2025-09-29 10:07:48] [INFO] 处理中...(79%)
+[2025-09-29 10:07:49] [INFO] 处理中...(82%)
+[2025-09-29 10:07:49] [INFO] 处理中...(85%)
+[2025-09-29 10:07:49] [INFO] 处理中...(88%)
+[2025-09-29 10:07:50] [INFO] 处理中...(90%)
+[2025-09-29 10:07:50] [INFO] 升级包大小：438.91MB
+[2025-09-29 10:07:50] [INFO] 临时文件清理完成
+[2025-09-29 10:07:51] [INFO] 任务[build_78-20250_to_79-20250_1759111429]完全结束：78-20250919-5186-BUG→79-20250919-5189-BUG升级包构建完成，请在90秒内下载升级包
+[2025-09-29 10:07:51] [INFO] 获取已有升级包成功，共12个有效包
+[2025-09-29 10:09:21] [INFO] 任务临时目录清理完成：/app/images/78-20250919-5186-BUG_to_79-20250919-5189-BUG_build_78-20250_to_79-20250_1759111429
+[2025-09-29 10:09:21] [INFO] 任务临时日志文件已清理
+[2025-09-29 10:12:18] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 10:12:19] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 10:12:19] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 11:09:56] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 11:09:57] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 11:09:57] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 11:10:02] [INFO] 任务[build_76-20250_to_77-20250_1759115402]启动：版本升级 76-20250912-5154-BUG → 77-20250916-5172-BUG
+[2025-09-29 11:10:04] [INFO] 验证依赖：生成patch_list的Shell脚本存在
+[2025-09-29 11:10:04] [INFO] 验证依赖：镜像拉取的Shell脚本存在
+[2025-09-29 11:10:05] [INFO] 任务[build_76-20250_to_77-20250_1759115402]依赖检查通过：所有Shell脚本均存在
+[2025-09-29 11:10:06] [INFO] 开始生成镜像列表，当前版本: 76-20250912-5154-BUG, 目标版本: 77-20250916-5172-BUG
+[2025-09-29 11:10:06] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 11:10:06] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 11:10:06] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 11:10:06] [INFO] [get_patch_image_tag_list.sh] 获取需要更新的 Patch 列表 [1;32m [0m
+77-20250916-5172-BUG
+[2025-09-29 11:10:06] [INFO] [get_patch_image_tag_list.sh] 生成镜像列表完成 [1;32m [0m
+[2025-09-29 11:10:07] [INFO] 处理中...(16%)
+[2025-09-29 11:10:07] [INFO] 处理中...(18%)
+[2025-09-29 11:10:07] [INFO] 处理中...(20%)
+[2025-09-29 11:10:07] [INFO] 处理中...(22%)
+[2025-09-29 11:10:08] [INFO] 处理中...(24%)
+[2025-09-29 11:10:08] [INFO] 处理中...(25%)
+[2025-09-29 11:10:08] [INFO] 镜像列表生成成功，脚本输出已记录
+[2025-09-29 11:10:08] [INFO] 发现 1 个需要拉取的镜像
+[2025-09-29 11:10:09] [INFO] 开始拉取镜像，存储路径：/app/images/76-20250912-5154-BUG_to_77-20250916-5172-BUG_build_76-20250_to_77-20250_1759115402
+[2025-09-29 11:10:33] [INFO] 处理中...(36%)
+[2025-09-29 11:10:33] [INFO] 处理中...(42%)
+[2025-09-29 11:10:34] [INFO] 处理中...(48%)
+[2025-09-29 11:10:35] [INFO] 处理中...(54%)
+[2025-09-29 11:10:35] [INFO] 处理中...(60%)
+[2025-09-29 11:10:36] [INFO] 处理中...(65%)
+[2025-09-29 11:10:36] [INFO] 镜像拉取成功！共拉取1个镜像
+[2025-09-29 11:10:36] [INFO] 准备打包 3 个文件
+[2025-09-29 11:10:58] [INFO] 处理中...(76%)
+[2025-09-29 11:10:58] [INFO] 处理中...(79%)
+[2025-09-29 11:10:58] [INFO] 处理中...(82%)
+[2025-09-29 11:10:59] [INFO] 处理中...(85%)
+[2025-09-29 11:10:59] [INFO] 处理中...(88%)
+[2025-09-29 11:10:59] [INFO] 处理中...(90%)
+[2025-09-29 11:10:59] [INFO] 升级包大小：123.30MB
+[2025-09-29 11:11:00] [INFO] 临时文件清理完成
+[2025-09-29 11:11:00] [INFO] 任务[build_76-20250_to_77-20250_1759115402]完全结束：76-20250912-5154-BUG→77-20250916-5172-BUG升级包构建完成，请在90秒内下载升级包
+[2025-09-29 11:11:01] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 11:12:31] [INFO] 任务临时目录清理完成：/app/images/76-20250912-5154-BUG_to_77-20250916-5172-BUG_build_76-20250_to_77-20250_1759115402
+[2025-09-29 11:12:31] [INFO] 任务临时日志文件已清理
+[2025-09-29 11:32:30] [INFO] DeepFlow升级包构建服务启动成功！
+[2025-09-29 11:32:30] [INFO] 服务配置：升级包存储目录=/app/upgrade_packages，日志目录=/app/logs
+[2025-09-29 11:32:31] [INFO] DeepFlow升级包构建服务启动成功！
+[2025-09-29 11:32:31] [INFO] 服务配置：升级包存储目录=/app/upgrade_packages，日志目录=/app/logs
+[2025-09-29 11:33:07] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 11:33:09] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 11:33:09] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 11:33:15] [INFO] 任务[build_76-20250_to_77-20250_1759116795]启动：版本升级 76-20250912-5154-BUG → 77-20250916-5172-BUG
+[2025-09-29 11:33:17] [INFO] 验证依赖：生成patch_list的Shell脚本存在
+[2025-09-29 11:33:17] [INFO] 验证依赖：镜像拉取的Shell脚本存在
+[2025-09-29 11:33:18] [INFO] 任务[build_76-20250_to_77-20250_1759116795]依赖检查通过：所有Shell脚本均存在
+[2025-09-29 11:33:19] [INFO] 开始生成镜像列表，当前版本: 76-20250912-5154-BUG, 目标版本: 77-20250916-5172-BUG
+[2025-09-29 11:33:19] [INFO] [get_patch_image_tag_list.sh] 开始 git pull  [1;32m [0m
+Already up to date.
+[2025-09-29 11:33:19] [INFO] [get_patch_image_tag_list.sh] https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成 [1;32m [0m
+[2025-09-29 11:33:19] [INFO] [get_patch_image_tag_list.sh] 开始生成镜像列表 [1;32m [0m
+[2025-09-29 11:33:19] [INFO] [get_patch_image_tag_list.sh] 获取需要更新的 Patch 列表 [1;32m [0m
+77-20250916-5172-BUG
+[2025-09-29 11:33:19] [INFO] [get_patch_image_tag_list.sh] 生成镜像列表完成 [1;32m [0m
+[2025-09-29 11:33:20] [INFO] 处理中...(16%)
+[2025-09-29 11:33:20] [INFO] 处理中...(18%)
+[2025-09-29 11:33:20] [INFO] 处理中...(20%)
+[2025-09-29 11:33:21] [INFO] 处理中...(22%)
+[2025-09-29 11:33:21] [INFO] 处理中...(24%)
+[2025-09-29 11:33:21] [INFO] 处理中...(25%)
+[2025-09-29 11:33:21] [INFO] 镜像列表生成成功，脚本输出已记录
+[2025-09-29 11:33:22] [INFO] 发现 1 个需要拉取的镜像
+[2025-09-29 11:33:22] [INFO] 开始拉取镜像，存储路径：/app/images/76-20250912-5154-BUG_to_77-20250916-5172-BUG_build_76-20250_to_77-20250_1759116795
+[2025-09-29 11:33:47] [INFO] 处理中...(36%)
+[2025-09-29 11:33:48] [INFO] 处理中...(42%)
+[2025-09-29 11:33:48] [INFO] 处理中...(48%)
+[2025-09-29 11:33:49] [INFO] 处理中...(54%)
+[2025-09-29 11:33:50] [INFO] 处理中...(60%)
+[2025-09-29 11:33:50] [INFO] 处理中...(65%)
+[2025-09-29 11:33:50] [INFO] 镜像拉取成功！共拉取1个镜像
+[2025-09-29 11:33:51] [INFO] 准备打包 3 个文件
+[2025-09-29 11:34:10] [INFO] 处理中...(76%)
+[2025-09-29 11:34:10] [INFO] 处理中...(79%)
+[2025-09-29 11:34:10] [INFO] 处理中...(82%)
+[2025-09-29 11:34:11] [INFO] 处理中...(85%)
+[2025-09-29 11:34:11] [INFO] 处理中...(88%)
+[2025-09-29 11:34:11] [INFO] 处理中...(90%)
+[2025-09-29 11:34:11] [INFO] 升级包大小：123.30MB
+[2025-09-29 11:34:12] [INFO] 临时文件清理完成
+[2025-09-29 11:34:12] [INFO] 任务[build_76-20250_to_77-20250_1759116795]完全结束：76-20250912-5154-BUG→77-20250916-5172-BUG升级包构建完成，请在90秒内下载升级包
+[2025-09-29 11:34:13] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 11:34:16] [INFO] 新构建包下载成功：任务ID=build_76-20250_to_77-20250_1759116795，文件名=deepflow_patch_v669_76_77.tar.gz
+[2025-09-29 11:34:16] [INFO] 新构建包下载成功：任务ID=build_76-20250_to_77-20250_1759116795，文件名=deepflow_patch_v669_76_77.tar.gz
+[2025-09-29 11:35:42] [INFO] 任务临时目录清理完成：/app/images/76-20250912-5154-BUG_to_77-20250916-5172-BUG_build_76-20250_to_77-20250_1759116795
+[2025-09-29 11:35:42] [INFO] 任务临时日志文件已清理
+[2025-09-29 11:43:01] [INFO] 已有升级包下载成功：文件名=deepflow_patch_v669_76_77.tar.gz，路径=/app/upgrade_packages/deepflow_patch_v669_76_77.tar.gz
+[2025-09-29 11:46:20] [INFO] 已有升级包下载成功：文件名=deepflow_patch_v669_76_77.tar.gz，路径=/app/upgrade_packages/deepflow_patch_v669_76_77.tar.gz
+[2025-09-29 14:04:11] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:04:12] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:04:12] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 14:04:14] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:04:15] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:04:15] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 14:04:33] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:04:34] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:04:34] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 14:04:57] [INFO] DeepFlow升级包构建服务启动成功！
+[2025-09-29 14:04:57] [INFO] 服务配置：升级包存储目录=/app/upgrade_packages，日志目录=/app/logs
+[2025-09-29 14:04:58] [INFO] DeepFlow升级包构建服务启动成功！
+[2025-09-29 14:04:58] [INFO] 服务配置：升级包存储目录=/app/upgrade_packages，日志目录=/app/logs
+[2025-09-29 14:05:01] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:05:03] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:05:03] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 14:05:03] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:05:03] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:05:03] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 14:14:42] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:14:43] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:14:43] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 14:15:26] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:15:27] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:15:27] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 14:24:45] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:24:46] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:24:46] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt
+[2025-09-29 14:52:15] [INFO] 获取已有升级包成功，共5个有效包
+[2025-09-29 14:52:16] [INFO] OSS版本按序号排序完成，共79个版本
+[2025-09-29 14:52:16] [INFO] OSS 获取的 PATCH 版本已经成功保存到临时文本：/app/.trash/oss_patch_version.txt

@@ -1,1 +1,1 @@
-deepflow-server:v6.6.5622
+deepflow-agent_tag: v6.6.5617

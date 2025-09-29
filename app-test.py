@@ -18,14 +18,18 @@ build_semaphore = threading.Semaphore(3)  # 限制最大并发任务数为3
 
 # -------------------------- 基础配置（与项目结构对齐） --------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BIN_DIR = os.path.join(BASE_DIR, 'bin')   # 脚本/可执行文件
 IMAGE_TAR_ROOT = os.path.join(BASE_DIR, 'images')       # 镜像临时存储根目录（按任务分目录）
 UPGRADE_PACKAGE_DIR = os.path.join(BASE_DIR, 'upgrade_packages')  # 最终升级包存储目录（TAR.GZ）
 LATEST_LIST_DIR = os.path.join(BASE_DIR, 'latest_image_list')  # 镜像列表目录
 PATCH_LIST_PATH = os.path.join(LATEST_LIST_DIR, 'patch_image_tag_list.txt')  # 镜像列表文件
-PULL_SCRIPT_PATH = os.path.join(BASE_DIR, 'pull_save.sh') # 镜像拉取脚本
-LOG_DIR = os.path.join(BASE_DIR, 'logs')                  # 日志目录
-# 生成patch_list.txt的脚本路径
-PATCH_LIST_SCRIPT_PATH = os.path.join(BASE_DIR, 'get_patch_image_tag_list.sh')
+PULL_SCRIPT_PATH = os.path.join(BIN_DIR, 'pull_save.sh') # 镜像拉取脚本
+LOG_DIR = os.path.join(BASE_DIR, 'logs')        # 日志目录
+OSS_FILE = os.path.join(BIN_DIR, 'ossutil')  # ossutil
+TRASH_DIR = os.path.join(BASE_DIR, '.trash') # 项目临时回收站
+OSS_VERSIONS_TMP_FILE = os.path.join(TRASH_DIR, 'oss_patch_version.txt')
+PATCH_LIST_SCRIPT_PATH = os.path.join(BIN_DIR, 'get_patch_image_tag_list.sh') # 生成patch_list.txt的脚本路径
+UPGRADE_SCRIPT_PATH = os.path.join(BIN_DIR, "deepflow_patch_upgrade.sh")
 
 # 确保目录存在（首次运行自动创建，避免手动创建）
 for dir_path in [IMAGE_TAR_ROOT, UPGRADE_PACKAGE_DIR, LATEST_LIST_DIR, LOG_DIR]:
@@ -33,7 +37,7 @@ for dir_path in [IMAGE_TAR_ROOT, UPGRADE_PACKAGE_DIR, LATEST_LIST_DIR, LOG_DIR]:
         os.makedirs(dir_path)
         write_log(f"自动创建目录：{dir_path}")
 
-
+#print(OSS_FILE)
 # -------------------------- 工具函数（文件列表处理） --------------------------
 def write_log(content, level="INFO", task_id=None):
     """写日志（含时间戳，同时输出到文件和控制台）
@@ -102,7 +106,7 @@ def get_oss_versions():
     """
     try:
         result = subprocess.run(
-            ["ossutil", "ls", "-d", "oss://df-patch-no-delete/patch/6.6/6.6.9/"],
+            [OSS_FILE,"-c",".ossutilconfig", "ls", "-d", "oss://df-patch-no-delete/patch/6.6/6.6.9/"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
@@ -138,6 +142,13 @@ def get_oss_versions():
         # 后端严格按序号升序排序（01→16），前端直接用此顺序
         versions.sort(key=lambda x: x['seq_num'])
         write_log(f"OSS版本按序号排序完成，共{len(versions)}个版本")
+        
+        # 保留 OSS 获取的 PATCH 版本到临时文本，方便其他脚本使用（如果文件不存在，会自动创建）
+        with open(OSS_VERSIONS_TMP_FILE, 'w', encoding='utf-8') as f:
+            for ver in versions:
+                f.write(f"{ver['value']}\n")
+        
+        write_log(f"OSS 获取的 PATCH 版本已经成功保存到临时文本：{OSS_VERSIONS_TMP_FILE}", level="INFO")
         return versions
     
     except Exception as e:
@@ -255,8 +266,8 @@ def run_build_task(task_id, current_version, target_version):
                 script_result = subprocess.run(
                     ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version],
                     check=True,
-                    stdout=f,
-                    stderr=subprocess.STDOUT,
+                    stdout=f,  # 捕获标准输出
+                    stderr=subprocess.STDOUT, # 标准错误合并到标准输出
                     universal_newlines=True
                 )
             
@@ -302,12 +313,17 @@ def run_build_task(task_id, current_version, target_version):
             update_progress(task_id, 70, "准备打包升级包，复制镜像列表文件")
             temp_patch_list = os.path.join(task_image_dir, "patch_image_tag_list.txt")
             shutil.copy2(PATCH_LIST_PATH, temp_patch_list)
-            files_to_pack = tar_files + [temp_patch_list]
+            
+            if not os.path.exists(UPGRADE_SCRIPT_PATH) or not os.path.isfile(UPGRADE_SCRIPT_PATH):
+                raise Exception(f"升级脚本不存在：{UPGRADE_SCRIPT_PATH}")
+            files_to_pack = tar_files + [temp_patch_list, UPGRADE_SCRIPT_PATH]
             write_log(f"准备打包 {len(files_to_pack)} 个文件", task_id=task_id)
 
             # 打包TAR.GZ升级包（仅包含当前任务的镜像+镜像列表）
             update_progress(task_id, 75, "开始打包TAR.GZ升级包")
-            upgrade_package = f"{current_version}_to_{target_version}.tar.gz"
+            current_patch_version = current_version.split('-')[0]
+            target_patch_version = target_version.split('-')[0]
+            upgrade_package = f"deepflow_patch_v669_{current_patch_version}_{target_patch_version}.tar.gz"
             upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
             
             # 执行TAR.GZ打包（--transform确保解包后无嵌套目录）
@@ -338,11 +354,11 @@ def run_build_task(task_id, current_version, target_version):
             write_log(f"临时文件清理完成", task_id=task_id)
 
             # 任务完成：更新状态并记录日志
-            update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+1个列表）")
+            update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）")
             build_status[task_id].update({
                 "status": "complete",
                 "percent": 100,
-                "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+1个列表）",
+                "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）",
                 "complete": True,
                 "error": False,
                 "download_url": f"/download/{task_id}",
@@ -372,7 +388,7 @@ def run_build_task(task_id, current_version, target_version):
             traceback.print_exc()
             
             # 失败后延迟5秒删除状态，给前端足够时间接收错误状态
-            time.sleep(5)
+            time.sleep(50)
             if task_id in build_status:
                 del build_status[task_id]
 
@@ -401,7 +417,7 @@ def run_build_task(task_id, current_version, target_version):
 @app.route('/')
 def index():
     """前端页面入口（返回静态HTML）"""
-    return send_file('index-test.html')
+    return send_file('index.html')
 
 # -------------------------- 获取已有升级包列表 --------------------------
 @app.route('/existing-packages', methods=['GET'])
@@ -624,4 +640,4 @@ def api_download(task_id):
 if __name__ == '__main__':
     write_log("DeepFlow升级包构建服务启动成功！")
     write_log(f"服务配置：升级包存储目录={UPGRADE_PACKAGE_DIR}，日志目录={LOG_DIR}")
-    app.run(host='0.0.0.0', port=8000, threaded=True)
+    app.run(host='0.0.0.0', port=8000, threaded=True, debug=True)
