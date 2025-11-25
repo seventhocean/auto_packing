@@ -15,9 +15,26 @@ CURRENT_DIRECTORY=$(cd "$(dirname "$0")" && pwd)
 # 生成的镜像列表文件
 PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/patch_image_tag_list.txt"
 # 临时回收站
+#TRASH="${CURRENT_DIRECTORY}/../.trash"
+# patch 列表（以 OSS 为准）
+#OSS_PATCH_LIST="${TRASH}/oss_patch_version.txt"
+
+# 临时回收站
 TRASH="${CURRENT_DIRECTORY}/../.trash"
+
+# 如果 .trash 目录不存在，则创建它
+if [ ! -d "${TRASH}" ]; then
+  mkdir -p "${TRASH}"
+fi
+
 # patch 列表（以 OSS 为准）
 OSS_PATCH_LIST="${TRASH}/oss_patch_version.txt"
+
+# 如果 oss_patch_version.txt 文件不存在，则创建空文件
+if [ ! -f "${OSS_PATCH_LIST}" ]; then
+  touch "${OSS_PATCH_LIST}"
+fi
+
 # 获取传参传入的当前补丁版本和目标补丁版本
 CURRENT_PATCH_VERSION="$1"
 TARGET_PATCH_VERSION="$2"

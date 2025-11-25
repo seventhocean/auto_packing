@@ -26,6 +26,7 @@ PATCH_LIST_PATH = os.path.join(LATEST_LIST_DIR, 'patch_image_tag_list.txt')  # �
 PULL_SCRIPT_PATH = os.path.join(BIN_DIR, 'pull_save.sh') # 镜像拉取脚本
 LOG_DIR = os.path.join(BASE_DIR, 'logs')        # 日志目录
 OSS_FILE = os.path.join(BIN_DIR, 'ossutil')  # ossutil
+OSS_CONFIG = os.path.join(BIN_DIR, '.ossutilconfig')
 TRASH_DIR = os.path.join(BASE_DIR, '.trash') # 项目临时回收站
 OSS_VERSIONS_TMP_FILE = os.path.join(TRASH_DIR, 'oss_patch_version.txt')
 PATCH_LIST_SCRIPT_PATH = os.path.join(BIN_DIR, 'get_patch_image_tag_list.sh') # 生成patch_list.txt的脚本路径
@@ -106,7 +107,7 @@ def get_oss_versions():
     """
     try:
         result = subprocess.run(
-            [OSS_FILE,"-c",".ossutilconfig", "ls", "-d", "oss://df-patch-no-delete/patch/6.6/6.6.9/"],
+            [OSS_FILE,"-c", OSS_CONFIG, "ls", "-d", "oss://df-patch-no-delete/patch/6.6/6.6.9/"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
