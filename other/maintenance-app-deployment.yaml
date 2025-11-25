@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maintenance-app
+  namespace: default
+  labels:
+    app: maintenance-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maintenance-app
+  template:
+    metadata:
+      labels:
+        app: maintenance-app
+    spec:
+      # 解析GitLab
+      hostAliases:
+      - ip: "10.1.0.14"
+        hostnames:
+        - "gitlab.yunshan.net"
+      containers:
+      - name: maintenance-app
+        image: maintenance-app:v1.5
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        env:
+        - name: FLASK_APP
+          value: "app-test.py"
+        - name: FLASK_ENV
+          value: "production"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        # OSS凭据
+        - name: OSS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: oss-credentials
+              key: access-key-id
+        - name: OSS_ACCESS_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oss-credentials
+              key: access-key-secret
+        - name: OSS_ENDPOINT
+          value: "oss-cn-beijing.aliyuncs.com"
+        - name: OSS_REGION
+          value: "cn-beijing"
+        volumeMounts:
+        - name: gitlab-ssh-key
+          mountPath: /root/.ssh
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      restartPolicy: Always
+      volumes:
+      - name: gitlab-ssh-key
+        secret:
+          secretName: gitlab-ssh-key
+          defaultMode: 0400
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: maintenance-svc
+  namespace: default
+spec:
+  selector:
+    app: maintenance-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+      nodePort: 30080
+  type: NodePort

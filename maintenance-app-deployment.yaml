@@ -15,27 +15,28 @@ spec:
       labels:
         app: maintenance-app
     spec:
-      # 添加 hostAliases 解析 GitLab
+      # 解析GitLab
       hostAliases:
       - ip: "10.1.0.14"
         hostnames:
         - "gitlab.yunshan.net"
-
       containers:
       - name: maintenance-app
-        image: maintenance-app:v1.7
+        image: maintenance-app:v1.6
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
           protocol: TCP
         env:
+        - name: PATH
+          value: "/app/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         - name: FLASK_APP
           value: "app-test.py"
         - name: FLASK_ENV
           value: "production"
         - name: PYTHONUNBUFFERED
           value: "1"
-        # 注入 OSS 凭据（来自 Secret）
+        # OSS凭据
         - name: OSS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
@@ -54,6 +55,8 @@ spec:
         - name: gitlab-ssh-key
           mountPath: /root/.ssh
           readOnly: true
+        - name: containerd-sock
+          mountPath: /run/containerd/containerd.sock
         resources:
           requests:
             memory: "128Mi"
@@ -62,12 +65,15 @@ spec:
             memory: "256Mi"
             cpu: "200m"
       restartPolicy: Always
-      
       volumes:
       - name: gitlab-ssh-key
         secret:
           secretName: gitlab-ssh-key
           defaultMode: 0400
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket
 ---
 apiVersion: v1
 kind: Service
