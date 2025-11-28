@@ -32,7 +32,6 @@ OSS_VERSIONS_TMP_FILE = os.path.join(TRASH_DIR, 'oss_patch_version.txt')
 PATCH_LIST_SCRIPT_PATH = os.path.join(BIN_DIR, 'get_patch_image_tag_list.sh') # 生成patch_list.txt的脚本路径
 UPGRADE_SCRIPT_PATH = os.path.join(BIN_DIR, "deepflow_patch_upgrade.sh")
 
-# 确保目录存在（首次运行自动创建，避免手动创建）
 for dir_path in [IMAGE_TAR_ROOT, UPGRADE_PACKAGE_DIR, LATEST_LIST_DIR, LOG_DIR]:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -47,28 +46,21 @@ def write_log(content, level="INFO", task_id=None):
     log_file = os.path.join(LOG_DIR, 'app.log')
     timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
     log_line = f"[{timestamp}] [{level}] {content}\n"
-    
-    # 写入文件（追加模式，避免覆盖历史日志）
     with open(log_file, 'a', encoding='utf-8') as f:
         f.write(log_line)
-    
-    # 打印到控制台（便于实时查看）
     print(log_line.strip())
     
     # 如果有任务ID，将日志添加到任务状态中，供前端展示
     if task_id and task_id in build_status:
-        # 确保日志列表存在
         if 'logs' not in build_status[task_id]:
             build_status[task_id]['logs'] = []
-        
-        # 添加日志到任务状态，包含时间戳和级别
+            
         build_status[task_id]['logs'].append({
             'timestamp': timestamp,
             'level': level,
             'content': content
         })
         
-        # 限制日志数量，避免内存占用过大
         if len(build_status[task_id]['logs']) > 100:
             build_status[task_id]['logs'] = build_status[task_id]['logs'][-100:]
 
@@ -78,13 +70,8 @@ def update_progress(task_id, new_percent, message, level="INFO"):
         return
         
     current_percent = build_status[task_id].get('percent', 0)
-    
-    # 仅在新进度大于当前进度时更新
     if new_percent > current_percent:
-        # 计算需要步进的次数（每次增加1%）
         steps = new_percent - current_percent
-        
-        # 分步骤更新进度，使进度条更流畅
         for i in range(steps):
             percent = current_percent + i + 1
             build_status[task_id].update({
@@ -92,18 +79,14 @@ def update_progress(task_id, new_percent, message, level="INFO"):
                 "percent": percent,
                 "message": message if i == steps - 1 else build_status[task_id].get('message', '')
             })
-            
-            # 对于较大的进度跳跃，添加中间日志
             if steps > 5 and (i % (steps // 5) == 0 or i == steps - 1):
                 progress_msg = f"处理中...({percent}%)"
-                write_log(progress_msg, level, task_id)
-                
-            # 控制更新速度，使进度变化可见
+                write_log(progress_msg, level, task_id)   
             time.sleep(0.1)
 
 def get_oss_versions():
     """从OSS获取x86_64架构的补丁版本列表（供前端下拉框用）
-    按文件名前缀序号（01~16）排序，前端直接沿用此顺序，无需二次排序
+    按文件名前缀序号（01~16）排序，前端直接沿用此顺序
     """
     try:
         result = subprocess.run(
@@ -122,10 +105,10 @@ def get_oss_versions():
             if line and ".tar.gz" in line and "x86_64" in line and not line.endswith('/'):
                 # 提取完整文件名（如"01-20250430-26798-BUG_x86_64.tar.gz"）
                 file_name = line.split('/')[-1]
-                # 提取序号（从原始文件名提取，避免后续处理丢失）
-                seq_match = re.search(r'^(\d{2})-', file_name)
+                #seq_match = re.search(r'^(\d{3})-', file_name)
+                seq_match = re.search(r'^(\d+)-', file_name)   #支持3位数以上patch
                 seq_num = int(seq_match.group(1)) if seq_match else 99  # 异常序号放最后
-                
+
                 # 处理前端显示的版本名（去掉.tar.gz和_x86_64）
                 version_with_arch = file_name[:-len(".tar.gz")]
                 display_version = version_with_arch.rstrip('_x86_64')
@@ -136,15 +119,15 @@ def get_oss_versions():
                     versions.append({
                         'value': display_version,
                         'display': display_version,
-                        'seq_num': seq_num,  # 后端排序依据（前端无需使用）
+                        'seq_num': seq_num,
                         'date': date_match.group(1) if date_match else ""  # 仅存储，不排序
                     })
         
-        # 后端严格按序号升序排序（01→16），前端直接用此顺序
+        # 后端严格按序号升序排序，前端直接用此顺序
         versions.sort(key=lambda x: x['seq_num'])
         write_log(f"OSS版本按序号排序完成，共{len(versions)}个版本")
         
-        # 保留 OSS 获取的 PATCH 版本到临时文本，方便其他脚本使用（如果文件不存在，会自动创建）
+        # 保留 OSS 获取的 PATCH 版本到临时文本，方便其他脚本使用
         with open(OSS_VERSIONS_TMP_FILE, 'w', encoding='utf-8') as f:
             for ver in versions:
                 f.write(f"{ver['value']}\n")
@@ -162,16 +145,15 @@ def get_existing_packages():
     返回格式：[{name: 文件名, size: 文件大小(字节)}, ...]
     """
     try:
-        # 筛选目录下所有.tar.gz文件（仅文件，排除目录）
+        # 筛选目录下所有.tar.gz文件
         package_pattern = os.path.join(UPGRADE_PACKAGE_DIR, "*.tar.gz")
         package_files = glob.glob(package_pattern)
         
-        # 处理每个文件，提取名称和大小
         packages = []
         for file_path in package_files:
-            if os.path.isfile(file_path):  # 再次确认是文件（避免符号链接等异常）
+            if os.path.isfile(file_path):
                 file_name = os.path.basename(file_path)
-                file_size = os.path.getsize(file_path)  # 单位：字节
+                file_size = os.path.getsize(file_path)
                 packages.append({
                     "name": file_name,
                     "size": file_size
@@ -214,7 +196,7 @@ def validate_package_filename(filename):
     if not os.path.exists(file_path_abs) or not os.path.isfile(file_path_abs):
         return False, "文件不存在或不是有效文件"
     
-    return True, file_path_abs  # 校验通过，返回文件绝对路径
+    return True, file_path_abs
 
 
 def run_build_task(task_id, current_version, target_version):
