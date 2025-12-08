@@ -3,56 +3,6 @@
 这是一个基于 Docker 和 Python 的轻量级自动化系统，用于管理、部署和维护补丁镜像。本项目旨在简化升级、拉取、保存和部署补丁镜像的流程，适用于离线或受控环境。
 
 ---
-
-## 📁 项目结构
-.
-├── bin/
-│   ├── auto_utilconfig
-│   ├── deepflow_patch_upgrade.sh
-│   ├── get_patch_image_tag_list.sh
-│   └── pull_save.sh
-│
-├── images/
-│   ├── latest_image_list
-│   └── patch_image_tag_list.txt
-│
-├── logs/
-│   ├── app.log
-│   ├── oss_processor.log
-│   └── pull_save.log
-│
-├── myenv/
-│   ├── bin/
-│   ├── lib/
-│   └── lib64/
-│   ├── pip-selfcheck.json
-│   └── pyvenv.cfg
-│
-├── nuwa/
-│   └── upgrade_packages/
-│
-├── webfonts/
-│   └── .dockerignore
-│
-├── static/
-│   ├── all.min.css
-│   ├── bootstrap.bundle.min.js
-│   ├── bootstrap.min.css
-│   └── favicon.ico
-│
-├── app.py
-├── app-test.py
-├── auto_get_patch_dockerfile
-├── get_patch_image_tag_list.sh
-├── index.html
-├── index-test.html
-├── maintenance-app-deployment.yaml
-├── oss-credentials-secret.yaml
-├── pull_save.sh
-└── README.md
-
----
-
 ## 🛠️ 核心组件说明
 
 ### 🔧 脚本文件

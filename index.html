@@ -952,7 +952,8 @@
 
             // 从当前选中版本的display文本中提取序号
             const currentDisplay = currentOpt.textContent;
-            const currentSeqMatch = currentDisplay.match(/^(\d{2})-/);
+            // const currentSeqMatch = currentDisplay.match(/^(\d{2})-/);
+            const currentSeqMatch = currentDisplay.match(/^(\d+)-/);
             if (!currentSeqMatch) {
                 // 如果无法提取序号，保持禁用状态
                 return;
@@ -962,7 +963,8 @@
             // 筛选：仅保留序号高于当前版本的目标版本，沿用后端返回的顺序
             const validTargets = versionData.filter(ver => {
                 // 从版本数据中提取序号
-                const seqMatch = ver.display.match(/^(\d{2})-/);
+                // const seqMatch = ver.display.match(/^(\d{2})-/);
+                const seqMatch = ver.display.match(/^(\d+)-/);
                 if (!seqMatch) return false;
                 const verSeq = parseInt(seqMatch[1], 10);
                 return verSeq > currentSeq;
