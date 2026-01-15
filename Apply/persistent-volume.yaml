@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: auto-pancking-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual-local-storage
+  hostPath:
+    path: /mnt/auto_pancking_pvc/
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auto-pancking-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: manual-local-storage

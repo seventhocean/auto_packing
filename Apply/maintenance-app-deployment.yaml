@@ -22,7 +22,7 @@ spec:
         - "gitlab.yunshan.net"
       containers:
       - name: maintenance-app
-        image: maintenance-app:v1.6
+        image: maintenance-app:v1.7.3
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -57,13 +57,15 @@ spec:
           readOnly: true
         - name: containerd-sock
           mountPath: /run/containerd/containerd.sock
+        - mountPath: /app/upgrade_packages
+          name: storage
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
+            memory: "512Mi"
+            cpu: "500m"
           limits:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "1024Mi"
+            cpu: "1000m"
       restartPolicy: Always
       volumes:
       - name: gitlab-ssh-key
@@ -74,6 +76,9 @@ spec:
         hostPath:
           path: /run/containerd/containerd.sock
           type: Socket
+      - name: storage
+        persistentVolumeClaim:
+          claimName: auto-pancking-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -87,5 +92,5 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 8000
-      nodePort: 30080
+      nodePort: 30090
   type: NodePort
