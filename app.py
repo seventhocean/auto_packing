@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import subprocess
 import threading
 import time
@@ -6,13 +7,13 @@ import glob
 import re
 import json
 import shutil
-from flask import Flask, request, Response, jsonify, send_file, abort
+from flask import Flask, request, Response, jsonify, send_file, abort, render_template
 import traceback
 from urllib.parse import quote, unquote
 
 # 初始化Flask应用
-#app = Flask(__name__, static_folder='static', static_url_path='/static')
-app = Flask(__name__, static_folder='.', static_url_path='')
+app = Flask(__name__, static_folder='static', static_url_path='/static')
+#app = Flask(__name__, static_folder='.', static_url_path='')
 build_status = {}  # 存储构建任务状态（SSE实时更新用）
 build_semaphore = threading.Semaphore(3)  # 限制最大并发任务数为3
 
@@ -35,7 +36,7 @@ UPGRADE_SCRIPT_PATH = os.path.join(BIN_DIR, "deepflow_patch_upgrade.sh")
 for dir_path in [IMAGE_TAR_ROOT, UPGRADE_PACKAGE_DIR, LATEST_LIST_DIR, LOG_DIR]:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-        write_log(f"自动创建目录：{dir_path}")
+       # write_log(f"自动创建目录：{dir_path}")
 
 #print(OSS_FILE)
 # -------------------------- 工具函数（文件列表处理） --------------------------
@@ -399,8 +400,8 @@ def run_build_task(task_id, current_version, target_version):
 # -------------------------- Flask路由 --------------------------
 @app.route('/')
 def index():
-    """前端页面入口（返回静态HTML）"""
-    return send_file('index.html')
+    """前端页面入口"""
+    return render_template('index.html')
 
 # -------------------------- 获取已有升级包列表 --------------------------
 @app.route('/existing-packages', methods=['GET'])
