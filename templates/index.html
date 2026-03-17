@@ -705,11 +705,11 @@
                                 </select>
                             </div>
                             <div class="col-md-12 mt-3 v7-only" style="display: none;">
-                                <label class="form-label">镜像名称（逗号分隔）</label>
+                                <label class="form-label">镜像列表（每行一个或逗号分隔）</label>
                                 <textarea class="form-control" id="v7ImageList" rows="4"
-                                    placeholder="例如：deepflow-server, deepflow-agent, deepflow-app"></textarea>
+                                    placeholder="例如：deepflow-agent_tag: v6.6.5617&#10;deepflow-server_tag: v6.6.5617"></textarea>
                                 <div class="section-desc mt-2" style="margin-bottom: 0;">
-                                    仅 V7 模式生效，每行一个镜像会写入 patchlist（后端自动按逗号分隔并去空）
+                                    仅 V7 模式生效。格式建议为 <code>name_tag: vX.Y.Z</code> 或 <code>name: vX.Y.Z</code>，将写入 patchlist。
                                 </div>
                             </div>
                         </div>
@@ -1217,7 +1217,7 @@
 
         function normalizeV7Images(raw) {
             return raw
-                .split(',')
+                .split(/[,，;\n\r]+/)
                 .map(item => item.trim())
                 .filter(item => item.length > 0);
         }

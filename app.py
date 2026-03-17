@@ -85,6 +85,14 @@ def update_progress(task_id, new_percent, message, level="INFO"):
                 write_log(progress_msg, level, task_id)   
             time.sleep(0.1)
 
+def schedule_task_cleanup(task_id, delay_seconds):
+    """延迟清理任务状态，避免阻塞构建线程与并发控制"""
+    def _cleanup():
+        time.sleep(delay_seconds)
+        if task_id in build_status:
+            del build_status[task_id]
+    threading.Thread(target=_cleanup, daemon=True).start()
+
 def get_oss_versions():
     """从OSS获取x86_64架构的补丁版本列表（供前端下拉框用）
     按文件名前缀序号（01~16）排序，前端直接沿用此顺序
@@ -202,7 +210,8 @@ def validate_package_filename(filename):
 
 def run_build_task(task_id, current_version, target_version):
     """核心构建任务：执行构建list脚本→拉取镜像→打包TAR.GZ格式升级包"""
-    with build_semaphore:  # 控制并发任务数量
+    build_semaphore.acquire()  # 控制并发任务数量
+    try:
         # 创建任务专属目录（用版本+任务ID命名，确保唯一性，避免文件冲突）
         task_dir_name = f"{current_version}_to_{target_version}_{task_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
@@ -352,11 +361,8 @@ def run_build_task(task_id, current_version, target_version):
                 "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2)  # 包大小（MB）
             })
             write_log(f"任务[{task_id}]完全结束：{current_version}→{target_version}升级包构建完成，请在90秒内下载升级包", task_id=task_id)
-            
             # 成功后延迟90秒删除状态，给前端足够时间获取最终状态
-            time.sleep(90)
-            if task_id in build_status:
-                del build_status[task_id]
+            schedule_task_cleanup(task_id, 90)
 
         except Exception as e:
             # 任务失败：捕获异常并更新状态
@@ -370,11 +376,8 @@ def run_build_task(task_id, current_version, target_version):
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             # 打印异常堆栈，便于问题排查
             traceback.print_exc()
-            
-            # 失败后延迟5秒删除状态，给前端足够时间接收错误状态
-            time.sleep(50)
-            if task_id in build_status:
-                del build_status[task_id]
+            # 失败后延迟50秒删除状态，给前端足够时间接收错误状态
+            schedule_task_cleanup(task_id, 50)
 
         finally:
             # 最终清理：无论成功/失败，都删除任务专属镜像目录（节省磁盘空间）
@@ -394,10 +397,13 @@ def run_build_task(task_id, current_version, target_version):
                     write_log(f"任务临时日志文件已清理", task_id=task_id)
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
+    finally:
+        build_semaphore.release()
 
 def run_build_task_v7(task_id, images):
     """V7构建任务：根据镜像列表生成patchlist→拉取镜像→打包TAR.GZ格式升级包"""
-    with build_semaphore:
+    build_semaphore.acquire()
+    try:
         task_dir_name = f"v7_{task_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
         if os.path.exists(task_image_dir):
@@ -504,9 +510,7 @@ def run_build_task_v7(task_id, images):
             })
             write_log(f"任务[{task_id}]完全结束：V7升级包构建完成，请在90秒内下载升级包", task_id=task_id)
 
-            time.sleep(90)
-            if task_id in build_status:
-                del build_status[task_id]
+            schedule_task_cleanup(task_id, 90)
 
         except Exception as e:
             error_msg = str(e)
@@ -519,9 +523,7 @@ def run_build_task_v7(task_id, images):
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             traceback.print_exc()
 
-            time.sleep(50)
-            if task_id in build_status:
-                del build_status[task_id]
+            schedule_task_cleanup(task_id, 50)
 
         finally:
             if os.path.exists(task_image_dir):
@@ -538,6 +540,8 @@ def run_build_task_v7(task_id, images):
                     write_log(f"任务临时日志文件已清理", task_id=task_id)
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
+    finally:
+        build_semaphore.release()
 
 
 # -------------------------- Flask路由 --------------------------
