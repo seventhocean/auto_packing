@@ -686,16 +686,31 @@
                     <form id="buildForm">
                         <div class="row mb-4">
                             <div class="col-md-12">
+                                <label class="form-label">版本栏目</label>
+                                <select class="form-select" id="versionSeries" required>
+                                    <option value="v6" selected>V6（6.6.9）</option>
+                                    <option value="v7">V7（待接入）</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12 mt-3 v6-only">
                                 <label class="form-label">当前Patch版本</label>
                                 <select class="form-select" id="currentVersion" required>
                                     <option value="">加载中...</option>
                                 </select>
                             </div>
-                            <div class="col-md-12 mt-3">
+                            <div class="col-md-12 mt-3 v6-only">
                                 <label class="form-label">目标Patch版本</label>
                                 <select class="form-select" id="targetVersion" required disabled>
                                     <option value="">请先选择当前版本
                                 </select>
+                            </div>
+                            <div class="col-md-12 mt-3 v7-only" style="display: none;">
+                                <label class="form-label">镜像名称（逗号分隔）</label>
+                                <textarea class="form-control" id="v7ImageList" rows="4"
+                                    placeholder="例如：deepflow-server, deepflow-agent, deepflow-app"></textarea>
+                                <div class="section-desc mt-2" style="margin-bottom: 0;">
+                                    仅 V7 模式生效，每行一个镜像会写入 patchlist（后端自动按逗号分隔并去空）
+                                </div>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary w-100 py-3 fs-5" disabled>
@@ -797,10 +812,11 @@
     <script>
         let versionData = [];  // 存储从后端获取的版本列表
         let eventSource = null;  // SSE连接对象
+        let currentSeries = 'v6';
 
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
-            fetchVersions();  // 获取版本列表
+            fetchVersions(currentSeries);  // 获取版本列表
             fetchExistingFiles();  // 获取已有升级包列表
             initEventListeners();  // 绑定事件监听
         });
@@ -808,12 +824,18 @@
         /**
          * 从后端获取版本列表
          */
-        async function fetchVersions() {
+        async function fetchVersions(series) {
+            if (series !== 'v6') {
+                versionData = [];
+                renderVersionOptions(true);
+                return;
+            }
             const currentSelect = document.getElementById('currentVersion');
             currentSelect.innerHTML = '<option value=""><span class="loading-spinner"></span> 加载中...</option>';
 
             try {
-                const res = await fetch('/versions');
+                const query = series ? `?series=${encodeURIComponent(series)}` : '';
+                const res = await fetch(`/versions${query}`);
                 const data = await res.json();
 
                 if (data.success && data.versions) {
@@ -821,11 +843,13 @@
                     renderVersionOptions();  // 渲染版本下拉框
                 } else {
                     showAlert('获取版本失败', data.message || '未知错误', 'error');
-                    currentSelect.innerHTML = '<option value="">加载失败</option>';
+                    versionData = [];
+                    renderVersionOptions(true);
                 }
             } catch (err) {
                 showAlert('网络错误', `获取版本失败：${err.message}`, 'error');
-                currentSelect.innerHTML = '<option value="">网络异常</option>';
+                versionData = [];
+                renderVersionOptions(true);
             }
         }
 
@@ -902,16 +926,24 @@
         /**
          * 渲染版本下拉框选项（关键：不做二次排序，直接用后端返回顺序）
          */
-        function renderVersionOptions() {
+        function renderVersionOptions(isError = false) {
             const currentSelect = document.getElementById('currentVersion');
             const targetSelect = document.getElementById('targetVersion');
             const buildBtn = document.querySelector('button[type="submit"]');
 
             // 重置下拉框
-            currentSelect.innerHTML = '<option value="">请选择当前版本</option>';
+            if (isError) {
+                currentSelect.innerHTML = '<option value="">后端未接入或获取失败</option>';
+            } else {
+                currentSelect.innerHTML = '<option value="">请选择当前版本</option>';
+            }
             targetSelect.innerHTML = '<option value="">请选择目标版本</option>';
             targetSelect.disabled = true;
             buildBtn.disabled = true;
+
+            if (isError || versionData.length === 0) {
+                return;
+            }
 
             // 直接使用后端返回的列表（已按序号排序），不做任何排序
             versionData.forEach(ver => {
@@ -928,10 +960,20 @@
          * 初始化所有事件监听
          */
         function initEventListeners() {
+            // 版本栏目切换：拉取对应版本列表
+            document.getElementById('versionSeries').addEventListener('change', (e) => {
+                currentSeries = e.target.value;
+                versionData = [];
+                renderVersionOptions();
+                toggleSeriesUI(currentSeries);
+                fetchVersions(currentSeries);
+            });
             // 当前版本选择变化：更新目标版本可选范围
             document.getElementById('currentVersion').addEventListener('change', updateTargetVersionOptions);
             // 目标版本选择变化：检查构建按钮是否可启用
             document.getElementById('targetVersion').addEventListener('change', checkBuildBtnStatus);
+            // V7 镜像输入变化：检查构建按钮是否可启用
+            document.getElementById('v7ImageList').addEventListener('input', checkBuildBtnStatus);
             // 构建表单提交：触发构建流程
             document.getElementById('buildForm').addEventListener('submit', startBuildProcess);
             // 下载链接点击：校验文件是否存在
@@ -992,10 +1034,15 @@
          * 检查构建按钮是否可启用（需同时选择当前和目标版本）
          */
         function checkBuildBtnStatus() {
-            const currentVal = document.getElementById('currentVersion').value;
-            const targetVal = document.getElementById('targetVersion').value;
             const buildBtn = document.querySelector('button[type="submit"]');
-            buildBtn.disabled = !(currentVal && targetVal);
+            if (currentSeries === 'v7') {
+                const images = document.getElementById('v7ImageList').value.trim();
+                buildBtn.disabled = images.length === 0;
+            } else {
+                const currentVal = document.getElementById('currentVersion').value;
+                const targetVal = document.getElementById('targetVersion').value;
+                buildBtn.disabled = !(currentVal && targetVal);
+            }
         }
 
         /**
@@ -1006,6 +1053,7 @@
 
             const currentVersion = document.getElementById('currentVersion').value;
             const targetVersion = document.getElementById('targetVersion').value;
+            const v7Images = document.getElementById('v7ImageList').value;
             const buildBtn = document.querySelector('button[type="submit"]');
             const progressSection = document.getElementById('progressSection');
             const logOutput = document.getElementById('logOutput');
@@ -1026,7 +1074,19 @@
             }
 
             // 建立SSE连接，监听构建进度
-            eventSource = new EventSource(`/build?current=${encodeURIComponent(currentVersion)}&target=${encodeURIComponent(targetVersion)}`);
+            let buildUrl = `/build?series=${encodeURIComponent(currentSeries)}`;
+            if (currentSeries === 'v7') {
+                const images = normalizeV7Images(v7Images);
+                if (images.length === 0) {
+                    showAlert('参数错误', '请输入至少一个镜像名称', 'error');
+                    resetBuildState();
+                    return;
+                }
+                buildUrl += `&images=${encodeURIComponent(images.join(','))}`;
+            } else {
+                buildUrl += `&current=${encodeURIComponent(currentVersion)}&target=${encodeURIComponent(targetVersion)}`;
+            }
+            eventSource = new EventSource(buildUrl);
 
             // 接收后端发送的状态消息
             eventSource.onmessage = function (event) {
@@ -1145,6 +1205,21 @@
                 eventSource.close();
                 eventSource = null;
             }
+        }
+
+        function toggleSeriesUI(series) {
+            const v6Els = document.querySelectorAll('.v6-only');
+            const v7Els = document.querySelectorAll('.v7-only');
+            v6Els.forEach(el => { el.style.display = series === 'v6' ? '' : 'none'; });
+            v7Els.forEach(el => { el.style.display = series === 'v7' ? '' : 'none'; });
+            checkBuildBtnStatus();
+        }
+
+        function normalizeV7Images(raw) {
+            return raw
+                .split(',')
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
         }
 
         /**

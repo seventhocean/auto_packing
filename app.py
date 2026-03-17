@@ -394,7 +394,150 @@ def run_build_task(task_id, current_version, target_version):
                     write_log(f"任务临时日志文件已清理", task_id=task_id)
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
-                    
+
+def run_build_task_v7(task_id, images):
+    """V7构建任务：根据镜像列表生成patchlist→拉取镜像→打包TAR.GZ格式升级包"""
+    with build_semaphore:
+        task_dir_name = f"v7_{task_id}"
+        task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
+        if os.path.exists(task_image_dir):
+            shutil.rmtree(task_image_dir)
+        os.makedirs(task_image_dir, exist_ok=True)
+
+        task_log_path = os.path.join(LOG_DIR, f"task_{task_id}.log")
+
+        try:
+            build_status[task_id] = {
+                "status": "progress",
+                "percent": 0,
+                "message": "初始化V7构建任务，检查核心依赖",
+                "logs": []
+            }
+            write_log(f"任务[{task_id}]启动：V7镜像构建，数量={len(images)}", task_id=task_id)
+            time.sleep(1)
+
+            dependencies = [
+                (PULL_SCRIPT_PATH, "镜像拉取的Shell脚本")
+            ]
+
+            update_progress(task_id, 5, "检查核心依赖脚本")
+            for dep_path, dep_desc in dependencies:
+                if not os.path.exists(dep_path):
+                    raise Exception(f"核心依赖缺失：{dep_desc}路径不存在 → {dep_path}")
+                write_log(f"验证依赖：{dep_desc}存在", task_id=task_id)
+                time.sleep(0.5)
+
+            update_progress(task_id, 12, "生成V7镜像列表文件")
+            os.makedirs(LATEST_LIST_DIR, exist_ok=True)
+            with open(PATCH_LIST_PATH, 'w', encoding='utf-8') as f:
+                for image in images:
+                    f.write(f"{image}\n")
+            write_log(f"V7镜像列表写入完成：{PATCH_LIST_PATH}", task_id=task_id)
+
+            update_progress(task_id, 25, "镜像拉取清单生成完成，准备拉取镜像文件")
+            write_log(f"开始拉取镜像，存储路径：{task_image_dir}", task_id=task_id)
+
+            with open(task_log_path, 'a', encoding='utf-8') as f:
+                subprocess.run(
+                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir],
+                    check=True,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True
+                )
+
+            tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
+            if not tar_files:
+                raise Exception(f"镜像拉取失败：任务目录{task_image_dir}无任何.tar镜像文件")
+
+            update_progress(task_id, 60, f"镜像拉取完成，共拉取 {len(tar_files)} 个")
+            write_log(f"镜像拉取成功！共拉取{len(tar_files)}个镜像", task_id=task_id)
+
+            update_progress(task_id, 70, "准备打包升级包，复制镜像列表文件")
+            temp_patch_list = os.path.join(task_image_dir, "patch_image_tag_list.txt")
+            shutil.copy2(PATCH_LIST_PATH, temp_patch_list)
+
+            if not os.path.exists(UPGRADE_SCRIPT_PATH) or not os.path.isfile(UPGRADE_SCRIPT_PATH):
+                raise Exception(f"升级脚本不存在：{UPGRADE_SCRIPT_PATH}")
+            files_to_pack = tar_files + [temp_patch_list, UPGRADE_SCRIPT_PATH]
+
+            update_progress(task_id, 75, "开始打包TAR.GZ升级包")
+            upgrade_package = f"deepflow_patch_v7_{task_id}.tar.gz"
+            upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
+
+            with open(task_log_path, 'a', encoding='utf-8') as f:
+                subprocess.run(
+                    [
+                        "tar", "-czf", upgrade_path,
+                        "--transform", "s/.*\///",
+                        *files_to_pack
+                    ],
+                    check=True,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True
+                )
+
+            if not os.path.exists(upgrade_path) or os.path.getsize(upgrade_path) == 0:
+                raise Exception(f"打包失败：升级包{upgrade_path}不存在或为空文件")
+
+            update_progress(task_id, 90, "验证升级包完整性")
+            package_size = os.path.getsize(upgrade_path)
+            write_log(f"升级包大小：{package_size/1024/1024:.2f}MB", task_id=task_id)
+
+            update_progress(task_id, 95, "清理临时文件")
+            os.remove(temp_patch_list)
+            write_log(f"临时文件清理完成", task_id=task_id)
+
+            update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）")
+            build_status[task_id].update({
+                "status": "complete",
+                "percent": 100,
+                "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）",
+                "complete": True,
+                "error": False,
+                "download_url": f"/download/{task_id}",
+                "package_path": upgrade_path,
+                "package_name": upgrade_package,
+                "package_format": "tar.gz",
+                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2)
+            })
+            write_log(f"任务[{task_id}]完全结束：V7升级包构建完成，请在90秒内下载升级包", task_id=task_id)
+
+            time.sleep(90)
+            if task_id in build_status:
+                del build_status[task_id]
+
+        except Exception as e:
+            error_msg = str(e)
+            build_status[task_id].update({
+                "status": "error",
+                "message": f"构建失败：{error_msg}",
+                "complete": True,
+                "error": True
+            })
+            write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
+            traceback.print_exc()
+
+            time.sleep(50)
+            if task_id in build_status:
+                del build_status[task_id]
+
+        finally:
+            if os.path.exists(task_image_dir):
+                try:
+                    shutil.rmtree(task_image_dir)
+                    write_log(f"任务临时目录清理完成：{task_image_dir}", task_id=task_id)
+                except Exception as clean_e:
+                    clean_error_msg = f"任务临时目录清理失败：{str(clean_e)}"
+                    write_log(clean_error_msg, level="WARNING", task_id=task_id)
+
+            if os.path.exists(task_log_path):
+                try:
+                    os.remove(task_log_path)
+                    write_log(f"任务临时日志文件已清理", task_id=task_id)
+                except Exception as log_e:
+                    write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
 
 
 # -------------------------- Flask路由 --------------------------
@@ -470,6 +613,14 @@ def api_download_existing(filename):
 @app.route('/versions', methods=['GET'])
 def api_get_versions():
     """原有接口：从OSS获取版本列表，供前端下拉框选择"""
+    series = request.args.get('series', 'v6')
+    if series != 'v6':
+        return jsonify({
+            "success": False,
+            "versions": [],
+            "message": f"{series} 版本列表尚未接入（占位逻辑）"
+        }), 501
+
     versions = get_oss_versions()
     if versions:
         return jsonify({
@@ -515,26 +666,43 @@ def api_build():
     # 获取前端传递的版本参数
     current_version = request.args.get('current')
     target_version = request.args.get('target')
-    
-    # 参数校验
-    if not current_version or not target_version:
-        return jsonify({"success": False, "message": "缺少必要参数：current或target版本不能为空"}), 400
-    if current_version == target_version:
-        return jsonify({"success": False, "message": "当前版本与目标版本不能相同"}), 400
+    series = request.args.get('series', 'v6')
+    v7_images = request.args.get('images', '')
 
-    # 生成唯一任务ID
-    timestamp = int(time.time())
-    current_abbr = current_version[:8] if len(current_version)>=8 else current_version
-    target_abbr = target_version[:8] if len(target_version)>=8 else target_version
-    task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}"
+    if series == 'v7':
+        if not v7_images.strip():
+            return jsonify({"success": False, "message": "缺少必要参数：images不能为空"}), 400
+        images = [img.strip() for img in v7_images.split(',') if img.strip()]
+        if not images:
+            return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
+        timestamp = int(time.time())
+        task_id = f"build_v7_{timestamp}"
+        build_thread = threading.Thread(
+            target=run_build_task_v7,
+            args=(task_id, images),
+            daemon=True
+        )
+        build_thread.start()
+    else:
+        # 参数校验
+        if not current_version or not target_version:
+            return jsonify({"success": False, "message": "缺少必要参数：current或target版本不能为空"}), 400
+        if current_version == target_version:
+            return jsonify({"success": False, "message": "当前版本与目标版本不能相同"}), 400
 
-    # 启动异步构建任务
-    build_thread = threading.Thread(
-        target=run_build_task,
-        args=(task_id, current_version, target_version),
-        daemon=True
-    )
-    build_thread.start()
+        # 生成唯一任务ID
+        timestamp = int(time.time())
+        current_abbr = current_version[:8] if len(current_version)>=8 else current_version
+        target_abbr = target_version[:8] if len(target_version)>=8 else target_version
+        task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}"
+
+        # 启动异步构建任务
+        build_thread = threading.Thread(
+            target=run_build_task,
+            args=(task_id, current_version, target_version),
+            daemon=True
+        )
+        build_thread.start()
 
     # 建立SSE连接，实时推送进度和日志
     def generate_sse():
