@@ -80,9 +80,6 @@ def update_progress(task_id, new_percent, message, level="INFO"):
                 "percent": percent,
                 "message": message if i == steps - 1 else build_status[task_id].get('message', '')
             })
-            if steps > 5 and (i % (steps // 5) == 0 or i == steps - 1):
-                progress_msg = f"处理中...({percent}%)"
-                write_log(progress_msg, level, task_id)   
             time.sleep(0.1)
 
 def schedule_task_cleanup(task_id, delay_seconds):

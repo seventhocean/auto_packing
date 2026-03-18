@@ -813,6 +813,7 @@
         let versionData = [];  // 存储从后端获取的版本列表
         let eventSource = null;  // SSE连接对象
         let currentSeries = 'v6';
+        let lastLogMessage = '';
 
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
@@ -1064,6 +1065,7 @@
             buildBtn.innerHTML = '<span class="loading-spinner"></span> 构建中...';
             progressSection.style.display = 'block';
             logOutput.innerHTML = '';
+            lastLogMessage = '';
             downloadSection.style.display = 'none';
             updateProgressBar(0, '构建任务已启动，等待后端响应...');
 
@@ -1174,6 +1176,12 @@
          * 添加日志到日志容器
          */
         function addLog(message, type = 'info') {
+            const cleaned = sanitizeLogMessage(message);
+            if (!cleaned) return;
+            // 避免重复输出相同日志
+            if (cleaned === lastLogMessage) return;
+            lastLogMessage = cleaned;
+
             const logOutput = document.getElementById('logOutput');
             const logDiv = document.createElement('div');
             logDiv.className = 'log-entry';
@@ -1181,11 +1189,11 @@
 
             // 根据日志类型设置样式
             if (type === 'error') {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-error">❌ ${message}</span>`;
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-error">❌ ${cleaned}</span>`;
             } else if (type === 'success') {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-success">✅ ${message}</span>`;
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-success">✅ ${cleaned}</span>`;
             } else {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-info">ℹ️ ${message}</span>`;
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-info">ℹ️ ${cleaned}</span>`;
             }
 
             logOutput.appendChild(logDiv);
@@ -1200,6 +1208,7 @@
             const buildBtn = document.querySelector('button[type="submit"]');
             buildBtn.disabled = false;
             buildBtn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
+            lastLogMessage = '';
             // 关闭SSE连接
             if (eventSource) {
                 eventSource.close();
@@ -1220,6 +1229,16 @@
                 .split(/[,，;\n\r]+/)
                 .map(item => item.trim())
                 .filter(item => item.length > 0);
+        }
+
+        function sanitizeLogMessage(message) {
+            if (!message) return '';
+            let cleaned = String(message);
+            // 去掉日志中的百分比展示（进度条已显示）
+            cleaned = cleaned.replace(/\(\s*\d{1,3}%\s*\)/g, '').trim();
+            cleaned = cleaned.replace(/(\s*\d{1,3}%\s*)/g, '').trim();
+            // 避免空消息
+            return cleaned;
         }
 
         /**
