@@ -3,6 +3,8 @@ kind: Namespace
 metadata:
   name: getpatch
 ---
+# 应用运行配置。这里只放业务应用读取的 Redis 参数，
+# 实际密码仍由 Secret 注入到容器环境变量 REDIS_PASSWORD。
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -31,6 +33,7 @@ type: Opaque
 stringData:
   redis-password: "YSDeepFlow@3q302"
 ---
+# Redis Service，供 maintenance-app / maintenance-worker 通过服务名访问。
 apiVersion: v1
 kind: Service
 metadata:
@@ -48,6 +51,7 @@ spec:
       targetPort: 6379
   type: ClusterIP
 ---
+# Redis 本体。这个 Deployment 才是真正运行 redis-server 的地方。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -117,6 +121,10 @@ spec:
       - name: redis-data
         emptyDir: {}
 ---
+# Web/API 服务：
+# - 主容器镜像是 maintenance-app:v1.7.3
+# - initContainer 用 redis:7.2-alpine 只是为了复用 redis-cli，
+#   在启动前检测 Redis 是否可连通且认证成功
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -135,6 +143,7 @@ spec:
         app: maintenance-app
     spec:
       initContainers:
+      # 这里只是“等待 Redis 就绪”的探测容器，不是业务容器。
       - name: wait-for-redis
         image: redis:7.2-alpine
         imagePullPolicy: IfNotPresent
@@ -154,6 +163,7 @@ spec:
         hostnames:
         - "gitlab.yunshan.net"
       containers:
+      # 真正的 maintenance-app 业务容器。
       - name: maintenance-app
         image: maintenance-app:v1.7.3
         imagePullPolicy: IfNotPresent
@@ -246,6 +256,10 @@ spec:
         configMap:
           name: maintenance-app-config
 ---
+# 后台构建 worker：
+# - 与 maintenance-app 复用同一业务镜像
+# - 通过 args 覆盖启动命令，改为执行 python worker.py
+# - 同样使用 initContainer 等待 Redis 就绪
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -264,6 +278,7 @@ spec:
         app: maintenance-worker
     spec:
       initContainers:
+      # 这里只是“等待 Redis 就绪”的探测容器，不是 worker 本体。
       - name: wait-for-redis
         image: redis:7.2-alpine
         imagePullPolicy: IfNotPresent
@@ -282,6 +297,7 @@ spec:
         hostnames:
         - "gitlab.yunshan.net"
       containers:
+      # 真正的 worker 业务容器。
       - name: maintenance-worker
         image: maintenance-app:v1.7.3
         imagePullPolicy: IfNotPresent
@@ -349,6 +365,7 @@ spec:
         configMap:
           name: maintenance-app-config
 ---
+# 对外暴露 maintenance-app 的 Web 入口。
 apiVersion: v1
 kind: Service
 metadata:
