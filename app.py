@@ -388,6 +388,15 @@ def run_build_task(task_id, current_version, target_version):
             update_progress(task_id, 10, "所有依赖检查通过，开始生成镜像列表")
             write_log(f"任务[{task_id}]依赖检查通过：所有Shell脚本均存在", task_id=task_id)
 
+            # 在 app / worker 分离部署后，worker Pod 不能依赖 app Pod 本地生成的
+            # .trash/oss_patch_version.txt。这里在 worker 执行任务前主动刷新一份
+            # 当前 Pod 本地的 OSS 版本缓存，供 shell 脚本读取。
+            update_progress(task_id, 12, "刷新OSS补丁版本缓存")
+            oss_versions = get_oss_versions()
+            if not oss_versions:
+                raise Exception("OSS版本缓存刷新失败，无法生成镜像列表")
+            write_log(f"OSS版本缓存刷新完成，共{len(oss_versions)}个版本", task_id=task_id)
+
             # 执行get_patch_image_tag_list.sh，生成镜像拉取清单
             update_progress(task_id, 15, f"执行镜像列表生成脚本，参数：{current_version} {target_version}")
             write_log(f"开始生成镜像列表，当前版本: {current_version}, 目标版本: {target_version}", task_id=task_id)
