@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import subprocess
-import threading
 import time
 import os
 import glob
@@ -105,6 +104,18 @@ def active_builds_key():
     return f"{REDIS_CONFIG['key_prefix']}:builds:active"
 
 
+def build_queue_key():
+    return f"{REDIS_CONFIG['key_prefix']}:build:queue"
+
+
+def build_processing_key(worker_id):
+    return f"{REDIS_CONFIG['key_prefix']}:build:processing:{worker_id}"
+
+
+def worker_heartbeat_key(worker_id):
+    return f"{REDIS_CONFIG['key_prefix']}:worker:{worker_id}:heartbeat"
+
+
 def get_task_status(task_id, include_logs=True):
     status_json = redis_client.get(task_meta_key(task_id))
     if not status_json:
@@ -153,7 +164,7 @@ def append_task_log(task_id, timestamp, level, content):
 def initialize_task_status(task_id, message):
     now = int(time.time())
     set_task_status(task_id, {
-        "status": "progress",
+        "status": "queued",
         "percent": 0,
         "message": message,
         "complete": False,
@@ -184,6 +195,10 @@ def release_build_slot(task_id):
         current_value = redis_client.decr(active_builds_key())
         if current_value < 0:
             redis_client.set(active_builds_key(), 0)
+
+
+def enqueue_build_task(payload):
+    redis_client.lpush(build_queue_key(), json.dumps(payload, ensure_ascii=False))
 
 
 # -------------------------- 工具函数（文件列表处理） --------------------------
@@ -781,22 +796,20 @@ def api_build():
             return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
         timestamp = int(time.time() * 1000)
         task_id = f"build_v7_{timestamp}_{uuid.uuid4().hex[:8]}"
-        if not try_acquire_build_slot(task_id):
-            return jsonify({
-                "success": False,
-                "message": "当前构建任务已达上限，请稍后再试"
-            }), 429
-        initialize_task_status(task_id, "初始化V7构建任务，检查核心依赖")
-        build_thread = threading.Thread(
-            target=run_build_task_v7,
-            args=(task_id, images),
-            daemon=True
-        )
         try:
-            build_thread.start()
-        except Exception:
-            release_build_slot(task_id)
-            schedule_task_cleanup(task_id, REDIS_CONFIG['failure_ttl_seconds'])
+            initialize_task_status(task_id, "任务已创建，等待 worker 调度")
+            enqueue_build_task({
+                "task_id": task_id,
+                "task_type": "v7",
+                "images": images
+            })
+        except Exception as e:
+            update_task_status(task_id, {
+                "status": "error",
+                "message": f"任务入队失败：{str(e)}",
+                "complete": True,
+                "error": True
+            }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
             raise
     else:
         # 参数校验
@@ -810,24 +823,21 @@ def api_build():
         current_abbr = current_version[:8] if len(current_version)>=8 else current_version
         target_abbr = target_version[:8] if len(target_version)>=8 else target_version
         task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}_{uuid.uuid4().hex[:8]}"
-        if not try_acquire_build_slot(task_id):
-            return jsonify({
-                "success": False,
-                "message": "当前构建任务已达上限，请稍后再试"
-            }), 429
-        initialize_task_status(task_id, "初始化构建任务，检查核心依赖")
-
-        # 启动异步构建任务
-        build_thread = threading.Thread(
-            target=run_build_task,
-            args=(task_id, current_version, target_version),
-            daemon=True
-        )
         try:
-            build_thread.start()
-        except Exception:
-            release_build_slot(task_id)
-            schedule_task_cleanup(task_id, REDIS_CONFIG['failure_ttl_seconds'])
+            initialize_task_status(task_id, "任务已创建，等待 worker 调度")
+            enqueue_build_task({
+                "task_id": task_id,
+                "task_type": "v6",
+                "current_version": current_version,
+                "target_version": target_version
+            })
+        except Exception as e:
+            update_task_status(task_id, {
+                "status": "error",
+                "message": f"任务入队失败：{str(e)}",
+                "complete": True,
+                "error": True
+            }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
             raise
 
     # 建立SSE连接，实时推送进度和日志
