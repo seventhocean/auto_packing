@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>DeepFlow 升级包构建工具</title>
+    <title>DeepFlow 升级包构建</title>
     <link rel="stylesheet" href="static/bootstrap.min.css">
     <link rel="stylesheet" href="static/all.min.css">
     <link rel="icon" href="static/favicon.ico" type="image/x-icon">
@@ -35,6 +35,21 @@
             --radius-sm: 10px;
         }
 
+        body[data-series="v7"] {
+            --brand: #c8a96d;
+            --brand-strong: #a98347;
+            --accent: #d7c39b;
+            --bg-page: #17120d;
+            --bg-panel: rgba(39, 31, 22, 0.9);
+            --bg-panel-strong: #2c2218;
+            --bg-muted: #34291d;
+            --line: rgba(222, 197, 156, 0.14);
+            --line-strong: rgba(222, 197, 156, 0.26);
+            --text-main: #fbf5ec;
+            --text-sub: #d8c6ad;
+            --text-muted: #b59d7e;
+        }
+
         body {
             margin: 0;
             min-height: 100vh;
@@ -44,6 +59,14 @@
                 radial-gradient(circle at top left, rgba(61, 125, 255, 0.18), transparent 32%),
                 radial-gradient(circle at bottom right, rgba(68, 196, 161, 0.12), transparent 28%),
                 linear-gradient(180deg, #0d1118 0%, #131a25 100%);
+            transition: background 0.35s ease, color 0.25s ease;
+        }
+
+        body[data-series="v7"] {
+            background:
+                radial-gradient(circle at top left, rgba(201, 169, 109, 0.18), transparent 34%),
+                radial-gradient(circle at bottom right, rgba(170, 131, 71, 0.12), transparent 30%),
+                linear-gradient(180deg, #120e0a 0%, #19140f 100%);
         }
 
         .page-shell {
@@ -57,6 +80,7 @@
             grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.65fr);
             gap: 18px;
             margin-bottom: 22px;
+            align-items: stretch;
         }
 
         .hero-card,
@@ -75,9 +99,30 @@
             padding: 24px 30px;
             position: relative;
             overflow: hidden;
-            min-height: 116px;
+            min-height: 132px;
             display: flex;
             align-items: center;
+            height: 100%;
+        }
+
+        .hero-copy {
+            position: relative;
+            z-index: 1;
+            max-width: 760px;
+        }
+
+        .hero-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-sub);
+            font-size: 0.82rem;
+            letter-spacing: 0.04em;
         }
 
         .status-card {
@@ -85,8 +130,11 @@
             background: rgba(20, 27, 39, 0.76);
             box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
             display: grid;
+            grid-template-rows: auto 1fr;
             gap: 12px;
-            align-content: start;
+            align-content: stretch;
+            min-height: 132px;
+            height: 100%;
         }
 
         .hero-card::before {
@@ -118,6 +166,14 @@
             letter-spacing: -0.03em;
         }
 
+        .hero-subtitle {
+            margin: 14px 0 0;
+            max-width: 560px;
+            color: var(--text-sub);
+            font-size: 1rem;
+            line-height: 1.75;
+        }
+
         .status-title {
             display: flex;
             align-items: center;
@@ -130,6 +186,7 @@
         .status-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-auto-rows: 1fr;
             gap: 10px;
         }
 
@@ -138,6 +195,11 @@
             border-radius: var(--radius-md);
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
+            min-height: 76px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .status-label {
@@ -163,58 +225,159 @@
             padding: 22px;
         }
 
-        .tabs-bar {
+        .section-header {
             display: flex;
-            gap: 12px;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .section-copy {
+            min-width: 0;
+        }
+
+        .mode-toolbar {
+            display: grid;
+            grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+            align-items: stretch;
+            gap: 14px;
             margin-bottom: 20px;
         }
 
-        .series-tab {
-            flex: 1;
+        .mode-picker {
+            min-width: 0;
+        }
+
+        .mode-label {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            margin-bottom: 8px;
+            letter-spacing: 0.04em;
+        }
+
+        .mode-select-wrap {
+            position: relative;
+            height: 100%;
+        }
+
+        .mode-select {
+            width: 100%;
+            min-height: 92px;
+            padding: 14px 46px 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+            color: var(--text-main);
+            appearance: none;
+            font-size: 1rem;
+            font-weight: 600;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            height: 100%;
+        }
+
+        .mode-select:focus {
+            outline: none;
+            border-color: rgba(108, 167, 255, 0.52);
+            box-shadow: 0 0 0 4px rgba(61, 125, 255, 0.12);
+        }
+
+        body[data-series="v7"] .mode-select:focus {
+            border-color: rgba(201, 169, 109, 0.52);
+            box-shadow: 0 0 0 4px rgba(169, 131, 71, 0.14);
+        }
+
+        .mode-select-wrap::after {
+            content: "\f078";
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .mode-summary {
             padding: 16px 18px;
             border-radius: var(--radius-lg);
             border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-sub);
-            cursor: pointer;
-            text-align: left;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-        }
-
-        .series-tab:hover {
-            border-color: var(--line-strong);
-            transform: translateY(-1px);
-        }
-
-        .series-tab.active {
-            background: linear-gradient(135deg, rgba(61, 125, 255, 0.28), rgba(68, 196, 161, 0.12));
-            border-color: rgba(108, 167, 255, 0.44);
+            background: linear-gradient(135deg, rgba(61, 125, 255, 0.18), rgba(68, 196, 161, 0.06));
             color: var(--text-main);
-            box-shadow: var(--shadow-md);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            min-height: 92px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
-        .series-name {
-            display: block;
-            font-size: 1.08rem;
+        body[data-series="v7"] .mode-summary {
+            background: linear-gradient(135deg, rgba(201, 169, 109, 0.18), rgba(167, 131, 71, 0.06));
+        }
+
+        .mode-summary-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 8px;
+            font-size: 1.02rem;
             font-weight: 600;
-            margin-bottom: 6px;
         }
 
-        .series-note {
-            display: block;
-            font-size: 0.88rem;
-            color: inherit;
-            opacity: 0.84;
+        .mode-summary-text {
+            color: var(--text-sub);
+            font-size: 0.92rem;
+            line-height: 1.7;
+            margin: 0;
         }
 
         .panel-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+            grid-template-columns: 1fr;
+            grid-template-rows: auto minmax(0, 1fr);
             gap: 18px;
+            min-height: clamp(620px, calc(100vh - 250px), 760px);
         }
 
         .card-shell {
             padding: 22px;
+        }
+
+        .panel-grid .card-shell {
+            min-height: 0;
+        }
+
+        .form-shell {
+            display: block;
+        }
+
+        .version-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .version-grid .mb-3 {
+            margin-bottom: 0 !important;
+        }
+
+        .version-grid + .build-submit {
+            margin-top: 18px;
+        }
+
+        .task-shell {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .task-shell .section-desc {
+            margin-bottom: 14px;
         }
 
         .section-title {
@@ -254,6 +417,12 @@
             color: var(--text-main);
         }
 
+        body[data-series="v7"] .helper-box,
+        body[data-series="v7"] .format-box {
+            background: rgba(201, 169, 109, 0.08);
+            border-color: rgba(201, 169, 109, 0.18);
+        }
+
         .form-label {
             display: block;
             font-size: 0.92rem;
@@ -270,7 +439,8 @@
             background: var(--bg-muted);
             color: #dce8ff;
             padding: 13px 16px;
-            box-shadow: none;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
 
         .form-control:focus,
@@ -286,10 +456,12 @@
         }
 
         textarea.form-control {
-            min-height: 260px;
+            min-height: clamp(200px, 24vh, 260px);
+            max-height: 360px;
             resize: vertical;
             line-height: 1.7;
             font-family: "SFMono-Regular", "Consolas", monospace;
+            overflow-wrap: anywhere;
         }
 
         .btn {
@@ -301,6 +473,7 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
         }
 
         .btn:hover {
@@ -310,6 +483,7 @@
         .btn-primary {
             background: linear-gradient(135deg, var(--brand-strong), var(--brand));
             color: #fff;
+            box-shadow: 0 12px 24px rgba(61, 125, 255, 0.22);
         }
 
         .btn-primary:disabled {
@@ -321,12 +495,14 @@
         .btn-success {
             background: linear-gradient(135deg, #24a47f, #49c39d);
             color: #fff;
+            box-shadow: 0 12px 24px rgba(36, 164, 127, 0.2);
         }
 
         .btn-outline-light {
             background: transparent;
             color: var(--text-sub);
             border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: none;
         }
 
         .btn-outline-light:hover {
@@ -343,6 +519,7 @@
             width: 100%;
             min-height: 58px;
             font-size: 1rem;
+            margin-top: 4px;
         }
 
         .series-panel {
@@ -353,9 +530,19 @@
             display: block;
         }
 
+        .series-panel[data-series="v6"] .card-accent {
+            color: #8bb8ff;
+        }
+
+        .series-panel[data-series="v7"] .card-accent {
+            color: #ddbf8c;
+        }
+
         .progress-section {
             margin-top: 20px;
             display: none;
+            min-height: 0;
+            flex: 1;
         }
 
         .status-chip-row {
@@ -371,6 +558,7 @@
             background: rgba(255, 255, 255, 0.05);
             color: var(--text-sub);
             font-size: 0.86rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .progress {
@@ -407,7 +595,7 @@
         }
 
         .log-container {
-            height: 320px;
+            height: clamp(240px, 30vh, 340px);
             margin-top: 16px;
             font-family: "SFMono-Regular", "Consolas", monospace;
             font-size: 13px;
@@ -469,6 +657,13 @@
             background: rgba(68, 196, 161, 0.08);
             border: 1px solid rgba(68, 196, 161, 0.16);
             display: none;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        #idlePanel {
+            min-height: 180px;
+            display: flex;
+            align-items: center;
         }
 
         .download-title {
@@ -483,14 +678,27 @@
             top: 18px;
         }
 
+        .resource-panel .section-header {
+            margin-bottom: 14px;
+        }
+
         .resource-toolbar {
-            display: flex;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 48px;
             gap: 10px;
             margin-bottom: 14px;
+            align-items: stretch;
         }
 
         .resource-toolbar .form-control {
             min-height: 46px;
+        }
+
+        .resource-toolbar .btn {
+            width: 48px;
+            min-width: 48px;
+            min-height: 46px;
+            padding: 0;
         }
 
         .stats-row {
@@ -498,6 +706,7 @@
             justify-content: space-between;
             align-items: center;
             gap: 12px;
+            flex-wrap: wrap;
             margin-bottom: 14px;
             color: var(--text-muted);
             font-size: 0.9rem;
@@ -505,9 +714,9 @@
 
         .file-item {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-columns: minmax(0, 1fr) 112px;
             gap: 14px;
-            align-items: center;
+            align-items: start;
             padding: 14px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
@@ -525,7 +734,7 @@
 
         .file-main {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
             min-width: 0;
             color: var(--text-main);
@@ -536,15 +745,22 @@
         }
 
         .file-title-text {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            line-height: 1.55;
         }
 
         .file-meta {
             color: var(--text-muted);
             font-size: 0.84rem;
             padding-left: 26px;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+
+        .download-existing-btn {
+            width: 100%;
+            min-height: 44px;
         }
 
         .empty-state {
@@ -626,6 +842,19 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
+        .section-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
         .guide-block h5 {
             margin: 0 0 10px;
             color: #cfe1ff;
@@ -678,6 +907,11 @@
                 grid-template-columns: 1fr;
             }
 
+            .panel-grid {
+                grid-template-rows: auto auto;
+                min-height: auto;
+            }
+
             .resource-panel {
                 position: static;
             }
@@ -696,6 +930,10 @@
                 font-size: 2rem;
             }
 
+            .hero-subtitle {
+                font-size: 0.94rem;
+            }
+
             .hero-card,
             .status-card,
             .workspace,
@@ -712,7 +950,29 @@
                 padding: 18px;
             }
 
+            .mode-toolbar {
+                grid-template-columns: 1fr;
+            }
+
+            .mode-picker {
+                min-width: 0;
+                max-width: none;
+            }
+
             .status-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .version-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .file-item {
                 grid-template-columns: 1fr;
             }
 
@@ -730,11 +990,18 @@
     <div class="page-shell">
         <section class="hero">
             <div class="hero-card">
-                <h1 class="hero-title">DeepFlow补丁打包系统</h1>
+                <div class="hero-copy">
+                    <div class="hero-kicker">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                        <span>Build Workspace</span>
+                    </div>
+                    <h1 class="hero-title">DeepFlow 升级包构建</h1>
+                    <p class="hero-subtitle">统一处理版本差异、镜像清单和升级包产出，尽量减少重复构建与手工整理。</p>
+                </div>
             </div>
             <aside class="status-card">
                 <div class="status-title">
-                    <span>系统状态概览</span>
+                    <span>系统概览</span>
                     <i class="fas fa-chart-column"></i>
                 </div>
                 <div class="status-grid">
@@ -752,51 +1019,77 @@
 
         <div class="layout">
             <main class="workspace">
-                <div class="tabs-bar">
-                    <button type="button" class="series-tab active" data-series="v6">
-                        <span class="series-name">V6 补丁构建</span>
-                        <span class="series-note">基于当前 Patch 版本与目标 Patch 版本自动计算差异</span>
-                    </button>
-                    <button type="button" class="series-tab" data-series="v7">
-                        <span class="series-name">V7 镜像清单构建</span>
-                        <span class="series-note">手工录入镜像列表，直接生成对应升级包</span>
-                    </button>
+                <div class="mode-toolbar">
+                    <div class="mode-picker">
+                        <label class="mode-label" for="seriesModeSelect">模式</label>
+                        <div class="mode-select-wrap">
+                            <select id="seriesModeSelect" class="mode-select">
+                                <option value="v6">V6 补丁构建</option>
+                                <option value="v7">V7 清单构建</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mode-summary">
+                        <div class="mode-summary-title">
+                            <i class="fas fa-compass"></i>
+                            <span id="modeSummaryTitle">V6 自动升级</span>
+                        </div>
+                        <p id="modeSummaryText" class="mode-summary-text">选择起止版本后，自动计算差异并打包。</p>
+                    </div>
                 </div>
 
                 <div class="panel-grid">
-                    <section class="card-shell">
-                        <div id="v6Panel" class="series-panel active">
-                            <h3 class="section-title"><i class="fas fa-code-branch"></i> V6 Patch 升级路径</h3>
-                            <p class="section-desc">
-                                选择当前正在运行的 Patch 版本和目标升级版本，系统会根据版本差异自动生成镜像清单、拉取镜像并打包。
-                            </p>
+                    <section class="card-shell form-shell">
+                        <div id="v6Panel" class="series-panel active" data-series="v6">
+                            <div class="section-header">
+                                <div class="section-copy">
+                                    <h3 class="section-title"><i class="fas fa-code-branch card-accent"></i> V6 自动升级</h3>
+                                    <p class="section-desc">
+                                        选择当前版和目标版，系统自动生成差异镜像并打包。
+                                    </p>
+                                </div>
+                                <div class="section-note">
+                                    <i class="fas fa-shuffle"></i>
+                                    <span>标准路径</span>
+                                </div>
+                            </div>
                             <div class="helper-box">
-                                <strong>适用场景：</strong> 已知当前版本与目标版本，且希望由系统自动计算中间差异。目标版本下拉框只会展示高于当前版本的可升级版本。
+                                <strong>适用场景：</strong> 已知起止版本。目标版本只显示可升级版本。
                             </div>
                             <form id="buildForm">
-                                <div class="mb-3">
-                                    <label class="form-label" for="currentVersion">当前 Patch 版本</label>
-                                    <select class="form-select" id="currentVersion" required>
-                                        <option value="">加载中...</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label" for="targetVersion">目标 Patch 版本</label>
-                                    <select class="form-select" id="targetVersion" required disabled>
-                                        <option value="">请先选择当前版本</option>
-                                    </select>
+                                <div class="version-grid">
+                                    <div class="mb-3">
+                                        <label class="form-label" for="currentVersion">当前 Patch 版本</label>
+                                        <select class="form-select" id="currentVersion" required>
+                                            <option value="">加载中...</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="targetVersion">目标 Patch 版本</label>
+                                        <select class="form-select" id="targetVersion" required disabled>
+                                            <option value="">请先选择当前版本</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <button type="submit" class="btn btn-primary build-submit" disabled>
-                                    <i class="fas fa-play"></i> 开始构建
+                                    <i class="fas fa-play"></i> 开始
                                 </button>
                             </form>
                         </div>
 
-                        <div id="v7Panel" class="series-panel">
-                            <h3 class="section-title"><i class="fas fa-list-check"></i> V7 镜像清单输入</h3>
-                            <p class="section-desc">
-                                手工填写镜像名称和标签，适合 V7 或临时镜像组合场景。每行一条，或使用逗号分隔，提交后将直接写入任务专属 patchlist。
-                            </p>
+                        <div id="v7Panel" class="series-panel" data-series="v7">
+                            <div class="section-header">
+                                <div class="section-copy">
+                                    <h3 class="section-title"><i class="fas fa-list-check card-accent"></i> V7 镜像清单</h3>
+                                    <p class="section-desc">
+                                        手动填写镜像和标签。支持每行一条或逗号分隔。
+                                    </p>
+                                </div>
+                                <div class="section-note">
+                                    <i class="fas fa-pen-ruler"></i>
+                                    <span>自定义输入</span>
+                                </div>
+                            </div>
                             <div class="format-box">
                                 <strong>推荐格式：</strong>
                                 <span class="guide-code">deepflow-agent_tag: v6.6.5617
@@ -808,16 +1101,24 @@ deepflow-server_tag: v6.6.5617</span>
                                     placeholder="例如：deepflow-agent_tag: v6.6.5617&#10;deepflow-server_tag: v6.6.5617"></textarea>
                             </div>
                             <button type="button" class="btn btn-primary build-submit" id="v7BuildBtn" disabled>
-                                <i class="fas fa-play"></i> 开始构建
+                                <i class="fas fa-play"></i> 开始
                             </button>
                         </div>
                     </section>
 
-                    <section class="card-shell">
-                        <h3 class="section-title"><i class="fas fa-stream"></i> 当前任务状态</h3>
-                        <p class="section-desc">
-                            这里展示最近一次任务的实时进度、状态日志和临时下载入口。构建完成后也会自动刷新右侧已有升级包资源区。
-                        </p>
+                    <section class="card-shell task-shell">
+                        <div class="section-header">
+                            <div class="section-copy">
+                                <h3 class="section-title"><i class="fas fa-stream"></i> 当前任务状态</h3>
+                                <p class="section-desc">
+                                    显示本次任务的进度、日志和下载入口。
+                                </p>
+                            </div>
+                            <div class="section-note">
+                                <i class="fas fa-wave-square"></i>
+                                <span>实时更新</span>
+                            </div>
+                        </div>
                         <div id="progressSection" class="progress-section">
                             <div class="status-chip-row">
                                 <div class="status-chip">模式：<span id="taskModeText">V6</span></div>
@@ -836,17 +1137,25 @@ deepflow-server_tag: v6.6.5617</span>
                             </div>
                         </div>
                         <div id="idlePanel" class="helper-box" style="margin-bottom: 0;">
-                            <strong>当前没有正在展示的任务。</strong> 发起构建后，这里会自动切换为实时任务面板，显示进度条、构建日志和下载按钮。
+                            <strong>当前暂无任务。</strong> 发起构建后，这里会显示进度、日志和下载入口。
                         </div>
                     </section>
                 </div>
             </main>
 
             <aside class="resource-panel">
-                <h3 class="section-title"><i class="fas fa-box-archive"></i> 已有升级包</h3>
-                <p class="section-desc">
-                    独立资源区。优先在这里检查是否已有可直接下载的升级包，避免重复构建。
-                </p>
+                <div class="section-header">
+                    <div class="section-copy">
+                        <h3 class="section-title"><i class="fas fa-box-archive"></i> 已有升级包</h3>
+                        <p class="section-desc">
+                            先检查这里，避免重复构建。
+                        </p>
+                    </div>
+                    <div class="section-note">
+                        <i class="fas fa-clock-rotate-left"></i>
+                        <span>按时间排序</span>
+                    </div>
+                </div>
                 <div class="resource-toolbar">
                     <input type="text" class="form-control" id="fileSearchInput" placeholder="搜索文件名或版本">
                     <button type="button" class="btn btn-outline-light" id="refreshFilesBtn">
@@ -878,7 +1187,7 @@ deepflow-server_tag: v6.6.5617</span>
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="tutorialModalLabel">使用说明与操作建议</h5>
+                    <h5 class="modal-title" id="tutorialModalLabel">使用说明</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                         aria-label="Close"></button>
                 </div>
@@ -886,15 +1195,15 @@ deepflow-server_tag: v6.6.5617</span>
                     <div class="guide-grid">
                         <div class="guide-block">
                             <h5>1. 先看右侧已有升级包</h5>
-                            <p>右侧资源区会展示服务器中已经存在的升级包。若所需版本已经生成，直接下载即可，不必重新拉取镜像和打包。</p>
+                            <p>如果目标包已存在，直接下载即可，无需重复构建。</p>
                         </div>
                         <div class="guide-block">
                             <h5>2. V6 模式怎么用</h5>
                             <ul>
                                 <li>选择当前 Patch 版本。</li>
                                 <li>选择目标 Patch 版本。</li>
-                                <li>点击“开始构建”，系统会自动生成差异镜像清单并打包。</li>
-                                <li>适合标准补丁升级路径。</li>
+                                <li>点击“开始”，系统会自动计算差异并打包。</li>
+                                <li>适合标准升级路径。</li>
                             </ul>
                         </div>
                         <div class="guide-block">
@@ -902,8 +1211,8 @@ deepflow-server_tag: v6.6.5617</span>
                             <ul>
                                 <li>在镜像清单输入框中填写镜像和标签。</li>
                                 <li>支持每行一条，也支持逗号分隔。</li>
-                                <li>建议使用 <code>name_tag: vX.Y.Z</code> 或 <code>name: vX.Y.Z</code> 形式。</li>
-                                <li>适合自定义镜像集或非标准升级路径。</li>
+                                <li>建议使用 <code>name_tag: vX.Y.Z</code> 或 <code>name: vX.Y.Z</code>。</li>
+                                <li>适合自定义镜像或非标准路径。</li>
                             </ul>
                             <span class="guide-code">deepflow-agent_tag: v6.6.5617
 deepflow-server_tag: v6.6.5617</span>
@@ -911,32 +1220,32 @@ deepflow-server_tag: v6.6.5617</span>
                         <div class="guide-block">
                             <h5>4. 构建过程中看哪里</h5>
                             <ul>
-                                <li>左侧任务面板会显示进度、状态和实时日志。</li>
-                                <li>任务完成后，下载按钮会出现在状态面板中。</li>
-                                <li>构建完成后，右侧已有升级包列表也会自动刷新。</li>
+                                <li>左侧任务面板会显示进度和实时日志。</li>
+                                <li>完成后会出现下载按钮。</li>
+                                <li>右侧升级包列表也会自动刷新。</li>
                             </ul>
                         </div>
                         <div class="guide-block">
                             <h5>5. 下载与过期说明</h5>
                             <ul>
-                                <li>当前任务完成后，会先给出临时下载入口。</li>
-                                <li>若临时入口过期，可到右侧“已有升级包”区域再次下载。</li>
-                                <li>若下载失败，先刷新已有升级包列表确认文件是否已存在。</li>
+                                <li>任务完成后，会先提供临时下载入口。</li>
+                                <li>若入口过期，可到右侧“已有升级包”重新下载。</li>
+                                <li>若下载失败，先刷新列表确认文件是否存在。</li>
                             </ul>
                         </div>
                         <div class="guide-block">
                             <h5>6. 常见建议</h5>
                             <ul>
                                 <li>V6 适合规范升级，优先用 V6。</li>
-                                <li>V7 输入镜像时，尽量一行一条，便于排查格式问题。</li>
-                                <li>构建失败时先看日志区最后几条错误信息，再决定是否重试。</li>
+                                <li>V7 建议一行一条，便于排查。</li>
+                                <li>失败时先看日志最后几条错误信息。</li>
                             </ul>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-check"></i> 我知道了
+                        <i class="fas fa-check"></i> 知道了
                     </button>
                 </div>
             </div>
@@ -954,28 +1263,11 @@ deepflow-server_tag: v6.6.5617</span>
         let existingFilesData = [];
 
         document.addEventListener('DOMContentLoaded', () => {
-            bindTabs();
             initEventListeners();
             toggleSeriesUI(currentSeries);
             fetchVersions(currentSeries);
             fetchExistingFiles();
         });
-
-        function bindTabs() {
-            document.querySelectorAll('.series-tab').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    currentSeries = tab.dataset.series;
-                    toggleSeriesUI(currentSeries);
-                    versionData = [];
-                    renderVersionOptions();
-                    if (currentSeries === 'v6') {
-                        fetchVersions(currentSeries);
-                    } else {
-                        checkBuildBtnStatus();
-                    }
-                });
-            });
-        }
 
         async function fetchVersions(series) {
             if (series !== 'v6') {
@@ -1084,6 +1376,7 @@ deepflow-server_tag: v6.6.5617</span>
 
         function updateFilesSummary(count) {
             document.getElementById('filesSummary').textContent = `共 ${count} 个可用升级包`;
+            document.getElementById('existingFilesCount').textContent = String(count);
         }
 
         function renderVersionOptions(isError = false) {
@@ -1110,6 +1403,7 @@ deepflow-server_tag: v6.6.5617</span>
         }
 
         function initEventListeners() {
+            document.getElementById('seriesModeSelect').addEventListener('change', handleModeChange);
             document.getElementById('currentVersion').addEventListener('change', updateTargetVersionOptions);
             document.getElementById('targetVersion').addEventListener('change', checkBuildBtnStatus);
             document.getElementById('v7ImageList').addEventListener('input', checkBuildBtnStatus);
@@ -1120,12 +1414,28 @@ deepflow-server_tag: v6.6.5617</span>
             document.getElementById('fileSearchInput').addEventListener('input', filterExistingFiles);
         }
 
+        function handleModeChange(event) {
+            currentSeries = event.target.value;
+            versionData = [];
+            renderVersionOptions();
+            toggleSeriesUI(currentSeries);
+            if (currentSeries === 'v6') {
+                fetchVersions(currentSeries);
+            } else {
+                checkBuildBtnStatus();
+            }
+        }
+
         function toggleSeriesUI(series) {
-            document.querySelectorAll('.series-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.dataset.series === series);
-            });
+            document.body.setAttribute('data-series', series);
+            document.getElementById('seriesModeSelect').value = series;
             document.getElementById('v6Panel').classList.toggle('active', series === 'v6');
             document.getElementById('v7Panel').classList.toggle('active', series === 'v7');
+            document.getElementById('currentModeLabel').textContent = series === 'v6' ? 'V6 Patch' : 'V7 Image List';
+            document.getElementById('modeSummaryTitle').textContent = series === 'v6' ? 'V6 自动升级' : 'V7 自定义清单';
+            document.getElementById('modeSummaryText').textContent = series === 'v6'
+                ? '选择起止版本后，自动计算差异并打包。'
+                : '手动录入镜像列表后直接打包。';
             checkBuildBtnStatus();
         }
 
@@ -1339,8 +1649,8 @@ deepflow-server_tag: v6.6.5617</span>
             const v6Btn = document.querySelector('#buildForm button[type="submit"]');
             const v7Btn = document.getElementById('v7BuildBtn');
 
-            v6Btn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
-            v7Btn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
+            v6Btn.innerHTML = '<i class="fas fa-play"></i> 开始';
+            v7Btn.innerHTML = '<i class="fas fa-play"></i> 开始';
             v6Btn.disabled = true;
             v7Btn.disabled = true;
             lastLogMessage = '';
