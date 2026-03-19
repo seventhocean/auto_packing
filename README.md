@@ -24,7 +24,7 @@
 - `Apply/maintenance-app-deployment.yaml`、`persistent-volume.yaml`：K8s 部署样例。
 
 ## 运行要求
-- Python 3.6+，Flask 1.1，依赖见 `requirements.txt`。
+- Python 3.10+，Flask 1.1，依赖见 `requirements.txt`。
 - 容器工具：`nerdctl`（默认）或 `docker`，二进制已随项目提供。
 - Git 访问 `nuwa` 仓库；镜像仓库访问凭据；可选 OSS 访问凭据（环境变量 `OSS_ACCESS_KEY_ID/SECRET/ENDPOINT`）。
 - 足够磁盘空间存放镜像 tar 与打包产物。
@@ -85,4 +85,3 @@ docker run -p 8000:8000 \
 - 将配置（仓库地址、并发数、清理保留时长）抽取到 env / config 文件。
 - 为 API 与脚本补充单元/集成测试（`test/` 目前仅示例）。
 - 增加鉴权/审计与下载链接失效策略。
-
