@@ -82,8 +82,13 @@ redis_client = redis.Redis(
     db=REDIS_CONFIG['db'],
     password=REDIS_CONFIG['password'] or None,
     decode_responses=True,
-    socket_timeout=5,
-    socket_connect_timeout=5
+    # Worker uses blocking Redis list operations for queue polling.
+    # Keep socket timeout comfortably above the BRPOPLPUSH timeout to avoid
+    # treating an idle queue as a network read timeout.
+    socket_timeout=30,
+    socket_connect_timeout=5,
+    health_check_interval=15,
+    retry_on_timeout=True
 )
 redis_client.ping()
 
