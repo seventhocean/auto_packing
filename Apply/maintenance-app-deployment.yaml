@@ -1,3 +1,117 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maintenance-app-config
+  namespace: default
+data:
+  config.yaml: |
+    redis:
+      host: maintenance-redis.default.svc.cluster.local
+      port: 6379
+      db: 0
+      password: ""
+      key_prefix: auto_packing
+      success_ttl_seconds: 7200
+      failure_ttl_seconds: 3600
+      download_ttl_seconds: 90
+      max_logs: 100
+      max_concurrent_tasks: 3
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: maintenance-app-secrets
+  namespace: default
+type: Opaque
+stringData:
+  redis-password: "YSDeepFlow@3q302"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: maintenance-redis
+  namespace: default
+  labels:
+    app: maintenance-redis
+spec:
+  selector:
+    app: maintenance-redis
+  ports:
+    - name: redis
+      protocol: TCP
+      port: 6379
+      targetPort: 6379
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maintenance-redis
+  namespace: default
+  labels:
+    app: maintenance-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maintenance-redis
+  template:
+    metadata:
+      labels:
+        app: maintenance-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2-alpine
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - exec redis-server --bind 0.0.0.0 --appendonly no --requirepass "$REDIS_PASSWORD"
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
+        ports:
+        - containerPort: 6379
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - redis-cli -a "$REDIS_PASSWORD" ping | grep PONG
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - redis-cli -a "$REDIS_PASSWORD" ping | grep PONG
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      restartPolicy: Always
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,6 +129,14 @@ spec:
       labels:
         app: maintenance-app
     spec:
+      initContainers:
+      - name: wait-for-redis
+        image: busybox:1.36
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - until nc -z maintenance-redis 6379; do echo "waiting for redis"; sleep 2; done
       # 解析GitLab
       hostAliases:
       - ip: "10.1.0.14"
@@ -36,6 +158,17 @@ spec:
           value: "production"
         - name: PYTHONUNBUFFERED
           value: "1"
+        - name: GUNICORN_WORKERS
+          value: "2"
+        - name: GUNICORN_THREADS
+          value: "4"
+        - name: APP_CONFIG_PATH
+          value: "/app/config/config.yaml"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
         # OSS凭据
         - name: OSS_ACCESS_KEY_ID
           valueFrom:
@@ -59,6 +192,25 @@ spec:
           mountPath: /run/containerd/containerd.sock
         - mountPath: /app/upgrade_packages
           name: storage
+        - name: app-config
+          mountPath: /app/config
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
         resources:
           requests:
             memory: "512Mi"
@@ -79,6 +231,9 @@ spec:
       - name: storage
         persistentVolumeClaim:
           claimName: auto-pancking-pvc
+      - name: app-config
+        configMap:
+          name: maintenance-app-config
 ---
 apiVersion: v1
 kind: Service

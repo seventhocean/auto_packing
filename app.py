@@ -7,15 +7,15 @@ import glob
 import re
 import json
 import shutil
+import uuid
 from flask import Flask, request, Response, jsonify, send_file, abort, render_template
 import traceback
 from urllib.parse import quote, unquote
+import yaml
+import redis
 
 # 初始化Flask应用
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-#app = Flask(__name__, static_folder='.', static_url_path='')
-build_status = {}  # 存储构建任务状态（SSE实时更新用）
-build_semaphore = threading.Semaphore(3)  # 限制最大并发任务数为3
 
 # -------------------------- 基础配置（与项目结构对齐） --------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +23,6 @@ BIN_DIR = os.path.join(BASE_DIR, 'bin')   # 脚本/可执行文件
 IMAGE_TAR_ROOT = os.path.join(BASE_DIR, 'images')       # 镜像临时存储根目录（按任务分目录）
 UPGRADE_PACKAGE_DIR = os.path.join(BASE_DIR, 'upgrade_packages')  # 最终升级包存储目录（TAR.GZ）
 LATEST_LIST_DIR = os.path.join(BASE_DIR, 'latest_image_list')  # 镜像列表目录
-PATCH_LIST_PATH = os.path.join(LATEST_LIST_DIR, 'patch_image_tag_list.txt')  # 镜像列表文件
 PULL_SCRIPT_PATH = os.path.join(BIN_DIR, 'pull_save.sh') # 镜像拉取脚本
 LOG_DIR = os.path.join(BASE_DIR, 'logs')        # 日志目录
 OSS_FILE = os.path.join(BIN_DIR, 'ossutil')  # ossutil
@@ -32,63 +31,192 @@ TRASH_DIR = os.path.join(BASE_DIR, '.trash') # 项目临时回收站
 OSS_VERSIONS_TMP_FILE = os.path.join(TRASH_DIR, 'oss_patch_version.txt')
 PATCH_LIST_SCRIPT_PATH = os.path.join(BIN_DIR, 'get_patch_image_tag_list.sh') # 生成patch_list.txt的脚本路径
 UPGRADE_SCRIPT_PATH = os.path.join(BIN_DIR, "deepflow_patch_upgrade.sh")
+APP_CONFIG_PATH = os.environ.get('APP_CONFIG_PATH', os.path.join(BASE_DIR, 'config.yaml'))
+
+DEFAULT_CONFIG = {
+    "redis": {
+        "host": "redis.deepflow.svc.cluster.local",
+        "port": 6379,
+        "db": 0,
+        "password": "",
+        "key_prefix": "auto_packing",
+        "success_ttl_seconds": 7200,
+        "failure_ttl_seconds": 3600,
+        "download_ttl_seconds": 90,
+        "max_logs": 100,
+        "max_concurrent_tasks": 3
+    }
+}
 
 for dir_path in [IMAGE_TAR_ROOT, UPGRADE_PACKAGE_DIR, LATEST_LIST_DIR, LOG_DIR]:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
        # write_log(f"自动创建目录：{dir_path}")
 
-#print(OSS_FILE)
+def load_app_config():
+    config = json.loads(json.dumps(DEFAULT_CONFIG))
+    if os.path.exists(APP_CONFIG_PATH):
+        with open(APP_CONFIG_PATH, 'r', encoding='utf-8') as f:
+            loaded = yaml.safe_load(f) or {}
+        if isinstance(loaded.get('redis'), dict):
+            config['redis'].update(loaded['redis'])
+
+    redis_password = os.environ.get('REDIS_PASSWORD')
+    if redis_password is not None:
+        config['redis']['password'] = redis_password
+
+    config['redis']['port'] = int(config['redis']['port'])
+    config['redis']['db'] = int(config['redis']['db'])
+    config['redis']['success_ttl_seconds'] = int(config['redis']['success_ttl_seconds'])
+    config['redis']['failure_ttl_seconds'] = int(config['redis']['failure_ttl_seconds'])
+    config['redis']['download_ttl_seconds'] = int(config['redis']['download_ttl_seconds'])
+    config['redis']['max_logs'] = int(config['redis']['max_logs'])
+    config['redis']['max_concurrent_tasks'] = int(config['redis']['max_concurrent_tasks'])
+    return config
+
+
+APP_CONFIG = load_app_config()
+REDIS_CONFIG = APP_CONFIG['redis']
+redis_client = redis.Redis(
+    host=REDIS_CONFIG['host'],
+    port=REDIS_CONFIG['port'],
+    db=REDIS_CONFIG['db'],
+    password=REDIS_CONFIG['password'] or None,
+    decode_responses=True,
+    socket_timeout=5,
+    socket_connect_timeout=5
+)
+redis_client.ping()
+
+
+def task_meta_key(task_id):
+    return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:meta"
+
+
+def task_logs_key(task_id):
+    return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:logs"
+
+
+def task_slot_key(task_id):
+    return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:slot"
+
+
+def active_builds_key():
+    return f"{REDIS_CONFIG['key_prefix']}:builds:active"
+
+
+def get_task_status(task_id, include_logs=True):
+    status_json = redis_client.get(task_meta_key(task_id))
+    if not status_json:
+        return None
+
+    status = json.loads(status_json)
+    if include_logs:
+        logs = redis_client.lrange(task_logs_key(task_id), 0, -1)
+        status['logs'] = [json.loads(item) for item in logs]
+    return status
+
+
+def set_task_status(task_id, status, ttl_seconds=None):
+    status_to_store = dict(status)
+    status_to_store.pop('logs', None)
+    redis_client.set(task_meta_key(task_id), json.dumps(status_to_store, ensure_ascii=False))
+    if ttl_seconds:
+        redis_client.expire(task_meta_key(task_id), ttl_seconds)
+        redis_client.expire(task_logs_key(task_id), ttl_seconds)
+
+
+def update_task_status(task_id, updates, ttl_seconds=None):
+    current_status = get_task_status(task_id, include_logs=False)
+    if not current_status:
+        return None
+
+    current_status.update(updates)
+    current_status['updated_at'] = int(time.time())
+    set_task_status(task_id, current_status, ttl_seconds=ttl_seconds)
+    return current_status
+
+
+def append_task_log(task_id, timestamp, level, content):
+    if not redis_client.exists(task_meta_key(task_id)):
+        return
+
+    log_entry = json.dumps({
+        'timestamp': timestamp,
+        'level': level,
+        'content': content
+    }, ensure_ascii=False)
+    redis_client.rpush(task_logs_key(task_id), log_entry)
+    redis_client.ltrim(task_logs_key(task_id), -REDIS_CONFIG['max_logs'], -1)
+
+
+def initialize_task_status(task_id, message):
+    now = int(time.time())
+    set_task_status(task_id, {
+        "status": "progress",
+        "percent": 0,
+        "message": message,
+        "complete": False,
+        "error": False,
+        "created_at": now,
+        "updated_at": now,
+        "download_expire_at": None
+    })
+    redis_client.delete(task_logs_key(task_id))
+
+
+def schedule_task_cleanup(task_id, delay_seconds):
+    update_task_status(task_id, {}, ttl_seconds=delay_seconds)
+
+
+def try_acquire_build_slot(task_id):
+    current_builds = redis_client.incr(active_builds_key())
+    if current_builds > REDIS_CONFIG['max_concurrent_tasks']:
+        redis_client.decr(active_builds_key())
+        return False
+
+    redis_client.set(task_slot_key(task_id), "1")
+    return True
+
+
+def release_build_slot(task_id):
+    if redis_client.delete(task_slot_key(task_id)):
+        current_value = redis_client.decr(active_builds_key())
+        if current_value < 0:
+            redis_client.set(active_builds_key(), 0)
+
+
 # -------------------------- 工具函数（文件列表处理） --------------------------
 def write_log(content, level="INFO", task_id=None):
-    """写日志（含时间戳，同时输出到文件和控制台）
-    新增task_id参数，用于将日志关联到特定任务并推送到前端
-    """
+    """写日志（含时间戳，同时输出到文件和控制台）"""
     log_file = os.path.join(LOG_DIR, 'app.log')
     timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
     log_line = f"[{timestamp}] [{level}] {content}\n"
     with open(log_file, 'a', encoding='utf-8') as f:
         f.write(log_line)
     print(log_line.strip())
-    
-    # 如果有任务ID，将日志添加到任务状态中，供前端展示
-    if task_id and task_id in build_status:
-        if 'logs' not in build_status[task_id]:
-            build_status[task_id]['logs'] = []
-            
-        build_status[task_id]['logs'].append({
-            'timestamp': timestamp,
-            'level': level,
-            'content': content
-        })
-        
-        if len(build_status[task_id]['logs']) > 100:
-            build_status[task_id]['logs'] = build_status[task_id]['logs'][-100:]
+
+    if task_id:
+        append_task_log(task_id, timestamp, level, content)
 
 def update_progress(task_id, new_percent, message, level="INFO"):
     """更新任务进度的辅助函数，确保进度平滑增加"""
-    if task_id not in build_status:
+    task_status = get_task_status(task_id, include_logs=False)
+    if not task_status:
         return
-        
-    current_percent = build_status[task_id].get('percent', 0)
+
+    current_percent = task_status.get('percent', 0)
     if new_percent > current_percent:
         steps = new_percent - current_percent
         for i in range(steps):
             percent = current_percent + i + 1
-            build_status[task_id].update({
+            task_status.update({
                 "status": "progress",
                 "percent": percent,
-                "message": message if i == steps - 1 else build_status[task_id].get('message', '')
+                "message": message if i == steps - 1 else task_status.get('message', '')
             })
+            set_task_status(task_id, task_status)
             time.sleep(0.1)
-
-def schedule_task_cleanup(task_id, delay_seconds):
-    """延迟清理任务状态，避免阻塞构建线程与并发控制"""
-    def _cleanup():
-        time.sleep(delay_seconds)
-        if task_id in build_status:
-            del build_status[task_id]
-    threading.Thread(target=_cleanup, daemon=True).start()
 
 def get_oss_versions():
     """从OSS获取x86_64架构的补丁版本列表（供前端下拉框用）
@@ -207,7 +335,6 @@ def validate_package_filename(filename):
 
 def run_build_task(task_id, current_version, target_version):
     """核心构建任务：执行构建list脚本→拉取镜像→打包TAR.GZ格式升级包"""
-    build_semaphore.acquire()  # 控制并发任务数量
     try:
         # 创建任务专属目录（用版本+任务ID命名，确保唯一性，避免文件冲突）
         task_dir_name = f"{current_version}_to_{target_version}_{task_id}"
@@ -222,13 +349,6 @@ def run_build_task(task_id, current_version, target_version):
         task_log_path = os.path.join(LOG_DIR, f"task_{task_id}.log")
 
         try:
-            # 初始化任务状态（SSE实时推送用），新增logs字段存储前端日志
-            build_status[task_id] = {
-                "status": "progress",
-                "percent": 0,
-                "message": "初始化构建任务，检查核心依赖",
-                "logs": []  # 用于存储前端展示的日志
-            }
             write_log(f"任务[{task_id}]启动：版本升级 {current_version} → {target_version}", task_id=task_id)
             time.sleep(1)  # 预留SSE状态推送时间，避免前端接收延迟
 
@@ -343,7 +463,7 @@ def run_build_task(task_id, current_version, target_version):
 
             # 任务完成：更新状态并记录日志
             update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）")
-            build_status[task_id].update({
+            update_task_status(task_id, {
                 "status": "complete",
                 "percent": 100,
                 "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）",
@@ -353,16 +473,16 @@ def run_build_task(task_id, current_version, target_version):
                 "package_path": upgrade_path,
                 "package_name": upgrade_package,
                 "package_format": "tar.gz",  # 标记包格式，便于前端显示
-                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2)  # 包大小（MB）
+                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2),  # 包大小（MB）
+                "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
             })
             write_log(f"任务[{task_id}]完全结束：{current_version}→{target_version}升级包构建完成，请在90秒内下载升级包", task_id=task_id)
-            # 成功后延迟90秒删除状态，给前端足够时间获取最终状态
-            schedule_task_cleanup(task_id, 90)
+            schedule_task_cleanup(task_id, REDIS_CONFIG['success_ttl_seconds'])
 
         except Exception as e:
             # 任务失败：捕获异常并更新状态
             error_msg = str(e)
-            build_status[task_id].update({
+            update_task_status(task_id, {
                 "status": "error",
                 "message": f"构建失败：{error_msg}",
                 "complete": True,
@@ -371,8 +491,7 @@ def run_build_task(task_id, current_version, target_version):
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             # 打印异常堆栈，便于问题排查
             traceback.print_exc()
-            # 失败后延迟50秒删除状态，给前端足够时间接收错误状态
-            schedule_task_cleanup(task_id, 50)
+            schedule_task_cleanup(task_id, REDIS_CONFIG['failure_ttl_seconds'])
 
         finally:
             # 最终清理：无论成功/失败，都删除任务专属镜像目录（节省磁盘空间）
@@ -393,11 +512,10 @@ def run_build_task(task_id, current_version, target_version):
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
     finally:
-        build_semaphore.release()
+        release_build_slot(task_id)
 
 def run_build_task_v7(task_id, images):
     """V7构建任务：根据镜像列表生成patchlist→拉取镜像→打包TAR.GZ格式升级包"""
-    build_semaphore.acquire()
     try:
         task_dir_name = f"v7_{task_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
@@ -409,12 +527,6 @@ def run_build_task_v7(task_id, images):
         task_log_path = os.path.join(LOG_DIR, f"task_{task_id}.log")
 
         try:
-            build_status[task_id] = {
-                "status": "progress",
-                "percent": 0,
-                "message": "初始化V7构建任务，检查核心依赖",
-                "logs": []
-            }
             write_log(f"任务[{task_id}]启动：V7镜像构建，数量={len(images)}", task_id=task_id)
             time.sleep(1)
 
@@ -488,7 +600,7 @@ def run_build_task_v7(task_id, images):
             write_log(f"临时文件清理完成", task_id=task_id)
 
             update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）")
-            build_status[task_id].update({
+            update_task_status(task_id, {
                 "status": "complete",
                 "percent": 100,
                 "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）",
@@ -498,15 +610,16 @@ def run_build_task_v7(task_id, images):
                 "package_path": upgrade_path,
                 "package_name": upgrade_package,
                 "package_format": "tar.gz",
-                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2)
+                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2),
+                "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
             })
             write_log(f"任务[{task_id}]完全结束：V7升级包构建完成，请在90秒内下载升级包", task_id=task_id)
 
-            schedule_task_cleanup(task_id, 90)
+            schedule_task_cleanup(task_id, REDIS_CONFIG['success_ttl_seconds'])
 
         except Exception as e:
             error_msg = str(e)
-            build_status[task_id].update({
+            update_task_status(task_id, {
                 "status": "error",
                 "message": f"构建失败：{error_msg}",
                 "complete": True,
@@ -515,7 +628,7 @@ def run_build_task_v7(task_id, images):
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             traceback.print_exc()
 
-            schedule_task_cleanup(task_id, 50)
+            schedule_task_cleanup(task_id, REDIS_CONFIG['failure_ttl_seconds'])
 
         finally:
             if os.path.exists(task_image_dir):
@@ -533,7 +646,7 @@ def run_build_task_v7(task_id, images):
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
     finally:
-        build_semaphore.release()
+        release_build_slot(task_id)
 
 
 # -------------------------- Flask路由 --------------------------
@@ -636,10 +749,11 @@ def api_get_versions():
 @app.route('/task-status/<task_id>', methods=['GET'])
 def api_task_status(task_id):
     """查询指定任务的当前状态，包含日志信息"""
-    if task_id in build_status:
+    task_status = get_task_status(task_id)
+    if task_status:
         return jsonify({
             "success": True,
-            "status": build_status[task_id]
+            "status": task_status
         })
     else:
         return jsonify({
@@ -653,12 +767,6 @@ def api_task_status(task_id):
 def api_build():
     """原有接口：启动构建任务，通过SSE实时推送进度和日志"""
     # 检查并发任务数
-    if build_semaphore._value == 0:
-        return jsonify({
-            "success": False,
-            "message": "当前构建任务已达上限，请稍后再试"
-        }), 429  # 429 Too Many Requests
-    
     # 获取前端传递的版本参数
     current_version = request.args.get('current')
     target_version = request.args.get('target')
@@ -671,14 +779,25 @@ def api_build():
         images = [img.strip() for img in v7_images.split(',') if img.strip()]
         if not images:
             return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
-        timestamp = int(time.time())
-        task_id = f"build_v7_{timestamp}"
+        timestamp = int(time.time() * 1000)
+        task_id = f"build_v7_{timestamp}_{uuid.uuid4().hex[:8]}"
+        if not try_acquire_build_slot(task_id):
+            return jsonify({
+                "success": False,
+                "message": "当前构建任务已达上限，请稍后再试"
+            }), 429
+        initialize_task_status(task_id, "初始化V7构建任务，检查核心依赖")
         build_thread = threading.Thread(
             target=run_build_task_v7,
             args=(task_id, images),
             daemon=True
         )
-        build_thread.start()
+        try:
+            build_thread.start()
+        except Exception:
+            release_build_slot(task_id)
+            schedule_task_cleanup(task_id, REDIS_CONFIG['failure_ttl_seconds'])
+            raise
     else:
         # 参数校验
         if not current_version or not target_version:
@@ -687,10 +806,16 @@ def api_build():
             return jsonify({"success": False, "message": "当前版本与目标版本不能相同"}), 400
 
         # 生成唯一任务ID
-        timestamp = int(time.time())
+        timestamp = int(time.time() * 1000)
         current_abbr = current_version[:8] if len(current_version)>=8 else current_version
         target_abbr = target_version[:8] if len(target_version)>=8 else target_version
-        task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}"
+        task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}_{uuid.uuid4().hex[:8]}"
+        if not try_acquire_build_slot(task_id):
+            return jsonify({
+                "success": False,
+                "message": "当前构建任务已达上限，请稍后再试"
+            }), 429
+        initialize_task_status(task_id, "初始化构建任务，检查核心依赖")
 
         # 启动异步构建任务
         build_thread = threading.Thread(
@@ -698,7 +823,12 @@ def api_build():
             args=(task_id, current_version, target_version),
             daemon=True
         )
-        build_thread.start()
+        try:
+            build_thread.start()
+        except Exception:
+            release_build_slot(task_id)
+            schedule_task_cleanup(task_id, REDIS_CONFIG['failure_ttl_seconds'])
+            raise
 
     # 建立SSE连接，实时推送进度和日志
     def generate_sse():
@@ -706,12 +836,12 @@ def api_build():
         retry_count = 0
         initial_status = None
         while retry_count < 2 and not initial_status:
-            initial_status = build_status.get(task_id, {
+            initial_status = get_task_status(task_id) or {
                 'status': 'progress',
                 'percent': 0,
                 'message': '任务初始化中...',
                 'logs': []
-            })
+            }
             if not initial_status:
                 time.sleep(0.5)
                 retry_count += 1
@@ -719,19 +849,20 @@ def api_build():
         
         # 循环推送状态
         while True:
-            if task_id not in build_status:
+            task_status = get_task_status(task_id)
+            if not task_status:
                 # 重试3次，若仍不存在则判定过期
                 retry = 0
                 while retry < 3:
-                    if task_id in build_status:
+                    task_status = get_task_status(task_id)
+                    if task_status:
                         break
                     time.sleep(0.5)
                     retry += 1
-                if task_id not in build_status:
+                if not task_status:
                     yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': '任务状态已过期，请刷新页面重试', 'logs': []})}\n\n"
                     break
-            
-            task_status = build_status[task_id]
+
             yield f"data: {json.dumps(task_status)}\n\n"
             
             # 任务完成，终止循环
@@ -749,16 +880,22 @@ def api_build():
 @app.route('/download/<task_id>', methods=['GET'])
 def api_download(task_id):
     """原有接口：下载新构建的升级包（通过任务ID定位）"""
-    if task_id not in build_status:
+    task_status = get_task_status(task_id, include_logs=False)
+    if not task_status:
         error_msg = f"任务{task_id}不存在或已过期（请重新构建）"
         write_log(error_msg, level="WARNING")
         return jsonify({"success": False, "message": error_msg}), 404
 
-    task_status = build_status[task_id]
     if task_status.get('status') != 'complete' or not task_status.get('package_path'):
         error_msg = f"任务{task_id}未构建完成，无法下载"
         write_log(error_msg, level="WARNING")
         return jsonify({"success": False, "message": error_msg}), 400
+
+    download_expire_at = task_status.get('download_expire_at')
+    if download_expire_at and time.time() > float(download_expire_at):
+        error_msg = f"任务{task_id}的下载链接已过期，请重新构建或从已有升级包列表下载"
+        write_log(error_msg, level="WARNING")
+        return jsonify({"success": False, "message": error_msg}), 410
 
     # 校验包路径合法性
     package_path = task_status['package_path']
@@ -787,5 +924,7 @@ def api_download(task_id):
 # -------------------------- 应用启动入口 --------------------------
 if __name__ == '__main__':
     write_log("DeepFlow升级包构建服务启动成功！")
-    write_log(f"服务配置：升级包存储目录={UPGRADE_PACKAGE_DIR}，日志目录={LOG_DIR}")
+    write_log(
+        f"服务配置：升级包存储目录={UPGRADE_PACKAGE_DIR}，日志目录={LOG_DIR}，Redis={REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}/{REDIS_CONFIG['db']}"
+    )
     app.run(host='0.0.0.0', port=8000, threaded=True, debug=True)
