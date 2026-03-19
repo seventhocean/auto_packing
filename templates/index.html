@@ -55,6 +55,7 @@
             min-height: 100vh;
             color: var(--text-main);
             font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+            font-size: 17px;
             background:
                 radial-gradient(circle at top left, rgba(61, 125, 255, 0.18), transparent 32%),
                 radial-gradient(circle at bottom right, rgba(68, 196, 161, 0.12), transparent 28%),
@@ -179,7 +180,7 @@
             align-items: center;
             justify-content: space-between;
             color: var(--text-sub);
-            font-size: 0.92rem;
+            font-size: 1rem;
             margin-bottom: 2px;
         }
 
@@ -204,12 +205,12 @@
 
         .status-label {
             color: var(--text-muted);
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             margin-bottom: 7px;
         }
 
         .status-value {
-            font-size: 1.02rem;
+            font-size: 1.12rem;
             font-weight: 600;
             color: var(--text-main);
         }
@@ -254,7 +255,7 @@
         .mode-label {
             display: block;
             color: var(--text-muted);
-            font-size: 0.82rem;
+            font-size: 0.92rem;
             margin-bottom: 8px;
             letter-spacing: 0.04em;
         }
@@ -270,13 +271,30 @@
             padding: 14px 46px 14px 16px;
             border: 1px solid var(--line);
             border-radius: var(--radius-lg);
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
-            color: var(--text-main);
+            background: linear-gradient(135deg, rgba(25, 33, 47, 0.98), rgba(17, 23, 34, 0.96));
+            color: #f7fbff;
             appearance: none;
-            font-size: 1rem;
+            font-size: 1.08rem;
             font-weight: 600;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
             height: 100%;
+        }
+
+        body[data-series="v7"] .mode-select {
+            background: linear-gradient(135deg, rgba(47, 36, 23, 0.98), rgba(29, 22, 14, 0.96));
+            color: #fff6e8;
+        }
+
+        .mode-select option,
+        .mode-select optgroup {
+            background: #17202d;
+            color: #eef4ff;
+        }
+
+        body[data-series="v7"] .mode-select option,
+        body[data-series="v7"] .mode-select optgroup {
+            background: #2a2016;
+            color: #fff1df;
         }
 
         .mode-select:focus {
@@ -325,13 +343,13 @@
             align-items: center;
             gap: 10px;
             margin: 0 0 8px;
-            font-size: 1.02rem;
+            font-size: 1.1rem;
             font-weight: 600;
         }
 
         .mode-summary-text {
             color: var(--text-sub);
-            font-size: 0.92rem;
+            font-size: 1rem;
             line-height: 1.7;
             margin: 0;
         }
@@ -385,7 +403,7 @@
             align-items: center;
             gap: 10px;
             margin: 0 0 10px;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             font-weight: 600;
         }
 
@@ -395,7 +413,7 @@
 
         .section-desc {
             color: var(--text-sub);
-            font-size: 0.94rem;
+            font-size: 1rem;
             line-height: 1.75;
             margin-bottom: 18px;
         }
@@ -409,7 +427,7 @@
             color: var(--text-sub);
             margin-bottom: 18px;
             line-height: 1.7;
-            font-size: 0.92rem;
+            font-size: 0.98rem;
         }
 
         .helper-box strong,
@@ -425,7 +443,7 @@
 
         .form-label {
             display: block;
-            font-size: 0.92rem;
+            font-size: 1rem;
             font-weight: 600;
             color: var(--text-sub);
             margin-bottom: 8px;
@@ -436,28 +454,55 @@
             min-height: 52px;
             border-radius: var(--radius-md);
             border: 1px solid var(--line);
-            background: var(--bg-muted);
-            color: #dce8ff;
+            background: linear-gradient(180deg, rgba(24, 32, 46, 0.98), rgba(18, 25, 37, 0.98));
+            color: #eef4ff;
             padding: 13px 16px;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
             transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            font-size: 1rem;
+            color-scheme: dark;
+        }
+
+        body[data-series="v7"] .form-control,
+        body[data-series="v7"] .form-select {
+            background: linear-gradient(180deg, rgba(46, 35, 23, 0.98), rgba(35, 27, 18, 0.98));
+            color: #fff4e3;
         }
 
         .form-control:focus,
         .form-select:focus {
-            color: #f4f7fb;
-            background: var(--bg-muted);
+            color: #f8fbff;
+            background: linear-gradient(180deg, rgba(24, 32, 46, 1), rgba(18, 25, 37, 1));
             border-color: rgba(108, 167, 255, 0.52);
             box-shadow: 0 0 0 4px rgba(61, 125, 255, 0.14);
         }
 
+        body[data-series="v7"] .form-control:focus,
+        body[data-series="v7"] .form-select:focus {
+            color: #fff8ef;
+            background: linear-gradient(180deg, rgba(46, 35, 23, 1), rgba(35, 27, 18, 1));
+            border-color: rgba(201, 169, 109, 0.52);
+            box-shadow: 0 0 0 4px rgba(169, 131, 71, 0.14);
+        }
+
+        .form-control::placeholder {
+            color: var(--text-muted);
+            opacity: 1;
+        }
+
         .form-select option {
-            color: #11151d;
+            background: #17202d;
+            color: #eaf2ff;
+        }
+
+        body[data-series="v7"] .form-select option {
+            background: #2a2016;
+            color: #fff1df;
         }
 
         textarea.form-control {
-            min-height: clamp(200px, 24vh, 260px);
-            max-height: 360px;
+            min-height: clamp(104px, 14vh, 132px);
+            max-height: 220px;
             resize: vertical;
             line-height: 1.7;
             font-family: "SFMono-Regular", "Consolas", monospace;
@@ -518,7 +563,7 @@
         .build-submit {
             width: 100%;
             min-height: 58px;
-            font-size: 1rem;
+            font-size: 1.04rem;
             margin-top: 4px;
         }
 
@@ -557,7 +602,7 @@
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.05);
             color: var(--text-sub);
-            font-size: 0.86rem;
+            font-size: 0.94rem;
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
@@ -598,7 +643,7 @@
             height: clamp(240px, 30vh, 340px);
             margin-top: 16px;
             font-family: "SFMono-Regular", "Consolas", monospace;
-            font-size: 13px;
+            font-size: 14px;
             line-height: 1.7;
         }
 
@@ -709,7 +754,7 @@
             flex-wrap: wrap;
             margin-bottom: 14px;
             color: var(--text-muted);
-            font-size: 0.9rem;
+            font-size: 0.98rem;
         }
 
         .file-item {
@@ -752,7 +797,7 @@
 
         .file-meta {
             color: var(--text-muted);
-            font-size: 0.84rem;
+            font-size: 0.92rem;
             padding-left: 26px;
             line-height: 1.6;
             overflow-wrap: anywhere;
@@ -767,6 +812,7 @@
             color: var(--text-muted);
             text-align: center;
             padding: 30px 14px;
+            font-size: 1rem;
         }
 
         .alert {
@@ -828,6 +874,7 @@
 
         .modal-title {
             color: #dcebff;
+            font-size: 1.15rem;
         }
 
         .guide-grid {
@@ -851,21 +898,21 @@
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.06);
             color: var(--text-muted);
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             white-space: nowrap;
         }
 
         .guide-block h5 {
             margin: 0 0 10px;
             color: #cfe1ff;
-            font-size: 1rem;
+            font-size: 1.08rem;
         }
 
         .guide-block p,
         .guide-block li {
             color: var(--text-sub);
             line-height: 1.75;
-            font-size: 0.94rem;
+            font-size: 1rem;
         }
 
         .guide-block ul {
@@ -882,6 +929,7 @@
             color: #9ad7ff;
             font-family: "SFMono-Regular", "Consolas", monospace;
             white-space: pre-wrap;
+            font-size: 0.96rem;
         }
 
         .loading-spinner {
@@ -1021,7 +1069,6 @@
             <main class="workspace">
                 <div class="mode-toolbar">
                     <div class="mode-picker">
-                        <label class="mode-label" for="seriesModeSelect">模式</label>
                         <div class="mode-select-wrap">
                             <select id="seriesModeSelect" class="mode-select">
                                 <option value="v6">V6 补丁构建</option>
@@ -1090,15 +1137,10 @@
                                     <span>自定义输入</span>
                                 </div>
                             </div>
-                            <div class="format-box">
-                                <strong>推荐格式：</strong>
-                                <span class="guide-code">deepflow-agent_tag: v6.6.5617
-deepflow-server_tag: v6.6.5617</span>
-                            </div>
                             <div class="mb-3">
                                 <label class="form-label" for="v7ImageList">镜像列表</label>
                                 <textarea class="form-control" id="v7ImageList"
-                                    placeholder="例如：deepflow-agent_tag: v6.6.5617&#10;deepflow-server_tag: v6.6.5617"></textarea>
+                                    placeholder="支持每行一条或逗号分隔，例如：deepflow-agent:v6.6.5617"></textarea>
                             </div>
                             <button type="button" class="btn btn-primary build-submit" id="v7BuildBtn" disabled>
                                 <i class="fas fa-play"></i> 开始
