@@ -1,12 +1,17 @@
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: getpatch
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: maintenance-app-config
-  namespace: default
+  namespace: getpatch
 data:
   config.yaml: |
     redis:
-      host: maintenance-redis.default.svc.cluster.local
+      host: maintenance-redis.getpatch.svc.cluster.local
       port: 6379
       db: 0
       password: ""
@@ -21,7 +26,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: maintenance-app-secrets
-  namespace: default
+  namespace: getpatch
 type: Opaque
 stringData:
   redis-password: "YSDeepFlow@3q302"
@@ -30,7 +35,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: maintenance-redis
-  namespace: default
+  namespace: getpatch
   labels:
     app: maintenance-redis
 spec:
@@ -47,7 +52,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: maintenance-redis
-  namespace: default
+  namespace: getpatch
   labels:
     app: maintenance-redis
 spec:
@@ -116,7 +121,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: maintenance-app
-  namespace: default
+  namespace: getpatch
   labels:
     app: maintenance-app
 spec:
@@ -131,12 +136,18 @@ spec:
     spec:
       initContainers:
       - name: wait-for-redis
-        image: busybox:1.36
+        image: redis:7.2-alpine
         imagePullPolicy: IfNotPresent
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
         command:
         - /bin/sh
         - -c
-        - until nc -z maintenance-redis 6379; do echo "waiting for redis"; sleep 2; done
+        - until redis-cli -h maintenance-redis -p 6379 -a "$REDIS_PASSWORD" ping | grep PONG; do echo "waiting for redis auth ready"; sleep 2; done
       # 解析GitLab
       hostAliases:
       - ip: "10.1.0.14"
@@ -239,7 +250,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: maintenance-worker
-  namespace: default
+  namespace: getpatch
   labels:
     app: maintenance-worker
 spec:
@@ -254,12 +265,18 @@ spec:
     spec:
       initContainers:
       - name: wait-for-redis
-        image: busybox:1.36
+        image: redis:7.2-alpine
         imagePullPolicy: IfNotPresent
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
         command:
         - /bin/sh
         - -c
-        - until nc -z maintenance-redis 6379; do echo "waiting for redis"; sleep 2; done
+        - until redis-cli -h maintenance-redis -p 6379 -a "$REDIS_PASSWORD" ping | grep PONG; do echo "waiting for redis auth ready"; sleep 2; done
       hostAliases:
       - ip: "10.1.0.14"
         hostnames:
@@ -336,7 +353,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: maintenance-svc
-  namespace: default
+  namespace: getpatch
 spec:
   selector:
     app: maintenance-app
