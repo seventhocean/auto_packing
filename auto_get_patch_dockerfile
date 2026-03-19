@@ -1,5 +1,5 @@
 # 基础镜像
-FROM python:3.10-slim
+FROM python:3.6-slim
 
 # 安装系统依赖 + ossutil 到 /app/bin/
 RUN echo "deb http://mirrors.aliyun.com/debian/ bullseye main non-free contrib" > /etc/apt/sources.list && \
