@@ -212,6 +212,7 @@ def run_build_task(task_id, current_version, target_version):
         # 创建任务专属目录（用版本+任务ID命名，确保唯一性，避免文件冲突）
         task_dir_name = f"{current_version}_to_{target_version}_{task_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
+        task_patch_list_path = os.path.join(task_image_dir, "patch_image_tag_list.txt")
         # 确保任务目录存在（不存在则创建，存在则清空历史残留）
         if os.path.exists(task_image_dir):
             shutil.rmtree(task_image_dir)
@@ -254,7 +255,7 @@ def run_build_task(task_id, current_version, target_version):
             # 调用Shell脚本，传递当前版本和目标版本参数
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 script_result = subprocess.run(
-                    ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version],
+                    ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version, task_patch_list_path],
                     check=True,
                     stdout=f,  # 捕获标准输出
                     stderr=subprocess.STDOUT, # 标准错误合并到标准输出
@@ -263,8 +264,8 @@ def run_build_task(task_id, current_version, target_version):
             
             update_progress(task_id, 25, "验证镜像列表生成结果")
             # 验证脚本执行结果：必须生成patch_image_tag_list.txt
-            if not os.path.exists(PATCH_LIST_PATH):
-                raise Exception(f"镜像列表脚本执行失败：未在{LATEST_LIST_DIR}生成patch_image_tag_list.txt")
+            if not os.path.exists(task_patch_list_path):
+                raise Exception(f"镜像列表脚本执行失败：未生成任务镜像列表文件 {task_patch_list_path}")
             
             # 读取并记录脚本输出日志
             with open(task_log_path, 'r', encoding='utf-8') as f:
@@ -273,7 +274,7 @@ def run_build_task(task_id, current_version, target_version):
             
             update_progress(task_id, 30, "镜像拉取清单生成完成，准备拉取镜像文件")
             # 读取镜像列表文件，获取要拉取的镜像数量
-            with open(PATCH_LIST_PATH, 'r', encoding='utf-8') as f:
+            with open(task_patch_list_path, 'r', encoding='utf-8') as f:
                 image_count = len([line for line in f if line.strip()])
             write_log(f"发现 {image_count} 个需要拉取的镜像", task_id=task_id)
 
@@ -284,7 +285,7 @@ def run_build_task(task_id, current_version, target_version):
             # 调用拉取脚本，指定任务专属目录（确保镜像仅属于当前任务）
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 pull_result = subprocess.run(
-                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir],
+                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
                     check=True,
                     stdout=f,
                     stderr=subprocess.STDOUT,
@@ -300,13 +301,11 @@ def run_build_task(task_id, current_version, target_version):
             write_log(f"镜像拉取成功！共拉取{len(tar_files)}个镜像", task_id=task_id)
 
             # 准备打包
-            update_progress(task_id, 70, "准备打包升级包，复制镜像列表文件")
-            temp_patch_list = os.path.join(task_image_dir, "patch_image_tag_list.txt")
-            shutil.copy2(PATCH_LIST_PATH, temp_patch_list)
+            update_progress(task_id, 70, "准备打包升级包")
             
             if not os.path.exists(UPGRADE_SCRIPT_PATH) or not os.path.isfile(UPGRADE_SCRIPT_PATH):
                 raise Exception(f"升级脚本不存在：{UPGRADE_SCRIPT_PATH}")
-            files_to_pack = tar_files + [temp_patch_list, UPGRADE_SCRIPT_PATH]
+            files_to_pack = tar_files + [task_patch_list_path, UPGRADE_SCRIPT_PATH]
             write_log(f"准备打包 {len(files_to_pack)} 个文件", task_id=task_id)
 
             # 打包TAR.GZ升级包（仅包含当前任务的镜像+镜像列表）
@@ -340,7 +339,6 @@ def run_build_task(task_id, current_version, target_version):
 
             # 清理临时文件
             update_progress(task_id, 95, "清理临时文件")
-            os.remove(temp_patch_list)
             write_log(f"临时文件清理完成", task_id=task_id)
 
             # 任务完成：更新状态并记录日志
@@ -403,6 +401,7 @@ def run_build_task_v7(task_id, images):
     try:
         task_dir_name = f"v7_{task_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
+        task_patch_list_path = os.path.join(task_image_dir, "patch_image_tag_list.txt")
         if os.path.exists(task_image_dir):
             shutil.rmtree(task_image_dir)
         os.makedirs(task_image_dir, exist_ok=True)
@@ -431,18 +430,17 @@ def run_build_task_v7(task_id, images):
                 time.sleep(0.5)
 
             update_progress(task_id, 12, "生成V7镜像列表文件")
-            os.makedirs(LATEST_LIST_DIR, exist_ok=True)
-            with open(PATCH_LIST_PATH, 'w', encoding='utf-8') as f:
+            with open(task_patch_list_path, 'w', encoding='utf-8') as f:
                 for image in images:
                     f.write(f"{image}\n")
-            write_log(f"V7镜像列表写入完成：{PATCH_LIST_PATH}", task_id=task_id)
+            write_log(f"V7镜像列表写入完成：{task_patch_list_path}", task_id=task_id)
 
             update_progress(task_id, 25, "镜像拉取清单生成完成，准备拉取镜像文件")
             write_log(f"开始拉取镜像，存储路径：{task_image_dir}", task_id=task_id)
 
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 subprocess.run(
-                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir],
+                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
                     check=True,
                     stdout=f,
                     stderr=subprocess.STDOUT,
@@ -456,13 +454,11 @@ def run_build_task_v7(task_id, images):
             update_progress(task_id, 60, f"镜像拉取完成，共拉取 {len(tar_files)} 个")
             write_log(f"镜像拉取成功！共拉取{len(tar_files)}个镜像", task_id=task_id)
 
-            update_progress(task_id, 70, "准备打包升级包，复制镜像列表文件")
-            temp_patch_list = os.path.join(task_image_dir, "patch_image_tag_list.txt")
-            shutil.copy2(PATCH_LIST_PATH, temp_patch_list)
+            update_progress(task_id, 70, "准备打包升级包")
 
             if not os.path.exists(UPGRADE_SCRIPT_PATH) or not os.path.isfile(UPGRADE_SCRIPT_PATH):
                 raise Exception(f"升级脚本不存在：{UPGRADE_SCRIPT_PATH}")
-            files_to_pack = tar_files + [temp_patch_list, UPGRADE_SCRIPT_PATH]
+            files_to_pack = tar_files + [task_patch_list_path, UPGRADE_SCRIPT_PATH]
 
             update_progress(task_id, 75, "开始打包TAR.GZ升级包")
             upgrade_package = f"deepflow_patch_v7_{task_id}.tar.gz"
@@ -489,7 +485,6 @@ def run_build_task_v7(task_id, images):
             write_log(f"升级包大小：{package_size/1024/1024:.2f}MB", task_id=task_id)
 
             update_progress(task_id, 95, "清理临时文件")
-            os.remove(temp_patch_list)
             write_log(f"临时文件清理完成", task_id=task_id)
 
             update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）")

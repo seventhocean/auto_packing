@@ -4,16 +4,10 @@
 # 启用严格错误检查（避免隐藏错误）
 set -euo pipefail
 
-# 检查传参数量
-    if [ $# -ne 2 ]; then
-        usage
-        exit 0
-    fi
-
 # 获取脚本所在目录
 CURRENT_DIRECTORY=$(cd "$(dirname "$0")" && pwd) 
 # 生成的镜像列表文件
-PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/patch_image_tag_list.txt"
+DEFAULT_PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/patch_image_tag_list.txt"
 # 临时回收站
 #TRASH="${CURRENT_DIRECTORY}/../.trash"
 # patch 列表（以 OSS 为准）
@@ -35,9 +29,6 @@ if [ ! -f "${OSS_PATCH_LIST}" ]; then
   touch "${OSS_PATCH_LIST}"
 fi
 
-# 获取传参传入的当前补丁版本和目标补丁版本
-CURRENT_PATCH_VERSION="$1"
-TARGET_PATCH_VERSION="$2"
 # 设置输出日志的颜色及等级
 NORMAL_COL="\033[0m"
 RED_COL="\033[1;31m"
@@ -60,12 +51,31 @@ usagelog(){ echo -e "[${timestamp}] [get_patch_image_tag_list.sh] $1 ${BLUE_COL}
 # 使用方法
 function usage() {
   debuglog  "【Usage】"
-  usagelog  "  bash $0 [当前补丁版本] [目标补丁版本]"
+  usagelog  "  bash $0 [当前补丁版本] [目标补丁版本] [输出文件路径(可选)]"
   debuglog  "【Example】"
-  usagelog  "  bash $0 01-20250430-26798-BUG 13-20250528-4661-BUG"
+  usagelog  "  bash $0 01-20250430-26798-BUG 13-20250528-4661-BUG /tmp/task_patch_image_tag_list.txt"
   debuglog  "【Tips】"
   usagelog  "  获取帮助信息: bash $0 [-h|--help]"   
 }
+
+# 检查传参数量
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+    usage
+    exit 0
+fi
+
+# 获取传参传入的当前补丁版本和目标补丁版本
+CURRENT_PATCH_VERSION="$1"
+TARGET_PATCH_VERSION="$2"
+PATCH_IMAGE_TAG_LIST_FILE="${3:-$DEFAULT_PATCH_IMAGE_TAG_LIST_FILE}"
+PATCH_IMAGE_TAG_LIST_DIR=$(dirname "${PATCH_IMAGE_TAG_LIST_FILE}")
+mkdir -p "${PATCH_IMAGE_TAG_LIST_DIR}"
+
+TMP_PATCH_IMAGE_TAG_LIST_FILE=$(mktemp "${TRASH}/patch_image_tag_list.XXXXXX")
+cleanup() {
+    rm -f "${TMP_PATCH_IMAGE_TAG_LIST_FILE}"
+}
+trap cleanup EXIT
 
 # 拉取最新项目内容
 function pull_nuwa_project() {
@@ -95,13 +105,11 @@ function get_patch_image_tag_list() {
     for i in ${DIFF_PATCH_LIST[@]};do echo $i >> $LOG_FILE; done
     # 生成需要更新 Patch 的镜像列表集
     rm -f ${PATCH_IMAGE_TAG_LIST_FILE}
-    rm -f ${TRASH}/patch_image_tag_list.txt
-    mkdir -p ${TRASH}
     for patch in ${DIFF_PATCH_LIST[@]}; do
-        grep ":v6.6" ${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh|sed s'/ //g'  >> ${TRASH}/patch_image_tag_list.txt
+        grep ":v6.6" ${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh|sed s'/ //g'  >> ${TMP_PATCH_IMAGE_TAG_LIST_FILE}
     done
     # 过滤需要更新的镜像列表
-    cat ${TRASH}/patch_image_tag_list.txt | sort -V | tac | awk -F: '!seen[$1]++' | tac | sed -E 's/^([^:]+):(.+)$/\1_tag: \2/' >> ${PATCH_IMAGE_TAG_LIST_FILE}
+    cat ${TMP_PATCH_IMAGE_TAG_LIST_FILE} | sort -V | tac | awk -F: '!seen[$1]++' | tac | sed -E 's/^([^:]+):(.+)$/\1_tag: \2/' >> ${PATCH_IMAGE_TAG_LIST_FILE}
 }
 
 # 主函数
