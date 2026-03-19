@@ -5,306 +5,322 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>DeepFlow 升级包构建工具</title>
-    <!-- 引入外部资源 -->
     <link rel="stylesheet" href="static/bootstrap.min.css">
     <link rel="stylesheet" href="static/all.min.css">
     <link rel="icon" href="static/favicon.ico" type="image/x-icon">
     <style>
-        /* 基础样式重置与全局配置 */
         * {
-            margin: 0;
-            padding: 0;
             box-sizing: border-box;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         :root {
-            --primary-color: #5176f1;
-            --primary-light: #7393ff;
-            --primary-dark: #3a5ed9;
-            --success-color: #4caf50;
-            --success-light: #66bb6a;
-            --danger-color: #f44336;
-            --danger-light: #ef5350;
-            --bg-primary: #1e1e1e;
-            --bg-secondary: #2c2c2c;
-            --bg-tertiary: #3a3a3a;
-            --border-color: #444;
-            --text-primary: #fcfcfc;
-            --text-secondary: #e0e0e0;
-            --text-tertiary: #9e9e9e;
-            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-            --radius-sm: 6px;
-            --radius-md: 10px;
-            --radius-lg: 14px;
-            --radius-full: 50%;
-            --transition-fast: 0.2s ease;
-            --transition-normal: 0.3s ease;
-            --transition-slow: 0.5s ease;
+            --bg-page: #11151d;
+            --bg-panel: rgba(23, 30, 43, 0.92);
+            --bg-panel-strong: #1a2231;
+            --bg-muted: #222c3d;
+            --line: rgba(157, 179, 214, 0.16);
+            --line-strong: rgba(157, 179, 214, 0.28);
+            --text-main: #f4f7fb;
+            --text-sub: #b8c4d8;
+            --text-muted: #8f9ab0;
+            --brand: #6ca7ff;
+            --brand-strong: #3d7dff;
+            --accent: #44c4a1;
+            --warn: #f56b6b;
+            --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.35);
+            --shadow-md: 0 14px 28px rgba(0, 0, 0, 0.22);
+            --radius-xl: 24px;
+            --radius-lg: 18px;
+            --radius-md: 14px;
+            --radius-sm: 10px;
         }
 
-        /* 页面基础样式 */
         body {
-            background-color: var(--bg-primary);
-            background-image:
-                radial-gradient(circle at 10% 20%, rgba(81, 118, 241, 0.05) 0%, transparent 20%),
-                radial-gradient(circle at 90% 80%, rgba(76, 175, 80, 0.05) 0%, transparent 20%);
-            color: var(--text-primary);
+            margin: 0;
             min-height: 100vh;
-            padding: 20px 0;
-            font-family: "Inter", "Microsoft YaHei", "PingFang SC", sans-serif;
-            line-height: 1.6;
+            color: var(--text-main);
+            font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(61, 125, 255, 0.18), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(68, 196, 161, 0.12), transparent 28%),
+                linear-gradient(180deg, #0d1118 0%, #131a25 100%);
         }
 
-        .container {
-            max-width: 1600px;
+        .page-shell {
+            max-width: 1560px;
             margin: 0 auto;
-            padding: 0 15px;
+            padding: 28px 20px 40px;
         }
 
-        /* 标题样式 */
-        h1 {
-            font-size: 2.2rem;
-            font-weight: 600;
-            background: linear-gradient(120deg, var(--primary-light), var(--text-primary));
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            text-align: center;
-            margin-bottom: 2.5rem;
-            position: relative;
-            padding-bottom: 1rem;
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+            gap: 20px;
+            margin-bottom: 22px;
         }
 
-        h1::after {
-            content: "";
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80px;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
-            border-radius: 3px;
+        .hero-card,
+        .status-card,
+        .workspace,
+        .resource-panel,
+        .card-shell {
+            background: var(--bg-panel);
+            border: 1px solid var(--line);
+            box-shadow: var(--shadow-lg);
+            border-radius: var(--radius-xl);
+            backdrop-filter: blur(16px);
         }
 
-        /* 卡片样式 */
-        .card {
-            background-color: var(--bg-secondary);
-            border: none;
-            box-shadow: var(--shadow-md);
-            border-radius: var(--radius-md);
-            padding: 30px;
-            margin-bottom: 30px;
+        .hero-card {
+            padding: 26px 30px;
             position: relative;
             overflow: hidden;
         }
 
-        .card::before {
+        .hero-card::before {
             content: "";
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+            inset: 0 auto auto 0;
+            width: 240px;
+            height: 240px;
+            background: radial-gradient(circle, rgba(108, 167, 255, 0.22), transparent 68%);
+            pointer-events: none;
         }
 
-        /* 表单相关样式 */
-        .section-title {
-            font-size: 1.5rem;
-            font-weight: 500;
-            color: var(--text-primary);
-            margin-bottom: 1rem;
-            display: flex;
+        .eyebrow {
+            display: inline-flex;
             align-items: center;
             gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(108, 167, 255, 0.14);
+            color: #d6e7ff;
+            font-size: 0.88rem;
+            letter-spacing: 0.04em;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 2.55rem;
+            line-height: 1.08;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+        }
+
+        .hero-desc {
+            max-width: 760px;
+            margin: 0;
+            color: var(--text-sub);
+            font-size: 1rem;
+            line-height: 1.75;
+        }
+
+        .hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        .meta-pill {
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            color: var(--text-sub);
+            font-size: 0.92rem;
+        }
+
+        .status-card {
+            padding: 22px;
+            display: grid;
+            gap: 14px;
+            align-content: start;
+        }
+
+        .status-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-sub);
+            font-size: 0.95rem;
+            margin-bottom: 2px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .status-item {
+            padding: 16px;
+            border-radius: var(--radius-md);
+            background: var(--bg-panel-strong);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .status-label {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            margin-bottom: 8px;
+        }
+
+        .status-value {
+            font-size: 1.18rem;
+            font-weight: 600;
+        }
+
+        .status-value.ok {
+            color: #83ddb2;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.82fr);
+            gap: 22px;
+            align-items: start;
+        }
+
+        .workspace {
+            padding: 22px;
+        }
+
+        .tabs-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .series-tab {
+            flex: 1;
+            padding: 16px 18px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-sub);
+            cursor: pointer;
+            text-align: left;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .series-tab:hover {
+            border-color: var(--line-strong);
+            transform: translateY(-1px);
+        }
+
+        .series-tab.active {
+            background: linear-gradient(135deg, rgba(61, 125, 255, 0.28), rgba(68, 196, 161, 0.12));
+            border-color: rgba(108, 167, 255, 0.44);
+            color: var(--text-main);
+            box-shadow: var(--shadow-md);
+        }
+
+        .series-name {
+            display: block;
+            font-size: 1.08rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .series-note {
+            display: block;
+            font-size: 0.88rem;
+            color: inherit;
+            opacity: 0.84;
+        }
+
+        .panel-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+            gap: 18px;
+        }
+
+        .card-shell {
+            padding: 22px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 10px;
+            font-size: 1.2rem;
+            font-weight: 600;
         }
 
         .section-title i {
-            color: var(--primary-color);
-            font-size: 1.2em;
+            color: var(--brand);
         }
 
         .section-desc {
-            font-size: 0.95rem;
-            color: var(--text-tertiary);
-            margin-bottom: 1.5rem;
+            color: var(--text-sub);
+            font-size: 0.94rem;
+            line-height: 1.75;
+            margin-bottom: 18px;
+        }
+
+        .helper-box,
+        .format-box {
+            padding: 15px 16px;
+            border-radius: var(--radius-md);
+            background: rgba(108, 167, 255, 0.08);
+            border: 1px solid rgba(108, 167, 255, 0.16);
+            color: var(--text-sub);
+            margin-bottom: 18px;
             line-height: 1.7;
+            font-size: 0.92rem;
+        }
+
+        .helper-box strong,
+        .format-box strong {
+            color: var(--text-main);
         }
 
         .form-label {
-            color: var(--text-secondary);
-            font-weight: 500;
-            margin-bottom: 0.5rem;
             display: block;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--text-sub);
+            margin-bottom: 8px;
         }
 
-        .form-select,
-        .form-control {
-            background-color: var(--bg-tertiary);
-            color: var(--primary-light);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-sm);
-            padding: 0.75rem 1rem;
-            font-size: 0.95rem;
-            transition: var(--transition-normal);
+        .form-control,
+        .form-select {
+            min-height: 52px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--line);
+            background: var(--bg-muted);
+            color: #dce8ff;
+            padding: 13px 16px;
+            box-shadow: none;
         }
 
-        .form-select:focus,
-        .form-control:focus {
-            background-color: var(--bg-tertiary);
-            color: var(--primary-light);
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(81, 118, 241, 0.2);
-            outline: none;
+        .form-control:focus,
+        .form-select:focus {
+            color: #f4f7fb;
+            background: var(--bg-muted);
+            border-color: rgba(108, 167, 255, 0.52);
+            box-shadow: 0 0 0 4px rgba(61, 125, 255, 0.14);
         }
 
         .form-select option {
-            background-color: var(--bg-primary);
-            color: var(--text-secondary);
-            padding: 0.5rem;
+            color: #11151d;
         }
 
-        .form-select option:checked {
-            background-color: var(--primary-dark);
-            color: white;
-        }
-
-        /* 进度条样式 */
-        .progress {
-            height: 28px;
-            border-radius: var(--radius-lg);
-            background-color: var(--bg-tertiary);
-            margin: 20px 0;
-            overflow: hidden;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .progress-bar {
-            border-radius: var(--radius-lg);
-            transition: width var(--transition-slow), background-color var(--transition-normal);
-            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
-            box-shadow: 0 0 10px rgba(81, 118, 241, 0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 500;
-            color: white;
-        }
-
-        .progress-bar.bg-success {
-            background: linear-gradient(90deg, var(--success-color), var(--success-light));
-            box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
-        }
-
-        .progress-bar.bg-danger {
-            background: linear-gradient(90deg, var(--danger-color), var(--danger-light));
-            box-shadow: 0 0 10px rgba(244, 67, 54, 0.4);
-        }
-
-        /* 呼吸动画效果 */
-        @keyframes breathe {
-
-            0%,
-            100% {
-                opacity: 1;
-                box-shadow: 0 0 10px rgba(81, 118, 241, 0.4);
-            }
-
-            50% {
-                opacity: 0.8;
-                box-shadow: 0 0 15px rgba(81, 118, 241, 0.6);
-            }
-        }
-
-        .progress-bar-animated {
-            animation: breathe 2s infinite ease-in-out;
-        }
-
-        /* 日志容器样式 */
-        .log-container {
-            height: 220px;
-            overflow-y: auto;
-            background-color: var(--bg-tertiary);
-            border-radius: var(--radius-sm);
-            padding: 15px;
-            font-family: "Consolas", "Monaco", monospace;
-            font-size: 14px;
-            border: 1px solid var(--border-color);
+        textarea.form-control {
+            min-height: 260px;
+            resize: vertical;
             line-height: 1.7;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+            font-family: "SFMono-Regular", "Consolas", monospace;
         }
 
-        /* 自定义滚动条 */
-        .log-container::-webkit-scrollbar,
-        .existing-files-container::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        .log-container::-webkit-scrollbar-track,
-        .existing-files-container::-webkit-scrollbar-track {
-            background: var(--bg-tertiary);
-            border-radius: 4px;
-        }
-
-        .log-container::-webkit-scrollbar-thumb,
-        .existing-files-container::-webkit-scrollbar-thumb {
-            background: #555;
-            border-radius: 4px;
-            transition: var(--transition-fast);
-        }
-
-        .log-container::-webkit-scrollbar-thumb:hover,
-        .existing-files-container::-webkit-scrollbar-thumb:hover {
-            background: var(--primary-color);
-        }
-
-        /* 日志类型样式 */
-        .log-time {
-            color: #90caf9;
-            font-weight: 500;
-        }
-
-        .log-info {
-            color: var(--text-secondary);
-        }
-
-        .log-success {
-            color: var(--success-light);
-            font-weight: 500;
-        }
-
-        .log-error {
-            color: var(--danger-light);
-            font-weight: bold;
-        }
-
-        /* 日志条目动画 */
-        .log-entry {
-            opacity: 0;
-            transform: translateY(5px);
-            animation: logFadeIn 0.3s forwards ease;
-        }
-
-        @keyframes logFadeIn {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* 按钮样式 */
         .btn {
-            transition: var(--transition-normal);
-            border-radius: var(--radius-sm);
-            font-weight: 500;
-            padding: 0.6rem 1.2rem;
-            font-size: 0.95rem;
             border: none;
+            border-radius: var(--radius-md);
+            padding: 13px 18px;
+            font-weight: 600;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -312,154 +328,212 @@
         }
 
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
         }
 
-        .btn:active {
-            transform: translateY(0);
-            box-shadow: var(--shadow-sm);
-        }
-
-        /* 按钮主题样式 */
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-            color: white;
+            background: linear-gradient(135deg, var(--brand-strong), var(--brand));
+            color: #fff;
         }
 
         .btn-primary:disabled {
-            background: linear-gradient(135deg, #4a69bd, #5c6bc0);
-            color: rgba(255, 255, 255, 0.7);
+            background: linear-gradient(135deg, #4c5f88, #60719b);
+            color: rgba(255, 255, 255, 0.68);
             transform: none;
-            box-shadow: none;
-            cursor: not-allowed;
         }
 
         .btn-success {
-            background: linear-gradient(135deg, #388e3c, var(--success-color));
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: linear-gradient(135deg, var(--success-color), var(--success-light));
-            color: white;
+            background: linear-gradient(135deg, #24a47f, #49c39d);
+            color: #fff;
         }
 
         .btn-outline-light {
             background: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: var(--text-secondary);
+            color: var(--text-sub);
+            border: 1px solid rgba(255, 255, 255, 0.16);
         }
 
         .btn-outline-light:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.5);
-            color: white;
-        }
-
-        .btn-outline-light:disabled {
-            border-color: rgba(255, 255, 255, 0.2);
-            color: rgba(255, 255, 255, 0.5);
-            transform: none;
-            box-shadow: none;
-            cursor: not-allowed;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text-main);
         }
 
         .btn-secondary {
-            background: linear-gradient(135deg, #555, #666);
-            color: white;
+            background: #44506a;
+            color: #fff;
         }
 
-        .btn-secondary:hover {
-            background: linear-gradient(135deg, #666, #777);
-            color: white;
+        .build-submit {
+            width: 100%;
+            min-height: 58px;
+            font-size: 1rem;
         }
 
-        /* 提示框样式 */
-        .alert {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-20px);
-            opacity: 0;
-            z-index: 1000;
-            max-width: 600px;
-            background-color: var(--bg-secondary);
-            border-color: var(--border-color);
-            color: var(--text-primary);
-            border-radius: var(--radius-sm);
-            box-shadow: var(--shadow-lg);
-            padding: 1.2rem;
-            transition: var(--transition-normal);
+        .series-panel {
+            display: none;
         }
 
-        .alert.show {
-            transform: translateX(-50%) translateY(0);
-            opacity: 1;
+        .series-panel.active {
+            display: block;
         }
 
-        .alert-heading {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
+        .progress-section {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .status-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .status-chip {
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-sub);
+            font-size: 0.86rem;
+        }
+
+        .progress {
+            height: 30px;
+            border-radius: 999px;
+            background: #1f2736;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .progress-bar {
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--brand-strong), var(--brand));
         }
 
-        .alert-info .alert-heading {
-            color: var(--primary-light);
+        .progress-bar.bg-success {
+            background: linear-gradient(90deg, #2aa774, #5ad3a7);
         }
 
-        .alert-danger .alert-heading {
-            color: var(--danger-light);
+        .progress-bar.bg-danger {
+            background: linear-gradient(90deg, #dd4f4f, #f07a7a);
         }
 
-        .alert p {
-            margin-bottom: 0;
-            color: var(--text-secondary);
-        }
-
-        .btn-close {
-            color: var(--text-tertiary);
-            opacity: 0.7;
-        }
-
-        .btn-close:hover {
-            color: white;
-            opacity: 1;
-        }
-
-        /* 已有文件列表样式 */
+        .log-container,
         .existing-files-container {
-            max-height: 260px;
-            overflow-y: auto;
-            background-color: var(--bg-tertiary);
-            border-radius: var(--radius-sm);
-            padding: 15px;
-            margin-top: 10px;
-            width: 100%;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+            background: #161d2a;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            overflow: auto;
         }
 
-        .file-item {
+        .log-container {
+            height: 320px;
+            margin-top: 16px;
+            font-family: "SFMono-Regular", "Consolas", monospace;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .existing-files-container {
+            max-height: calc(100vh - 320px);
+            min-height: 420px;
+        }
+
+        .log-container::-webkit-scrollbar,
+        .existing-files-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .log-container::-webkit-scrollbar-thumb,
+        .existing-files-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.16);
+            border-radius: 999px;
+        }
+
+        .log-entry {
+            opacity: 0;
+            transform: translateY(6px);
+            animation: logFade 0.22s forwards ease;
+        }
+
+        @keyframes logFade {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .log-time {
+            color: #8fcef7;
+            margin-right: 6px;
+        }
+
+        .log-info {
+            color: #c9d6ea;
+        }
+
+        .log-success {
+            color: #6fe0aa;
+            font-weight: 600;
+        }
+
+        .log-error {
+            color: #ff8585;
+            font-weight: 600;
+        }
+
+        .download-box {
+            margin-top: 18px;
+            padding: 18px;
+            border-radius: var(--radius-md);
+            background: rgba(68, 196, 161, 0.08);
+            border: 1px solid rgba(68, 196, 161, 0.16);
+            display: none;
+        }
+
+        .download-title {
+            margin-bottom: 12px;
+            color: #cdf2e6;
+            font-weight: 600;
+        }
+
+        .resource-panel {
+            padding: 22px;
+            position: sticky;
+            top: 18px;
+        }
+
+        .resource-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .resource-toolbar .form-control {
+            min-height: 46px;
+        }
+
+        .stats-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px solid var(--border-color);
-            transition: var(--transition-fast);
+            gap: 12px;
+            margin-bottom: 14px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
         }
 
-        .file-item:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            padding-left: 8px;
-            border-radius: var(--radius-sm);
+        .file-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 14px;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         .file-item:last-child {
@@ -467,159 +541,152 @@
         }
 
         .file-name {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .file-main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            color: var(--text-main);
+        }
+
+        .file-main i {
+            color: var(--brand);
+        }
+
+        .file-title-text {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            margin-right: 10px;
-            flex-grow: 1;
-            color: var(--text-primary);
+        }
+
+        .file-meta {
+            color: var(--text-muted);
+            font-size: 0.84rem;
+            padding-left: 26px;
+        }
+
+        .empty-state {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 30px 14px;
+        }
+
+        .alert {
+            position: fixed;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1200;
+            width: min(720px, calc(100% - 24px));
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            background: rgba(19, 25, 36, 0.95);
+            color: var(--text-main);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .alert-heading {
             display: flex;
             align-items: center;
             gap: 8px;
+            font-size: 1rem;
+            margin-bottom: 6px;
         }
 
-        .file-name i {
-            color: var(--primary-color);
-            opacity: 0.8;
-        }
-
-        .file-size {
-            color: var(--text-tertiary);
-            font-size: 0.85rem;
-            margin-left: 8px;
-        }
-
-        /* 使用教程按钮 */
         .tutorial-btn {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            border-radius: var(--radius-full);
-            font-size: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: var(--shadow-md);
-            z-index: 999;
-            background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
-            color: white;
+            right: 28px;
+            bottom: 28px;
+            width: 62px;
+            height: 62px;
             border: none;
-            cursor: pointer;
-            transition: var(--transition-normal);
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--brand-strong), var(--brand));
+            color: white;
+            box-shadow: var(--shadow-lg);
+            font-size: 22px;
+            z-index: 1200;
         }
 
         .tutorial-btn:hover {
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: var(--shadow-lg);
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            transform: translateY(-2px) scale(1.03);
         }
 
-        .tutorial-btn:active {
-            transform: translateY(-1px);
-        }
-
-        /* 教程模态框样式 */
         .modal {
-            backdrop-filter: blur(5px);
+            backdrop-filter: blur(10px);
         }
 
         .modal-content {
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            border: none;
-            border-radius: var(--radius-md);
-            box-shadow: var(--shadow-lg);
-            overflow: hidden;
+            background: #121926;
+            color: var(--text-main);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
         }
 
-        .modal-header {
-            border-color: var(--border-color);
-            padding: 1.2rem 1.5rem;
-            background: linear-gradient(90deg, var(--bg-secondary), var(--bg-tertiary));
+        .modal-header,
+        .modal-footer {
+            border-color: rgba(255, 255, 255, 0.08);
         }
 
         .modal-title {
-            font-size: 1.3rem;
-            font-weight: 600;
-            color: var(--primary-light);
+            color: #dcebff;
         }
 
-        .modal-body {
-            padding: 1.5rem;
-            max-height: 70vh;
-            overflow-y: auto;
+        .guide-grid {
+            display: grid;
+            gap: 16px;
         }
 
-        .modal-footer {
-            border-color: var(--border-color);
-            padding: 1rem 1.5rem;
-            background: linear-gradient(90deg, var(--bg-tertiary), var(--bg-secondary));
+        .guide-block {
+            padding: 16px 18px;
+            border-radius: var(--radius-md);
+            background: #182132;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .tutorial-step {
-            margin-bottom: 25px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
+        .guide-block h5 {
+            margin: 0 0 10px;
+            color: #cfe1ff;
+            font-size: 1rem;
         }
 
-        .tutorial-step:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
+        .guide-block p,
+        .guide-block li {
+            color: var(--text-sub);
+            line-height: 1.75;
+            font-size: 0.94rem;
         }
 
-        .tutorial-step h5 {
-            color: var(--primary-light);
-            margin-bottom: 12px;
-            font-size: 1.1rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .guide-block ul {
+            margin: 0;
+            padding-left: 18px;
         }
 
-        .tutorial-step h5 i {
-            background-color: rgba(81, 118, 241, 0.2);
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
+        .guide-code {
+            display: block;
+            margin-top: 10px;
+            padding: 12px 14px;
+            background: #101621;
+            border-radius: var(--radius-sm);
+            color: #9ad7ff;
+            font-family: "SFMono-Regular", "Consolas", monospace;
+            white-space: pre-wrap;
         }
 
-        .tutorial-step p {
-            color: var(--text-secondary);
-            margin-bottom: 10px;
-            line-height: 1.7;
-        }
-
-        .tutorial-step ul {
-            padding-left: 1.5rem;
-            margin-bottom: 0;
-        }
-
-        .tutorial-step li {
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-            line-height: 1.7;
-        }
-
-        .tutorial-step li:last-child {
-            margin-bottom: 0;
-        }
-
-        /* 加载动画 */
         .loading-spinner {
             display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-top-color: #fff;
             border-radius: 50%;
-            border-top-color: var(--primary-color);
-            animation: spin 1s ease-in-out infinite;
+            animation: spin 0.9s linear infinite;
         }
 
         @keyframes spin {
@@ -628,174 +695,289 @@
             }
         }
 
-        /* 响应式调整 */
+        @media (max-width: 1200px) {
+            .hero,
+            .layout,
+            .panel-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .resource-panel {
+                position: static;
+            }
+
+            .existing-files-container {
+                max-height: none;
+            }
+        }
+
         @media (max-width: 768px) {
+            .page-shell {
+                padding: 18px 14px 32px;
+            }
+
             h1 {
-                font-size: 1.8rem;
-                margin-bottom: 1.8rem;
+                font-size: 2rem;
             }
 
-            .card {
-                padding: 20px;
+            .hero-card,
+            .status-card,
+            .workspace,
+            .resource-panel,
+            .card-shell {
+                border-radius: 18px;
             }
 
-            .section-title {
-                font-size: 1.3rem;
+            .hero-card,
+            .status-card,
+            .workspace,
+            .resource-panel,
+            .card-shell {
+                padding: 18px;
             }
 
-            .existing-files-container,
-            .log-container {
-                max-height: 180px;
+            .tabs-bar,
+            .status-grid {
+                grid-template-columns: 1fr;
             }
 
             .tutorial-btn {
-                width: 50px;
-                height: 50px;
-                font-size: 20px;
-                bottom: 20px;
-                right: 20px;
-            }
-
-            .modal-body {
-                padding: 1rem;
-            }
-
-            .modal-title {
-                font-size: 1.1rem;
-            }
-
-            .btn {
-                padding: 0.5rem 1rem;
-                font-size: 0.9rem;
+                right: 18px;
+                bottom: 18px;
+                width: 54px;
+                height: 54px;
             }
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h1>DeepFlow 升级包构建工具</h1>
-        <div class="card">
-            <div class="row">
-                <!-- 左侧：现有版本选择表单 -->
-                <div class="col-md-6 pe-md-4">
-                    <h3 class="section-title">
-                        <i class="fas fa-cogs"></i> 构建新升级包
-                    </h3>
-                    <p class="section-desc">选择当前使用的版本和目标升级版本，系统将自动生成差异升级包</p>
-                    <form id="buildForm">
-                        <div class="row mb-4">
-                            <div class="col-md-12">
-                                <label class="form-label">版本栏目</label>
-                                <select class="form-select" id="versionSeries" required>
-                                    <option value="v6" selected>V6（6.6.9）</option>
-                                    <option value="v7">V7（待接入）</option>
-                                </select>
-                            </div>
-                            <div class="col-md-12 mt-3 v6-only">
-                                <label class="form-label">当前Patch版本</label>
-                                <select class="form-select" id="currentVersion" required>
-                                    <option value="">加载中...</option>
-                                </select>
-                            </div>
-                            <div class="col-md-12 mt-3 v6-only">
-                                <label class="form-label">目标Patch版本</label>
-                                <select class="form-select" id="targetVersion" required disabled>
-                                    <option value="">请先选择当前版本
-                                </select>
-                            </div>
-                            <div class="col-md-12 mt-3 v7-only" style="display: none;">
-                                <label class="form-label">镜像列表（每行一个或逗号分隔）</label>
-                                <textarea class="form-control" id="v7ImageList" rows="4"
-                                    placeholder="例如：deepflow-agent_tag: v6.6.5617&#10;deepflow-server_tag: v6.6.5617"></textarea>
-                                <div class="section-desc mt-2" style="margin-bottom: 0;">
-                                    仅 V7 模式生效。格式建议为 <code>name_tag: vX.Y.Z</code> 或 <code>name: vX.Y.Z</code>，将写入 patchlist。
-                                </div>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 py-3 fs-5" disabled>
-                            <i class="fas fa-play"></i> 开始构建
-                        </button>
-                    </form>
+    <div class="page-shell">
+        <section class="hero">
+            <div class="hero-card">
+                <div class="eyebrow">
+                    <i class="fas fa-layer-group"></i>
+                    DeepFlow Upgrade Workspace
                 </div>
-
-                <!-- 右侧：新增的已有文件列表表单 -->
-                <div class="col-md-6 ps-md-4">
-                    <h3 class="section-title">
-                        <i class="fas fa-box-archive"></i> 已有升级包
-                    </h3>
-                    <p class="section-desc">可直接下载以下已生成的升级包，避免重复构建，节省时间和资源</p>
-                    <div class="existing-files-container" id="existingFilesContainer">
-                        <div class="text-center text-white" id="filesLoading">
-                            <span class="loading-spinner"></span> 加载中...
-                        </div>
-                        <div id="noFilesMessage"
-                            style="display: none; text-align: center; color: var(--text-secondary);">
-                            暂无已生成的升级包
-                        </div>
-                        <div id="filesList" style="display: none;"></div>
+                <h1>升级包构建、任务跟踪与历史下载，在一个工作台内完成</h1>
+                <p class="hero-desc">
+                    左侧用于发起新的构建任务并实时查看进度、日志和下载结果，右侧用于管理已经生成的升级包。V6 与
+                    V7 被拆成独立工作模式，避免在同一表单中混杂操作逻辑。
+                </p>
+                <div class="hero-meta">
+                    <div class="meta-pill"><i class="fas fa-server"></i> Web 与 Worker 已解耦</div>
+                    <div class="meta-pill"><i class="fas fa-database"></i> Redis 持久化任务状态</div>
+                    <div class="meta-pill"><i class="fas fa-box-archive"></i> 历史升级包可直接复用</div>
+                </div>
+            </div>
+            <aside class="status-card">
+                <div class="status-title">
+                    <span>系统状态概览</span>
+                    <i class="fas fa-satellite-dish"></i>
+                </div>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <div class="status-label">运行模式</div>
+                        <div class="status-value">Gunicorn + Worker</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">状态存储</div>
+                        <div class="status-value ok">Redis / Ready</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">默认版本模式</div>
+                        <div class="status-value" id="currentModeLabel">V6 Patch</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">已存在升级包</div>
+                        <div class="status-value" id="existingFilesCount">--</div>
                     </div>
                 </div>
-            </div>
+            </aside>
+        </section>
 
-            <!-- 构建进度与日志区域（默认隐藏） -->
-            <div id="progressSection" class="mt-4" style="display: none;">
-                <!-- 进度条 -->
-                <div class="progress">
-                    <div id="progressBar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated"
-                        role="progressbar" style="width: 0%" aria-valuenow="0">0%</div>
+        <div class="layout">
+            <main class="workspace">
+                <div class="tabs-bar">
+                    <button type="button" class="series-tab active" data-series="v6">
+                        <span class="series-name">V6 补丁构建</span>
+                        <span class="series-note">基于当前 Patch 版本与目标 Patch 版本自动计算差异</span>
+                    </button>
+                    <button type="button" class="series-tab" data-series="v7">
+                        <span class="series-name">V7 镜像清单构建</span>
+                        <span class="series-note">手工录入镜像列表，直接生成对应升级包</span>
+                    </button>
                 </div>
-                <!-- 日志容器 -->
-                <div class="log-container mt-3" id="logOutput"></div>
-                <!-- 下载区域（默认隐藏） -->
-                <div id="downloadSection" class="text-center mt-4" style="display: none;">
-                    <a id="downloadLink" class="btn btn-success py-3 px-6 fs-5" target="_blank">
-                        <i class="fas fa-download"></i> 下载升级包
-                    </a>
+
+                <div class="panel-grid">
+                    <section class="card-shell">
+                        <div id="v6Panel" class="series-panel active">
+                            <h3 class="section-title"><i class="fas fa-code-branch"></i> V6 Patch 升级路径</h3>
+                            <p class="section-desc">
+                                选择当前正在运行的 Patch 版本和目标升级版本，系统会根据版本差异自动生成镜像清单、拉取镜像并打包。
+                            </p>
+                            <div class="helper-box">
+                                <strong>适用场景：</strong> 已知当前版本与目标版本，且希望由系统自动计算中间差异。目标版本下拉框只会展示高于当前版本的可升级版本。
+                            </div>
+                            <form id="buildForm">
+                                <div class="mb-3">
+                                    <label class="form-label" for="currentVersion">当前 Patch 版本</label>
+                                    <select class="form-select" id="currentVersion" required>
+                                        <option value="">加载中...</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" for="targetVersion">目标 Patch 版本</label>
+                                    <select class="form-select" id="targetVersion" required disabled>
+                                        <option value="">请先选择当前版本</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary build-submit" disabled>
+                                    <i class="fas fa-play"></i> 开始构建
+                                </button>
+                            </form>
+                        </div>
+
+                        <div id="v7Panel" class="series-panel">
+                            <h3 class="section-title"><i class="fas fa-list-check"></i> V7 镜像清单输入</h3>
+                            <p class="section-desc">
+                                手工填写镜像名称和标签，适合 V7 或临时镜像组合场景。每行一条，或使用逗号分隔，提交后将直接写入任务专属 patchlist。
+                            </p>
+                            <div class="format-box">
+                                <strong>推荐格式：</strong>
+                                <span class="guide-code">deepflow-agent_tag: v6.6.5617
+deepflow-server_tag: v6.6.5617</span>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="v7ImageList">镜像列表</label>
+                                <textarea class="form-control" id="v7ImageList"
+                                    placeholder="例如：deepflow-agent_tag: v6.6.5617&#10;deepflow-server_tag: v6.6.5617"></textarea>
+                            </div>
+                            <button type="button" class="btn btn-primary build-submit" id="v7BuildBtn" disabled>
+                                <i class="fas fa-play"></i> 开始构建
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="card-shell">
+                        <h3 class="section-title"><i class="fas fa-stream"></i> 当前任务状态</h3>
+                        <p class="section-desc">
+                            这里展示最近一次任务的实时进度、状态日志和临时下载入口。构建完成后也会自动刷新右侧已有升级包资源区。
+                        </p>
+                        <div id="progressSection" class="progress-section">
+                            <div class="status-chip-row">
+                                <div class="status-chip">模式：<span id="taskModeText">V6</span></div>
+                                <div class="status-chip">状态：<span id="taskStateText">等待启动</span></div>
+                            </div>
+                            <div class="progress">
+                                <div id="progressBar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated"
+                                    role="progressbar" style="width: 0%" aria-valuenow="0">0%</div>
+                            </div>
+                            <div class="log-container" id="logOutput"></div>
+                            <div id="downloadSection" class="download-box">
+                                <div class="download-title">本次构建已完成，可直接下载</div>
+                                <a id="downloadLink" class="btn btn-success" target="_blank">
+                                    <i class="fas fa-download"></i> 下载升级包
+                                </a>
+                            </div>
+                        </div>
+                        <div id="idlePanel" class="helper-box" style="margin-bottom: 0;">
+                            <strong>当前没有正在展示的任务。</strong> 发起构建后，这里会自动切换为实时任务面板，显示进度条、构建日志和下载按钮。
+                        </div>
+                    </section>
                 </div>
-            </div>
+            </main>
+
+            <aside class="resource-panel">
+                <h3 class="section-title"><i class="fas fa-box-archive"></i> 已有升级包</h3>
+                <p class="section-desc">
+                    独立资源区。优先在这里检查是否已有可直接下载的升级包，避免重复构建。
+                </p>
+                <div class="resource-toolbar">
+                    <input type="text" class="form-control" id="fileSearchInput" placeholder="搜索文件名或版本">
+                    <button type="button" class="btn btn-outline-light" id="refreshFilesBtn">
+                        <i class="fas fa-rotate"></i>
+                    </button>
+                </div>
+                <div class="stats-row">
+                    <span id="filesSummary">加载中...</span>
+                    <span>按最新生成时间排序</span>
+                </div>
+                <div class="existing-files-container" id="existingFilesContainer">
+                    <div class="text-center text-white" id="filesLoading">
+                        <span class="loading-spinner"></span> 加载中...
+                    </div>
+                    <div id="noFilesMessage" class="empty-state" style="display: none;">
+                        暂无已生成的升级包
+                    </div>
+                    <div id="filesList" style="display: none;"></div>
+                </div>
+            </aside>
         </div>
     </div>
 
-    <!-- 使用教程按钮 -->
     <button type="button" class="tutorial-btn" data-bs-toggle="modal" data-bs-target="#tutorialModal">
         <i class="fas fa-question"></i>
     </button>
 
-    <!-- 使用教程模态框 -->
     <div class="modal fade" id="tutorialModal" tabindex="-1" aria-labelledby="tutorialModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="tutorialModalLabel">DeepFlow 升级包构建工具使用教程</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h5 class="modal-title" id="tutorialModalLabel">使用说明与操作建议</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="tutorial-step">
-                        <h5><i class="fas fa-search"></i> 1. 查看已有升级包</h5>
-                        <p>页面右侧会显示所有已生成的升级包，文件名格式为"当前版本_to_目标版本.tar.gz"。如果已有您需要的升级包，可以直接点击右侧的"下载"按钮获取，无需重复构建。</p>
-                    </div>
-                    <div class="tutorial-step">
-                        <h5><i class="fas fa-wrench"></i> 2. 构建新升级包</h5>
-                        <p>如果没有您需要的升级包，请在左侧表单进行以下操作：</p>
-                        <ul>
-                            <li>从"当前Patch版本"下拉框选择您当前使用的版本</li>
-                            <li>从"目标Patch版本"下拉框选择您要升级到的版本（仅显示更新的版本）</li>
-                            <li>点击"开始构建"按钮启动构建流程</li>
-                        </ul>
-                    </div>
-                    <div class="tutorial-step">
-                        <h5><i class="fas fa-spinner"></i> 3. 查看构建进度</h5>
-                        <p>构建过程中，进度条会显示当前进度，下方日志区域会实时展示构建详情。构建完成后，会显示下载按钮，点击即可获取升级包。</p>
-                    </div>
-                    <div class="tutorial-step">
-                        <h5><i class="fas fa-exclamation-circle"></i> 4. 注意事项</h5>
-                        <ul>
-                            <li>构建过程中请勿关闭或刷新页面</li>
-                            <li>构建生成包会存在90秒,请及时点击【下载升级包】下载,90秒后可在【已有升级包】区域下载</li>
-                            <li>升级包生成后会保存在服务器，您可以在"已有升级包"区域再次下载</li>
-                            <li>如果构建失败，请查看日志信息排查问题后重试</li>
-                        </ul>
+                    <div class="guide-grid">
+                        <div class="guide-block">
+                            <h5>1. 先看右侧已有升级包</h5>
+                            <p>右侧资源区会展示服务器中已经存在的升级包。若所需版本已经生成，直接下载即可，不必重新拉取镜像和打包。</p>
+                        </div>
+                        <div class="guide-block">
+                            <h5>2. V6 模式怎么用</h5>
+                            <ul>
+                                <li>选择当前 Patch 版本。</li>
+                                <li>选择目标 Patch 版本。</li>
+                                <li>点击“开始构建”，系统会自动生成差异镜像清单并打包。</li>
+                                <li>适合标准补丁升级路径。</li>
+                            </ul>
+                        </div>
+                        <div class="guide-block">
+                            <h5>3. V7 模式怎么用</h5>
+                            <ul>
+                                <li>在镜像清单输入框中填写镜像和标签。</li>
+                                <li>支持每行一条，也支持逗号分隔。</li>
+                                <li>建议使用 <code>name_tag: vX.Y.Z</code> 或 <code>name: vX.Y.Z</code> 形式。</li>
+                                <li>适合自定义镜像集或非标准升级路径。</li>
+                            </ul>
+                            <span class="guide-code">deepflow-agent_tag: v6.6.5617
+deepflow-server_tag: v6.6.5617</span>
+                        </div>
+                        <div class="guide-block">
+                            <h5>4. 构建过程中看哪里</h5>
+                            <ul>
+                                <li>左侧任务面板会显示进度、状态和实时日志。</li>
+                                <li>任务完成后，下载按钮会出现在状态面板中。</li>
+                                <li>构建完成后，右侧已有升级包列表也会自动刷新。</li>
+                            </ul>
+                        </div>
+                        <div class="guide-block">
+                            <h5>5. 下载与过期说明</h5>
+                            <ul>
+                                <li>当前任务完成后，会先给出临时下载入口。</li>
+                                <li>若临时入口过期，可到右侧“已有升级包”区域再次下载。</li>
+                                <li>若下载失败，先刷新已有升级包列表确认文件是否已存在。</li>
+                            </ul>
+                        </div>
+                        <div class="guide-block">
+                            <h5>6. 常见建议</h5>
+                            <ul>
+                                <li>V6 适合规范升级，优先用 V6。</li>
+                                <li>V7 输入镜像时，尽量一行一条，便于排查格式问题。</li>
+                                <li>构建失败时先看日志区最后几条错误信息，再决定是否重试。</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -807,137 +989,156 @@
         </div>
     </div>
 
-    <!-- 引入Bootstrap JS -->
     <script src="static/bootstrap.bundle.min.js"></script>
     <script>
-        let versionData = [];  // 存储从后端获取的版本列表
-        let eventSource = null;  // SSE连接对象
+        let versionData = [];
+        let eventSource = null;
         let currentSeries = 'v6';
+        let activeTaskSeries = null;
+        let isBuilding = false;
         let lastLogMessage = '';
+        let existingFilesData = [];
 
-        // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
-            fetchVersions(currentSeries);  // 获取版本列表
-            fetchExistingFiles();  // 获取已有升级包列表
-            initEventListeners();  // 绑定事件监听
+            bindTabs();
+            initEventListeners();
+            toggleSeriesUI(currentSeries);
+            fetchVersions(currentSeries);
+            fetchExistingFiles();
         });
 
-        /**
-         * 从后端获取版本列表
-         */
+        function bindTabs() {
+            document.querySelectorAll('.series-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    currentSeries = tab.dataset.series;
+                    toggleSeriesUI(currentSeries);
+                    versionData = [];
+                    renderVersionOptions();
+                    if (currentSeries === 'v6') {
+                        fetchVersions(currentSeries);
+                    } else {
+                        checkBuildBtnStatus();
+                    }
+                });
+            });
+        }
+
         async function fetchVersions(series) {
             if (series !== 'v6') {
                 versionData = [];
                 renderVersionOptions(true);
                 return;
             }
+
             const currentSelect = document.getElementById('currentVersion');
-            currentSelect.innerHTML = '<option value=""><span class="loading-spinner"></span> 加载中...</option>';
+            currentSelect.innerHTML = '<option value="">加载中...</option>';
 
             try {
-                const query = series ? `?series=${encodeURIComponent(series)}` : '';
-                const res = await fetch(`/versions${query}`);
+                const res = await fetch(`/versions?series=${encodeURIComponent(series)}`);
                 const data = await res.json();
-
                 if (data.success && data.versions) {
                     versionData = data.versions;
-                    renderVersionOptions();  // 渲染版本下拉框
+                    renderVersionOptions();
                 } else {
-                    showAlert('获取版本失败', data.message || '未知错误', 'error');
                     versionData = [];
                     renderVersionOptions(true);
+                    showAlert('获取版本失败', data.message || '未知错误', 'error');
                 }
             } catch (err) {
-                showAlert('网络错误', `获取版本失败：${err.message}`, 'error');
                 versionData = [];
                 renderVersionOptions(true);
+                showAlert('网络错误', `获取版本失败：${err.message}`, 'error');
             }
         }
 
-        /**
-         * 从后端获取已有升级包列表
-         */
         async function fetchExistingFiles() {
             const filesLoading = document.getElementById('filesLoading');
             const noFilesMessage = document.getElementById('noFilesMessage');
             const filesList = document.getElementById('filesList');
 
+            filesLoading.style.display = 'block';
+            noFilesMessage.style.display = 'none';
+            filesList.style.display = 'none';
+
             try {
                 const res = await fetch('/existing-packages');
                 const data = await res.json();
-
+                existingFilesData = (data.success && data.files) ? data.files : [];
                 filesLoading.style.display = 'none';
-
-                if (data.success && data.files && data.files.length > 0) {
-                    // 有文件，渲染列表
-                    filesList.style.display = 'block';
-                    noFilesMessage.style.display = 'none';
-
-                    // 清空现有列表
-                    filesList.innerHTML = '';
-
-                    // 遍历文件列表，创建条目
-                    data.files.forEach(file => {
-                        const fileItem = document.createElement('div');
-                        fileItem.className = 'file-item';
-
-                        // 提取版本信息用于显示
-                        const versionMatch = file.name.match(/(.*)_to_(.*)\.tar\.gz/);
-                        let displayText = file.name;
-                        if (versionMatch && versionMatch.length >= 3) {
-                            displayText = `${versionMatch[1]} → ${versionMatch[2]}`;
-                        }
-
-                        // 格式化文件大小（MB）
-                        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-
-                        fileItem.innerHTML = `
-                            <div class="file-name" title="${file.name}">
-                                <i class="fas fa-file-archive"></i>
-                                ${displayText}
-                                <span class="file-size">(${fileSizeMB} MB)</span>
-                            </div>
-                            <a href="/download-existing/${encodeURIComponent(file.name)}" 
-                               class="btn btn-sm btn-outline-light download-existing-btn"
-                               data-filename="${file.name}">
-                                <i class="fas fa-download"></i> 下载
-                            </a>
-                        `;
-                        filesList.appendChild(fileItem);
-                    });
-
-                    // 为新增的下载按钮绑定事件
-                    document.querySelectorAll('.download-existing-btn').forEach(btn => {
-                        btn.addEventListener('click', checkExistingFileDownload);
-                    });
-                } else {
-                    // 无文件
-                    filesList.style.display = 'none';
-                    noFilesMessage.style.display = 'block';
-                }
+                filterExistingFiles();
             } catch (err) {
                 filesLoading.style.display = 'none';
-                filesList.style.display = 'none';
+                existingFilesData = [];
                 noFilesMessage.style.display = 'block';
-                noFilesMessage.innerHTML = `加载失败：${err.message}`;
-                console.error('获取已有文件列表失败:', err);
+                noFilesMessage.textContent = `加载失败：${err.message}`;
+                updateFilesSummary(0);
             }
         }
 
-        /**
-         * 渲染版本下拉框选项（关键：不做二次排序，直接用后端返回顺序）
-         */
+        function renderExistingFiles(files) {
+            const noFilesMessage = document.getElementById('noFilesMessage');
+            const filesList = document.getElementById('filesList');
+            filesList.innerHTML = '';
+
+            if (!files || files.length === 0) {
+                filesList.style.display = 'none';
+                noFilesMessage.style.display = 'block';
+                noFilesMessage.textContent = '暂无已生成的升级包';
+                updateFilesSummary(0);
+                return;
+            }
+
+            noFilesMessage.style.display = 'none';
+            filesList.style.display = 'block';
+            updateFilesSummary(files.length);
+
+            files.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                const displayText = formatExistingFileName(file.name);
+
+                fileItem.innerHTML = `
+                    <div class="file-name">
+                        <div class="file-main" title="${file.name}">
+                            <i class="fas fa-file-archive"></i>
+                            <span class="file-title-text">${displayText}</span>
+                        </div>
+                        <div class="file-meta">文件名：${file.name} | 大小：${fileSizeMB} MB</div>
+                    </div>
+                    <a href="/download-existing/${encodeURIComponent(file.name)}"
+                       class="btn btn-sm btn-outline-light download-existing-btn"
+                       data-filename="${file.name}">
+                        <i class="fas fa-download"></i> 下载
+                    </a>
+                `;
+                filesList.appendChild(fileItem);
+            });
+
+            document.querySelectorAll('.download-existing-btn').forEach(btn => {
+                btn.addEventListener('click', checkExistingFileDownload);
+            });
+        }
+
+        function formatExistingFileName(filename) {
+            const versionMatch = filename.match(/(.*)_to_(.*)\.tar\.gz/);
+            if (versionMatch && versionMatch.length >= 3) {
+                return `${versionMatch[1]} → ${versionMatch[2]}`;
+            }
+            return filename;
+        }
+
+        function updateFilesSummary(count) {
+            document.getElementById('filesSummary').textContent = `共 ${count} 个可用升级包`;
+            document.getElementById('existingFilesCount').textContent = String(count);
+        }
+
         function renderVersionOptions(isError = false) {
             const currentSelect = document.getElementById('currentVersion');
             const targetSelect = document.getElementById('targetVersion');
-            const buildBtn = document.querySelector('button[type="submit"]');
+            const buildBtn = document.querySelector('#buildForm button[type="submit"]');
 
-            // 重置下拉框
-            if (isError) {
-                currentSelect.innerHTML = '<option value="">后端未接入或获取失败</option>';
-            } else {
-                currentSelect.innerHTML = '<option value="">请选择当前版本</option>';
-            }
+            currentSelect.innerHTML = isError ? '<option value="">后端未接入或获取失败</option>' : '<option value="">请选择当前版本</option>';
             targetSelect.innerHTML = '<option value="">请选择目标版本</option>';
             targetSelect.disabled = true;
             buildBtn.disabled = true;
@@ -946,44 +1147,36 @@
                 return;
             }
 
-            // 直接使用后端返回的列表（已按序号排序），不做任何排序
             versionData.forEach(ver => {
                 const opt = document.createElement('option');
                 opt.value = ver.value;
                 opt.textContent = ver.display;
-                opt.dataset.date = ver.date;  // 保留日期数据（仅用于后续筛选目标版本）
+                opt.dataset.date = ver.date;
                 currentSelect.appendChild(opt);
             });
         }
 
-
-        /**
-         * 初始化所有事件监听
-         */
         function initEventListeners() {
-            // 版本栏目切换：拉取对应版本列表
-            document.getElementById('versionSeries').addEventListener('change', (e) => {
-                currentSeries = e.target.value;
-                versionData = [];
-                renderVersionOptions();
-                toggleSeriesUI(currentSeries);
-                fetchVersions(currentSeries);
-            });
-            // 当前版本选择变化：更新目标版本可选范围
             document.getElementById('currentVersion').addEventListener('change', updateTargetVersionOptions);
-            // 目标版本选择变化：检查构建按钮是否可启用
             document.getElementById('targetVersion').addEventListener('change', checkBuildBtnStatus);
-            // V7 镜像输入变化：检查构建按钮是否可启用
             document.getElementById('v7ImageList').addEventListener('input', checkBuildBtnStatus);
-            // 构建表单提交：触发构建流程
             document.getElementById('buildForm').addEventListener('submit', startBuildProcess);
-            // 下载链接点击：校验文件是否存在
+            document.getElementById('v7BuildBtn').addEventListener('click', startBuildProcess);
             document.getElementById('downloadLink').addEventListener('click', checkDownloadFile);
+            document.getElementById('refreshFilesBtn').addEventListener('click', fetchExistingFiles);
+            document.getElementById('fileSearchInput').addEventListener('input', filterExistingFiles);
         }
 
-        /**
-         * 根据当前版本更新目标版本可选范围（按序号筛选，仅保留序号高于当前版本的目标版本）
-         */
+        function toggleSeriesUI(series) {
+            document.querySelectorAll('.series-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.series === series);
+            });
+            document.getElementById('v6Panel').classList.toggle('active', series === 'v6');
+            document.getElementById('v7Panel').classList.toggle('active', series === 'v7');
+            document.getElementById('currentModeLabel').textContent = series === 'v6' ? 'V6 Patch' : 'V7 Image List';
+            checkBuildBtnStatus();
+        }
+
         function updateTargetVersionOptions() {
             const currentSelect = document.getElementById('currentVersion');
             const currentOpt = currentSelect.selectedOptions[0];
@@ -993,36 +1186,24 @@
 
             if (!currentOpt) return;
 
-            // 从当前选中版本的display文本中提取序号
             const currentDisplay = currentOpt.textContent;
-            // const currentSeqMatch = currentDisplay.match(/^(\d{2})-/);
             const currentSeqMatch = currentDisplay.match(/^(\d+)-/);
-            if (!currentSeqMatch) {
-                // 如果无法提取序号，保持禁用状态
-                return;
-            }
+            if (!currentSeqMatch) return;
             const currentSeq = parseInt(currentSeqMatch[1], 10);
 
-            // 筛选：仅保留序号高于当前版本的目标版本，沿用后端返回的顺序
             const validTargets = versionData.filter(ver => {
-                // 从版本数据中提取序号
-                // const seqMatch = ver.display.match(/^(\d{2})-/);
                 const seqMatch = ver.display.match(/^(\d+)-/);
                 if (!seqMatch) return false;
-                const verSeq = parseInt(seqMatch[1], 10);
-                return verSeq > currentSeq;
+                return parseInt(seqMatch[1], 10) > currentSeq;
             });
 
             if (validTargets.length === 0) {
                 targetSelect.innerHTML = '<option value="">暂无更新版本</option>';
             } else {
-                // 直接渲染筛选后的列表（顺序与后端返回一致）
                 validTargets.forEach(ver => {
                     const opt = document.createElement('option');
                     opt.value = ver.value;
                     opt.textContent = ver.display;
-                    opt.dataset.seq = ver.seq_num; // 存储序号用于可能的后续处理
-                    opt.dataset.date = ver.date;    // 仍保留日期数据
                     targetSelect.appendChild(opt);
                 });
                 targetSelect.disabled = false;
@@ -1031,51 +1212,66 @@
             checkBuildBtnStatus();
         }
 
-        /**
-         * 检查构建按钮是否可启用（需同时选择当前和目标版本）
-         */
         function checkBuildBtnStatus() {
-            const buildBtn = document.querySelector('button[type="submit"]');
+            const v6Btn = document.querySelector('#buildForm button[type="submit"]');
+            const v7Btn = document.getElementById('v7BuildBtn');
+
+            if (isBuilding) {
+                v6Btn.disabled = true;
+                v7Btn.disabled = true;
+                return;
+            }
+
             if (currentSeries === 'v7') {
                 const images = document.getElementById('v7ImageList').value.trim();
-                buildBtn.disabled = images.length === 0;
+                v7Btn.disabled = images.length === 0;
+                v6Btn.disabled = true;
             } else {
                 const currentVal = document.getElementById('currentVersion').value;
                 const targetVal = document.getElementById('targetVersion').value;
-                buildBtn.disabled = !(currentVal && targetVal);
+                v6Btn.disabled = !(currentVal && targetVal);
+                v7Btn.disabled = true;
             }
         }
 
-        /**
-         * 启动构建流程（建立SSE连接，接收实时进度）
-         */
         function startBuildProcess(e) {
-            e.preventDefault();  // 阻止表单默认提交
+            if (e) e.preventDefault();
+
+            if (isBuilding) {
+                showAlert('任务进行中', '当前已有构建任务正在进行，请等待其完成后再发起新的构建。', 'info');
+                return;
+            }
 
             const currentVersion = document.getElementById('currentVersion').value;
             const targetVersion = document.getElementById('targetVersion').value;
             const v7Images = document.getElementById('v7ImageList').value;
-            const buildBtn = document.querySelector('button[type="submit"]');
+            const v6Btn = document.querySelector('#buildForm button[type="submit"]');
+            const v7Btn = document.getElementById('v7BuildBtn');
+            const activeBtn = currentSeries === 'v7' ? v7Btn : v6Btn;
             const progressSection = document.getElementById('progressSection');
+            const idlePanel = document.getElementById('idlePanel');
             const logOutput = document.getElementById('logOutput');
             const downloadSection = document.getElementById('downloadSection');
 
-            // 初始化UI状态
-            buildBtn.disabled = true;
-            buildBtn.innerHTML = '<span class="loading-spinner"></span> 构建中...';
+            isBuilding = true;
+            activeTaskSeries = currentSeries;
+            activeBtn.disabled = true;
+            activeBtn.innerHTML = '<span class="loading-spinner"></span> 构建中...';
             progressSection.style.display = 'block';
+            idlePanel.style.display = 'none';
             logOutput.innerHTML = '';
             lastLogMessage = '';
             downloadSection.style.display = 'none';
+            document.getElementById('taskModeText').textContent = activeTaskSeries.toUpperCase();
+            document.getElementById('taskStateText').textContent = '已创建';
             updateProgressBar(0, '构建任务已启动，等待后端响应...');
+            checkBuildBtnStatus();
 
-            // 关闭之前的SSE连接（避免重复连接）
             if (eventSource) {
                 eventSource.close();
                 eventSource = null;
             }
 
-            // 建立SSE连接，监听构建进度
             let buildUrl = `/build?series=${encodeURIComponent(currentSeries)}`;
             if (currentSeries === 'v7') {
                 const images = normalizeV7Images(v7Images);
@@ -1088,82 +1284,75 @@
             } else {
                 buildUrl += `&current=${encodeURIComponent(currentVersion)}&target=${encodeURIComponent(targetVersion)}`;
             }
-            eventSource = new EventSource(buildUrl);
 
-            // 接收后端发送的状态消息
+            eventSource = new EventSource(buildUrl);
             eventSource.onmessage = function (event) {
                 try {
                     const statusData = JSON.parse(event.data);
-                    handleBuildStatus(statusData);  // 处理构建状态
+                    handleBuildStatus(statusData);
                 } catch (err) {
                     addLog(`消息解析失败：${err.message}`, 'error');
                 }
             };
 
-            // SSE连接异常处理
             eventSource.onerror = function (err) {
                 addLog(`SSE连接异常：${err.type}`, 'error');
-                resetBuildState();  // 重置构建状态
+                resetBuildState();
             };
         }
 
-        /**
-         * 处理后端返回的构建状态
-         */
         function handleBuildStatus(statusData) {
-            const buildBtn = document.querySelector('button[type="submit"]');
             const downloadLink = document.getElementById('downloadLink');
             const downloadSection = document.getElementById('downloadSection');
+            const stateText = document.getElementById('taskStateText');
+            const logs = Array.isArray(statusData.logs) ? statusData.logs : [];
+
+            if (logs.length > 0) {
+                const latestLog = logs[logs.length - 1];
+                if (latestLog && latestLog.content) {
+                    addLog(latestLog.content, mapLogLevel(latestLog.level));
+                }
+            } else if (statusData.message) {
+                addLog(statusData.message, mapStatusToLogType(statusData.status));
+            }
 
             switch (statusData.status) {
+                case 'queued':
+                    stateText.textContent = '排队中';
+                    updateProgressBar(statusData.percent || 0, statusData.message || '等待 worker 调度');
+                    break;
                 case 'progress':
-                    // 进度更新
+                    stateText.textContent = '构建中';
                     updateProgressBar(statusData.percent, statusData.message);
-                    addLog(statusData.message, 'info');
                     break;
                 case 'complete':
-                    // 构建完成
+                    stateText.textContent = '已完成';
                     updateProgressBar(100, statusData.message);
-                    addLog(statusData.message, 'success');
-                    // 显示下载链接
                     downloadLink.href = statusData.download_url;
                     downloadSection.style.display = 'block';
-                    // 重置按钮状态
-                    buildBtn.disabled = false;
-                    buildBtn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
-                    // 关闭SSE连接
-                    if (eventSource) {
-                        eventSource.close();
-                        eventSource = null;
-                    }
-                    // 构建完成后刷新已有文件列表
+                    resetBuildState(true);
                     fetchExistingFiles();
                     break;
                 case 'error':
-                    // 构建失败
+                    stateText.textContent = '失败';
                     updateProgressBar(0, statusData.message);
-                    addLog(statusData.message, 'error');
-                    resetBuildState();  // 重置状态
+                    resetBuildState();
                     break;
                 default:
-                    addLog(`未知状态：${statusData.status}`, 'info');
+                    stateText.textContent = statusData.status || '未知';
+                    break;
             }
         }
 
-        /**
-         * 更新进度条
-         */
         function updateProgressBar(percent, message) {
             const progressBar = document.getElementById('progressBar');
-            const safePercent = Math.max(0, Math.min(100, percent));  // 确保进度在0-100之间
+            const safePercent = Math.max(0, Math.min(100, percent || 0));
 
-            // 更新进度条样式和文本
             progressBar.style.width = `${safePercent}%`;
             progressBar.textContent = `${safePercent}%`;
             progressBar.setAttribute('aria-valuenow', safePercent);
 
-            // 根据状态切换进度条颜色
-            if (message.includes('失败')) {
+            if ((message || '').includes('失败')) {
                 progressBar.className = 'progress-bar bg-danger progress-bar-striped';
             } else if (safePercent === 100) {
                 progressBar.className = 'progress-bar bg-success progress-bar-striped';
@@ -1172,55 +1361,50 @@
             }
         }
 
-        /**
-         * 添加日志到日志容器
-         */
         function addLog(message, type = 'info') {
             const cleaned = sanitizeLogMessage(message);
-            if (!cleaned) return;
-            // 避免重复输出相同日志
-            if (cleaned === lastLogMessage) return;
+            if (!cleaned || cleaned === lastLogMessage) return;
             lastLogMessage = cleaned;
 
             const logOutput = document.getElementById('logOutput');
             const logDiv = document.createElement('div');
             logDiv.className = 'log-entry';
-            const timeStamp = new Date().toTimeString().slice(0, 8);  // 提取时分秒
+            const timeStamp = new Date().toTimeString().slice(0, 8);
 
-            // 根据日志类型设置样式
             if (type === 'error') {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-error">❌ ${cleaned}</span>`;
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span><span class="log-error">❌ ${cleaned}</span>`;
             } else if (type === 'success') {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-success">✅ ${cleaned}</span>`;
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span><span class="log-success">✅ ${cleaned}</span>`;
             } else {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-info">ℹ️ ${cleaned}</span>`;
+                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span><span class="log-info">ℹ️ ${cleaned}</span>`;
             }
 
             logOutput.appendChild(logDiv);
-            // 滚动到最新日志
             logOutput.scrollTop = logOutput.scrollHeight;
         }
 
-        /**
-         * 重置构建状态（失败或异常时）
-         */
-        function resetBuildState() {
-            const buildBtn = document.querySelector('button[type="submit"]');
-            buildBtn.disabled = false;
-            buildBtn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
+        function resetBuildState(isComplete = false) {
+            const v6Btn = document.querySelector('#buildForm button[type="submit"]');
+            const v7Btn = document.getElementById('v7BuildBtn');
+
+            v6Btn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
+            v7Btn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
+            v6Btn.disabled = true;
+            v7Btn.disabled = true;
             lastLogMessage = '';
-            // 关闭SSE连接
-            if (eventSource) {
+            isBuilding = false;
+            activeTaskSeries = null;
+
+            if (!isComplete && eventSource) {
                 eventSource.close();
                 eventSource = null;
             }
-        }
 
-        function toggleSeriesUI(series) {
-            const v6Els = document.querySelectorAll('.v6-only');
-            const v7Els = document.querySelectorAll('.v7-only');
-            v6Els.forEach(el => { el.style.display = series === 'v6' ? '' : 'none'; });
-            v7Els.forEach(el => { el.style.display = series === 'v7' ? '' : 'none'; });
+            if (isComplete && eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
             checkBuildBtnStatus();
         }
 
@@ -1234,40 +1418,53 @@
         function sanitizeLogMessage(message) {
             if (!message) return '';
             let cleaned = String(message);
-            // 去掉日志中的百分比展示（进度条已显示）
             cleaned = cleaned.replace(/\(\s*\d{1,3}%\s*\)/g, '').trim();
             cleaned = cleaned.replace(/(\s*\d{1,3}%\s*)/g, '').trim();
-            // 避免空消息
             return cleaned;
         }
 
-        /**
-         * 校验下载文件是否存在（避免无效下载）
-         */
+        function mapStatusToLogType(status) {
+            if (status === 'complete') return 'success';
+            if (status === 'error') return 'error';
+            return 'info';
+        }
+
+        function mapLogLevel(level) {
+            if (!level) return 'info';
+            const normalized = String(level).toUpperCase();
+            if (normalized === 'ERROR' || normalized === 'WARNING') return 'error';
+            if (normalized === 'SUCCESS') return 'success';
+            return 'info';
+        }
+
+        function filterExistingFiles() {
+            const keyword = document.getElementById('fileSearchInput').value.trim().toLowerCase();
+            if (!keyword) {
+                renderExistingFiles(existingFilesData);
+                return;
+            }
+
+            const filtered = existingFilesData.filter(file => {
+                return file.name.toLowerCase().includes(keyword) || formatExistingFileName(file.name).toLowerCase().includes(keyword);
+            });
+            renderExistingFiles(filtered);
+        }
+
         async function checkDownloadFile(e) {
             const downloadLink = this;
             const downloadUrl = downloadLink.href;
-
-            // 临时禁用下载按钮，显示加载状态
             downloadLink.classList.add('disabled');
             downloadLink.innerHTML = '<span class="loading-spinner"></span> 校验中...';
 
             try {
-                // 发送HEAD请求校验文件（不下载完整文件）
                 const res = await fetch(downloadUrl, { method: 'HEAD' });
-                if (res.ok) {
-                    // 文件存在，恢复按钮状态
-                    downloadLink.classList.remove('disabled');
-                    downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
-                } else {
-                    // 文件不存在，阻止下载
+                downloadLink.classList.remove('disabled');
+                downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
+                if (!res.ok) {
                     e.preventDefault();
-                    downloadLink.classList.remove('disabled');
-                    downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
                     showAlert('下载失败', `文件不存在或已过期（状态码：${res.status}）`, 'error');
                 }
             } catch (err) {
-                // 网络错误，阻止下载
                 e.preventDefault();
                 downloadLink.classList.remove('disabled');
                 downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
@@ -1275,36 +1472,23 @@
             }
         }
 
-        /**
-         * 校验已有文件下载
-         */
         async function checkExistingFileDownload(e) {
             const downloadBtn = this;
             const filename = downloadBtn.dataset.filename;
             const downloadUrl = downloadBtn.href;
-
-            // 临时禁用下载按钮，显示加载状态
             downloadBtn.classList.add('disabled');
             downloadBtn.innerHTML = '<span class="loading-spinner"></span> 校验中...';
 
             try {
-                // 发送HEAD请求校验文件（不下载完整文件）
                 const res = await fetch(downloadUrl, { method: 'HEAD' });
-                if (res.ok) {
-                    // 文件存在，恢复按钮状态
-                    downloadBtn.classList.remove('disabled');
-                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
-                } else {
-                    // 文件不存在，阻止下载
+                downloadBtn.classList.remove('disabled');
+                downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
+                if (!res.ok) {
                     e.preventDefault();
-                    downloadBtn.classList.remove('disabled');
-                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
                     showAlert('下载失败', `文件 "${filename}" 不存在或已被删除`, 'error');
-                    // 刷新文件列表
                     fetchExistingFiles();
                 }
             } catch (err) {
-                // 网络错误，阻止下载
                 e.preventDefault();
                 downloadBtn.classList.remove('disabled');
                 downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
@@ -1312,42 +1496,26 @@
             }
         }
 
-        /**
-         * 显示提示框（成功/错误）
-         */
         function showAlert(title, message, type = 'info') {
-            // 创建提示框元素
             const alertDiv = document.createElement('div');
             const alertClass = type === 'error' ? 'alert-danger' : 'alert-info';
-            alertDiv.className = `alert ${alertClass} alert-dismissible fade`;
-            alertDiv.role = 'alert';
-
-            // 根据类型设置图标
             const icon = type === 'error' ? 'exclamation-circle' : 'info-circle';
 
+            alertDiv.className = `alert ${alertClass} alert-dismissible fade`;
+            alertDiv.role = 'alert';
             alertDiv.innerHTML = `
                 <h5 class="alert-heading"><i class="fas fa-${icon}"></i> ${title}</h5>
                 <p>${message}</p>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
             `;
 
-            // 添加到页面并显示
-            document.querySelector('.container').prepend(alertDiv);
-
-            // 触发Bootstrap的显示动画
-            setTimeout(() => {
-                alertDiv.classList.add('show');
-            }, 10);
+            document.body.appendChild(alertDiv);
+            setTimeout(() => alertDiv.classList.add('show'), 10);
 
             const alertInstance = new bootstrap.Alert(alertDiv);
-
-            // 5秒后自动关闭
             setTimeout(() => {
                 alertInstance.close();
-                // 移除元素以清理DOM
-                setTimeout(() => {
-                    alertDiv.remove();
-                }, 300);
+                setTimeout(() => alertDiv.remove(), 250);
             }, 5000);
         }
     </script>
