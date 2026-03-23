@@ -7,11 +7,11 @@ import re
 import json
 import shutil
 import uuid
-from flask import Flask, request, Response, jsonify, send_file, abort, render_template
+from flask import Flask, request, Response, jsonify, send_file, abort, render_template # type: ignore
 import traceback
 from urllib.parse import quote, unquote
-import yaml
-import redis
+import yaml # type: ignore
+import redis # type: ignore
 
 # 初始化Flask应用
 app = Flask(__name__, static_folder='static', static_url_path='/static')
