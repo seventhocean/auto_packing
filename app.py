@@ -16,6 +16,7 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 #app = Flask(__name__, static_folder='.', static_url_path='')
 build_status = {}  # 存储构建任务状态（SSE实时更新用）
 build_semaphore = threading.Semaphore(3)  # 限制最大并发任务数为3
+build_status_lock = threading.Lock()  # 保护 build_status 字典的并发读写
 
 # -------------------------- 基础配置（与项目结构对齐） --------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,34 +53,40 @@ def write_log(content, level="INFO", task_id=None):
     print(log_line.strip())
     
     # 如果有任务ID，将日志添加到任务状态中，供前端展示
-    if task_id and task_id in build_status:
-        if 'logs' not in build_status[task_id]:
-            build_status[task_id]['logs'] = []
-            
-        build_status[task_id]['logs'].append({
-            'timestamp': timestamp,
-            'level': level,
-            'content': content
-        })
-        
-        if len(build_status[task_id]['logs']) > 100:
-            build_status[task_id]['logs'] = build_status[task_id]['logs'][-100:]
+    if task_id:
+        with build_status_lock:
+            if task_id in build_status:
+                if 'logs' not in build_status[task_id]:
+                    build_status[task_id]['logs'] = []
+                
+                build_status[task_id]['logs'].append({
+                    'timestamp': timestamp,
+                    'level': level,
+                    'content': content
+                })
+                
+                if len(build_status[task_id]['logs']) > 100:
+                    build_status[task_id]['logs'] = build_status[task_id]['logs'][-100:]
 
 def update_progress(task_id, new_percent, message, level="INFO"):
     """更新任务进度的辅助函数，确保进度平滑增加"""
-    if task_id not in build_status:
-        return
-        
-    current_percent = build_status[task_id].get('percent', 0)
+    with build_status_lock:
+        if task_id not in build_status:
+            return
+        current_percent = build_status[task_id].get('percent', 0)
+    
     if new_percent > current_percent:
         steps = new_percent - current_percent
         for i in range(steps):
             percent = current_percent + i + 1
-            build_status[task_id].update({
-                "status": "progress",
-                "percent": percent,
-                "message": message if i == steps - 1 else build_status[task_id].get('message', '')
-            })
+            with build_status_lock:
+                if task_id not in build_status:
+                    return
+                build_status[task_id].update({
+                    "status": "progress",
+                    "percent": percent,
+                    "message": message if i == steps - 1 else build_status[task_id].get('message', '')
+                })
             if steps > 5 and (i % (steps // 5) == 0 or i == steps - 1):
                 progress_msg = f"处理中...({percent}%)"
                 write_log(progress_msg, level, task_id)   
@@ -219,12 +226,13 @@ def run_build_task(task_id, current_version, target_version):
 
         try:
             # 初始化任务状态（SSE实时推送用），新增logs字段存储前端日志
-            build_status[task_id] = {
-                "status": "progress",
-                "percent": 0,
-                "message": "初始化构建任务，检查核心依赖",
-                "logs": []  # 用于存储前端展示的日志
-            }
+            with build_status_lock:
+                build_status[task_id] = {
+                    "status": "progress",
+                    "percent": 0,
+                    "message": "初始化构建任务，检查核心依赖",
+                    "logs": []  # 用于存储前端展示的日志
+                }
             write_log(f"任务[{task_id}]启动：版本升级 {current_version} → {target_version}", task_id=task_id)
             time.sleep(1)  # 预留SSE状态推送时间，避免前端接收延迟
 
@@ -346,42 +354,46 @@ def run_build_task(task_id, current_version, target_version):
 
             # 任务完成：更新状态并记录日志
             update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）")
-            build_status[task_id].update({
-                "status": "complete",
-                "percent": 100,
-                "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）",
-                "complete": True,
-                "error": False,
-                "download_url": f"/download/{task_id}",
-                "package_path": upgrade_path,
-                "package_name": upgrade_package,
-                "package_format": "tar.gz",  # 标记包格式，便于前端显示
-                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2)  # 包大小（MB）
-            })
+            with build_status_lock:
+                build_status[task_id].update({
+                    "status": "complete",
+                    "percent": 100,
+                    "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）",
+                    "complete": True,
+                    "error": False,
+                    "download_url": f"/download/{task_id}",
+                    "package_path": upgrade_path,
+                    "package_name": upgrade_package,
+                    "package_format": "tar.gz",  # 标记包格式，便于前端显示
+                    "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2)  # 包大小（MB）
+                })
             write_log(f"任务[{task_id}]完全结束：{current_version}→{target_version}升级包构建完成，请在90秒内下载升级包", task_id=task_id)
             
             # 成功后延迟90秒删除状态，给前端足够时间获取最终状态
             time.sleep(90)
-            if task_id in build_status:
-                del build_status[task_id]
+            with build_status_lock:
+                if task_id in build_status:
+                    del build_status[task_id]
 
         except Exception as e:
             # 任务失败：捕获异常并更新状态
             error_msg = str(e)
-            build_status[task_id].update({
-                "status": "error",
-                "message": f"构建失败：{error_msg}",
-                "complete": True,
-                "error": True
-            })
+            with build_status_lock:
+                build_status[task_id].update({
+                    "status": "error",
+                    "message": f"构建失败：{error_msg}",
+                    "complete": True,
+                    "error": True
+                })
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             # 打印异常堆栈，便于问题排查
             traceback.print_exc()
             
             # 失败后延迟5秒删除状态，给前端足够时间接收错误状态
             time.sleep(50)
-            if task_id in build_status:
-                del build_status[task_id]
+            with build_status_lock:
+                if task_id in build_status:
+                    del build_status[task_id]
 
         finally:
             # 最终清理：无论成功/失败，都删除任务专属镜像目录（节省磁盘空间）
@@ -504,10 +516,17 @@ def api_get_versions():
 @app.route('/task-status/<task_id>', methods=['GET'])
 def api_task_status(task_id):
     """查询指定任务的当前状态，包含日志信息"""
-    if task_id in build_status:
+    with build_status_lock:
+        task_data = build_status.get(task_id)
+        if task_data is not None:
+            status_copy = task_data.copy()
+        else:
+            status_copy = None
+    
+    if status_copy is not None:
         return jsonify({
             "success": True,
-            "status": build_status[task_id]
+            "status": status_copy
         })
     else:
         return jsonify({
@@ -557,8 +576,10 @@ def api_build():
         retry_count = 0
         initial_status = None
         while retry_count < 2:
-            if task_id in build_status:
-                initial_status = build_status[task_id]
+            with build_status_lock:
+                if task_id in build_status:
+                    initial_status = build_status[task_id].copy()
+            if initial_status is not None:
                 break
             time.sleep(0.5)
             retry_count += 1
@@ -574,19 +595,27 @@ def api_build():
         
         # 循环推送状态
         while True:
-            if task_id not in build_status:
+            with build_status_lock:
+                task_exists = task_id in build_status
+            
+            if not task_exists:
                 # 重试3次，若仍不存在则判定过期
                 retry = 0
                 while retry < 3:
-                    if task_id in build_status:
-                        break
+                    with build_status_lock:
+                        if task_id in build_status:
+                            task_exists = True
+                            break
                     time.sleep(0.5)
                     retry += 1
-                if task_id not in build_status:
+                if not task_exists:
                     yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': '任务状态已过期，请刷新页面重试', 'logs': []})}\n\n"
                     break
             
-            task_status = build_status[task_id]
+            with build_status_lock:
+                if task_id not in build_status:
+                    continue
+                task_status = build_status[task_id].copy()
             yield f"data: {json.dumps(task_status)}\n\n"
             
             # 任务完成，终止循环
@@ -604,12 +633,13 @@ def api_build():
 @app.route('/download/<task_id>', methods=['GET'])
 def api_download(task_id):
     """原有接口：下载新构建的升级包（通过任务ID定位）"""
-    if task_id not in build_status:
-        error_msg = f"任务{task_id}不存在或已过期（请重新构建）"
-        write_log(error_msg, level="WARNING")
-        return jsonify({"success": False, "message": error_msg}), 404
+    with build_status_lock:
+        if task_id not in build_status:
+            error_msg = f"任务{task_id}不存在或已过期（请重新构建）"
+            write_log(error_msg, level="WARNING")
+            return jsonify({"success": False, "message": error_msg}), 404
+        task_status = build_status[task_id].copy()
 
-    task_status = build_status[task_id]
     if task_status.get('status') != 'complete' or not task_status.get('package_path'):
         error_msg = f"任务{task_id}未构建完成，无法下载"
         write_log(error_msg, level="WARNING")

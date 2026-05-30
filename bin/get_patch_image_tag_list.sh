@@ -84,9 +84,35 @@ function pull_nuwa_project() {
 function get_patch_image_tag_list() {
     # 获取对应版本全量的 Patch 列表
     ALL_PATCH_LIST=($(cat ${OSS_PATCH_LIST}))
-    # 获取起始版本和结束版本的索引
-    CURRENT_PATCH_VERSION_INDEX=$(( $(printf "%s\n" "${ALL_PATCH_LIST[@]}" | grep -n "^${CURRENT_PATCH_VERSION}$" | cut -d: -f1) - 1 ))
-    TARGET_PATCH_VERSION_INDEX=$(( $(printf "%s\n" "${ALL_PATCH_LIST[@]}" | grep -n "^${TARGET_PATCH_VERSION}$" | cut -d: -f1) - 1 ))
+
+    # 验证版本列表非空
+    if [ ${#ALL_PATCH_LIST[@]} -eq 0 ]; then
+        errorlog "OSS 版本列表文件为空或不存在：${OSS_PATCH_LIST}"
+        exit 1
+    fi
+
+    # 获取起始版本的行号
+    CURRENT_LINE=$(printf "%s\n" "${ALL_PATCH_LIST[@]}" | grep -n "^${CURRENT_PATCH_VERSION}$" | cut -d: -f1 || true)
+    if [ -z "$CURRENT_LINE" ]; then
+        errorlog "当前版本 '${CURRENT_PATCH_VERSION}' 在版本列表中未找到，请检查版本名是否正确"
+        exit 1
+    fi
+    CURRENT_PATCH_VERSION_INDEX=$(( CURRENT_LINE - 1 ))
+
+    # 获取目标版本的行号
+    TARGET_LINE=$(printf "%s\n" "${ALL_PATCH_LIST[@]}" | grep -n "^${TARGET_PATCH_VERSION}$" | cut -d: -f1 || true)
+    if [ -z "$TARGET_LINE" ]; then
+        errorlog "目标版本 '${TARGET_PATCH_VERSION}' 在版本列表中未找到，请检查版本名是否正确"
+        exit 1
+    fi
+    TARGET_PATCH_VERSION_INDEX=$(( TARGET_LINE - 1 ))
+
+    # 验证目标版本必须在当前版本之后
+    if [ $TARGET_PATCH_VERSION_INDEX -le $CURRENT_PATCH_VERSION_INDEX ]; then
+        errorlog "目标版本序号(${TARGET_PATCH_VERSION_INDEX})必须大于当前版本序号(${CURRENT_PATCH_VERSION_INDEX})"
+        exit 1
+    fi
+
     echo "CURRENT_PATCH_VERSION_INDEX: $CURRENT_PATCH_VERSION_INDEX"
     echo "TARGET_PATCH_VERSION_INDEX: $TARGET_PATCH_VERSION_INDEX"
     # 获取需要更新的 Patch 版本数
