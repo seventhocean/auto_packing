@@ -112,7 +112,7 @@ def get_oss_versions():
 
                 # 处理前端显示的版本名（去掉.tar.gz和_x86_64）
                 version_with_arch = file_name[:-len(".tar.gz")]
-                display_version = version_with_arch.rstrip('_x86_64')
+                display_version = re.sub(r'_x86_64$', '', version_with_arch)
                 
                 if display_version not in seen_versions:
                     seen_versions.add(display_version)
@@ -211,6 +211,9 @@ def run_build_task(task_id, current_version, target_version):
             shutil.rmtree(task_image_dir)
         os.makedirs(task_image_dir, exist_ok=True)
 
+        # 为每个任务生成独立的镜像列表文件路径，避免并发竞争
+        task_patch_list_path = os.path.join(LATEST_LIST_DIR, f"patch_image_tag_list_{task_id}.txt")
+
         # 创建任务专属日志文件（记录脚本详细输出，避免实时刷屏）
         task_log_path = os.path.join(LOG_DIR, f"task_{task_id}.log")
 
@@ -246,19 +249,23 @@ def run_build_task(task_id, current_version, target_version):
             write_log(f"开始生成镜像列表，当前版本: {current_version}, 目标版本: {target_version}", task_id=task_id)
             
             # 调用Shell脚本，传递当前版本和目标版本参数
+            # 通过环境变量传入任务专属的输出路径，避免并发竞争
+            script_env = os.environ.copy()
+            script_env["PATCH_IMAGE_TAG_LIST_FILE"] = task_patch_list_path
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 script_result = subprocess.run(
                     ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version],
                     check=True,
                     stdout=f,  # 捕获标准输出
                     stderr=subprocess.STDOUT, # 标准错误合并到标准输出
-                    universal_newlines=True
+                    universal_newlines=True,
+                    env=script_env
                 )
             
             update_progress(task_id, 25, "验证镜像列表生成结果")
-            # 验证脚本执行结果：必须生成patch_image_tag_list.txt
-            if not os.path.exists(PATCH_LIST_PATH):
-                raise Exception(f"镜像列表脚本执行失败：未在{LATEST_LIST_DIR}生成patch_image_tag_list.txt")
+            # 验证脚本执行结果：必须生成任务专属的镜像列表文件
+            if not os.path.exists(task_patch_list_path):
+                raise Exception(f"镜像列表脚本执行失败：未生成{task_patch_list_path}")
             
             # 读取并记录脚本输出日志
             with open(task_log_path, 'r', encoding='utf-8') as f:
@@ -267,7 +274,7 @@ def run_build_task(task_id, current_version, target_version):
             
             update_progress(task_id, 30, "镜像拉取清单生成完成，准备拉取镜像文件")
             # 读取镜像列表文件，获取要拉取的镜像数量
-            with open(PATCH_LIST_PATH, 'r', encoding='utf-8') as f:
+            with open(task_patch_list_path, 'r', encoding='utf-8') as f:
                 image_count = len([line for line in f if line.strip()])
             write_log(f"发现 {image_count} 个需要拉取的镜像", task_id=task_id)
 
@@ -275,10 +282,10 @@ def run_build_task(task_id, current_version, target_version):
             update_progress(task_id, 35, f"开始拉取 {image_count} 个镜像文件")
             write_log(f"开始拉取镜像，存储路径：{task_image_dir}", task_id=task_id)
             
-            # 调用拉取脚本，指定任务专属目录（确保镜像仅属于当前任务）
+            # 调用拉取脚本，指定任务专属目录和任务专属镜像列表文件
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 pull_result = subprocess.run(
-                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir],
+                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
                     check=True,
                     stdout=f,
                     stderr=subprocess.STDOUT,
@@ -296,7 +303,7 @@ def run_build_task(task_id, current_version, target_version):
             # 准备打包
             update_progress(task_id, 70, "准备打包升级包，复制镜像列表文件")
             temp_patch_list = os.path.join(task_image_dir, "patch_image_tag_list.txt")
-            shutil.copy2(PATCH_LIST_PATH, temp_patch_list)
+            shutil.copy2(task_patch_list_path, temp_patch_list)
             
             if not os.path.exists(UPGRADE_SCRIPT_PATH) or not os.path.isfile(UPGRADE_SCRIPT_PATH):
                 raise Exception(f"升级脚本不存在：{UPGRADE_SCRIPT_PATH}")
@@ -387,6 +394,14 @@ def run_build_task(task_id, current_version, target_version):
                     clean_error_msg = f"任务临时目录清理失败：{str(clean_e)}"
                     write_log(clean_error_msg, level="WARNING", task_id=task_id)
             
+            # 清理任务专属镜像列表文件
+            if os.path.exists(task_patch_list_path):
+                try:
+                    os.remove(task_patch_list_path)
+                    write_log(f"任务专属镜像列表文件已清理：{task_patch_list_path}", task_id=task_id)
+                except Exception as patch_e:
+                    write_log(f"任务专属镜像列表清理失败：{str(patch_e)}", level="WARNING", task_id=task_id)
+
             # 清理任务日志文件
             if os.path.exists(task_log_path):
                 try:
@@ -541,16 +556,20 @@ def api_build():
         # 初始状态推送
         retry_count = 0
         initial_status = None
-        while retry_count < 2 and not initial_status:
-            initial_status = build_status.get(task_id, {
+        while retry_count < 2:
+            if task_id in build_status:
+                initial_status = build_status[task_id]
+                break
+            time.sleep(0.5)
+            retry_count += 1
+
+        if initial_status is None:
+            initial_status = {
                 'status': 'progress',
                 'percent': 0,
                 'message': '任务初始化中...',
                 'logs': []
-            })
-            if not initial_status:
-                time.sleep(0.5)
-                retry_count += 1
+            }
         yield f"data: {json.dumps(initial_status)}\n\n"
         
         # 循环推送状态

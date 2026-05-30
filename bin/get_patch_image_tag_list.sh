@@ -12,8 +12,10 @@ set -euo pipefail
 
 # 获取脚本所在目录
 CURRENT_DIRECTORY=$(cd "$(dirname "$0")" && pwd) 
-# 生成的镜像列表文件
-PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/patch_image_tag_list.txt"
+# 生成的镜像列表文件（支持通过环境变量覆盖，用于并发任务隔离）
+if [ -z "${PATCH_IMAGE_TAG_LIST_FILE:-}" ]; then
+    PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/patch_image_tag_list.txt"
+fi
 # 临时回收站
 #TRASH="${CURRENT_DIRECTORY}/../.trash"
 # patch 列表（以 OSS 为准）
