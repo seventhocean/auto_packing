@@ -119,12 +119,12 @@ def get_oss_versions():
                 # 提取完整文件名（如"01-20250430-26798-BUG_x86_64.tar.gz"）
                 file_name = line.split('/')[-1]
                 # 提取序号（从原始文件名提取，避免后续处理丢失）
-                seq_match = re.search(r'^(\d{2})-', file_name)
+                seq_match = re.search(r'^(\d+)-', file_name)
                 seq_num = int(seq_match.group(1)) if seq_match else 99  # 异常序号放最后
                 
                 # 处理前端显示的版本名（去掉.tar.gz和_x86_64）
                 version_with_arch = file_name[:-len(".tar.gz")]
-                display_version = version_with_arch.rstrip('_x86_64')
+                display_version = re.sub(r'_x86_64$', '', version_with_arch)
                 
                 if display_version not in seen_versions:
                     seen_versions.add(display_version)
@@ -542,16 +542,20 @@ def api_build():
         # 初始状态推送
         retry_count = 0
         initial_status = None
-        while retry_count < 2 and not initial_status:
-            initial_status = build_status.get(task_id, {
+        while retry_count < 2:
+            if task_id in build_status:
+                initial_status = build_status[task_id]
+                break
+            time.sleep(0.5)
+            retry_count += 1
+
+        if initial_status is None:
+            initial_status = {
                 'status': 'progress',
                 'percent': 0,
                 'message': '任务初始化中...',
                 'logs': []
-            })
-            if not initial_status:
-                time.sleep(0.5)
-                retry_count += 1
+            }
         yield f"data: {json.dumps(initial_status)}\n\n"
         
         # 循环推送状态
