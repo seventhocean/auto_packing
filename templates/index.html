@@ -189,9 +189,6 @@
             transition:background var(--transition),border-color var(--transition);
         }
         .btn-sm:hover{background:var(--surface-hover);border-color:var(--text-muted)}
-        .btn-download{background:var(--brand);color:var(--on-brand);border-color:var(--brand);display:none}
-        .btn-download:hover{background:var(--brand-hover);border-color:var(--brand-hover)}
-        .btn-download.visible{display:inline-flex;align-items:center;gap:6px}
 
         /* Log area */
         .build-log{
@@ -240,6 +237,11 @@
         .pkg-item:hover{background:var(--surface)}
         .pkg-info{min-width:0;display:flex;flex-direction:column;gap:2px}
         .pkg-name{font-size:var(--font-sm);font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .pkg-new{
+            display:inline-block;font-size:9px;font-weight:700;color:var(--on-brand);
+            background:var(--brand);padding:1px 5px;border-radius:2px;margin-left:6px;
+            text-transform:uppercase;letter-spacing:0.04em;vertical-align:middle;
+        }
         .pkg-meta{font-size:var(--font-xs);color:var(--text-muted)}
         .pkg-download{
             flex-shrink:0;font-size:var(--font-sm);font-weight:600;color:var(--brand);
@@ -330,7 +332,6 @@
                 <div class="build-idle">
                     <i class="fas fa-chart-line"></i>
                     <span>暂无构建任务</span>
-                    <a href="#" id="previewBuild" style="color:var(--brand);font-size:var(--font-xs);text-decoration:none;margin-top:var(--spacing-sm);">预览构建状态</a>
                 </div>
                 <div class="build-running">
                     <div class="progress-wrap">
@@ -344,9 +345,6 @@
                         </span>
                         <div class="build-actions">
                             <button class="btn-sm" id="btnToggleLog">展开日志</button>
-                            <a class="btn-sm btn-download" id="downloadLink" target="_blank">
-                                <i class="fas fa-download"></i> 下载
-                            </a>
                         </div>
                     </div>
                     <div class="build-log" id="buildLog"></div>
@@ -372,7 +370,7 @@
 /* ================================================================
    STATE
    ================================================================ */
-let versionData=[],eventSource=null,currentSeries='v6',activeTaskSeries=null,isBuilding=false;
+let versionData=[],eventSource=null,currentSeries='v6',isBuilding=false;
 let lastLogMessage='',existingFilesData=[],logExpanded=false;
 
 /* ================================================================
@@ -455,13 +453,12 @@ function startBuildProcess(e){
     const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn');
     const ab=currentSeries==='v7'?b7:b6;
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
-    const dl=document.getElementById('downloadLink');
 
     isBuilding=true;window.addEventListener('beforeunload',beforeUnloadHandler);
-    activeTaskSeries=currentSeries;ab.disabled=true;
+    ab.disabled=true;
     ab.innerHTML='<span class="spinner"></span> 构建中...';
     bc.classList.add('active');bl.classList.remove('expanded');bl.innerHTML='';
-    lastLogMessage='';logExpanded=false;dl.classList.remove('visible');
+    lastLogMessage='';logExpanded=false;
     document.getElementById('taskStateText').textContent='排队中';
     document.getElementById('taskMessageText').textContent='';
     document.getElementById('btnToggleLog').textContent='展开日志';
@@ -491,11 +488,12 @@ function resetBuildState(){
     const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn'),bc=document.getElementById('buildCard');
     b6.innerHTML='<i class="fas fa-play"></i> 开始构建';b7.innerHTML='<i class="fas fa-play"></i> 开始构建';
     isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
-    activeTaskSeries=null;lastLogMessage='';if(eventSource){eventSource.close();eventSource=null}
+    lastLogMessage='';if(eventSource){eventSource.close();eventSource=null}
     bc.classList.remove('active');checkBuildBtnStatus();
 }
+let newPackageName='';
 function handleBuildStatus(d){
-    const dl=document.getElementById('downloadLink'),st=document.getElementById('taskStateText');
+    const st=document.getElementById('taskStateText');
     const mt=document.getElementById('taskMessageText'),logs=Array.isArray(d.logs)?d.logs:[];
     if(logs.length>0){const l=logs[logs.length-1];if(l&&l.content)addLog(l.content,mapLogLevel(l.level))}
     else if(d.message)addLog(d.message,mapStatusToLogType(d.status));
@@ -503,13 +501,14 @@ function handleBuildStatus(d){
         case'queued':st.textContent='排队中';updateProgressBar(d.percent||0,'');mt.textContent=d.message||'';break;
         case'progress':st.textContent='构建中';updateProgressBar(d.percent,d.message);mt.textContent=d.message||'';break;
         case'complete':
-            st.textContent='已完成';updateProgressBar(100,'success');mt.textContent=d.message||'';
-            dl.href=d.download_url;dl.classList.add('visible');
+            st.textContent='已完成';updateProgressBar(100,'success');mt.textContent='升级包已加入右侧列表';
+            newPackageName=d.package_name||'';
             isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
             if(eventSource){eventSource.close();eventSource=null}
             {let b6=document.getElementById('v6BuildBtn');let b7=document.getElementById('v7BuildBtn');
             b6.innerHTML='<i class="fas fa-play"></i> 开始构建';b7.innerHTML='<i class="fas fa-play"></i> 开始构建';}
-            fetchExistingFiles();checkBuildBtnStatus();break;
+            fetchExistingFiles();checkBuildBtnStatus();
+            break;
         case'error':st.textContent='失败';updateProgressBar(0,'error');mt.textContent=d.message||'';resetBuildState();break;
     }
 }
@@ -550,21 +549,20 @@ function renderExistingFiles(files){
     const fl=document.getElementById('filesList'),nf=document.getElementById('noFilesMessage');
     if(!files||files.length===0){nf.style.display='flex';fl.innerHTML='';return}
     nf.style.display='none';
-    fl.innerHTML=files.map(f=>{
+    fl.innerHTML=files.map((f,i)=>{
         const m=f.name.match(/deepflow_patch_v(\d+)_(.+)_(.+)\.tar\.gz/);
         const d=m?m[2]+' → '+m[3].replace(/_/g,'-'):f.name.replace('deepflow_patch_','').replace('.tar.gz','');
         const mb=(f.size/1048576).toFixed(1);
-        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${f.name}">${d}</div><div class="pkg-meta">${mb} MB</div></div><a class="pkg-download" href="/download-existing/${encodeURIComponent(f.name)}" data-filename="${f.name}" onclick="return checkExistingFileDownload(event,this)"><i class="fas fa-download"></i> 下载</a></div>`;
+        const badge=(i===0&&newPackageName)?'<span class="pkg-new">NEW</span>':'';
+        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${f.name}">${d}${badge}</div><div class="pkg-meta">${mb} MB</div></div><a class="pkg-download" href="/download-existing/${encodeURIComponent(f.name)}" data-filename="${f.name}" onclick="return checkExistingFileDownload(event,this)"><i class="fas fa-download"></i> 下载</a></div>`;
     }).join('');
 }
-function formatExistingFileName(f){const m=f.match(/deepflow_patch_v(\d+)_(.+)_(.+)\.tar\.gz/);return m?m[2]+' → '+m[3].replace(/_/g,'-'):f}
 function updateFilesSummary(n){document.getElementById('filesSummary').textContent=n+' 个包'}
 function filterExistingFiles(){
     const q=document.getElementById('fileSearchInput').value.toLowerCase();
     renderExistingFiles(q?existingFilesData.filter(f=>f.name.toLowerCase().includes(q)):existingFilesData);
 }
 async function checkExistingFileDownload(e,el){try{const r=await fetch(el.href,{method:'HEAD'});if(!r.ok){e.preventDefault();fetchExistingFiles()}return true}catch(err){e.preventDefault();return false}}
-function checkDownloadFile(e){}
 function normalizeV7Images(raw){return raw.split(/[,，;\n\r]+/).map(s=>s.trim()).filter(Boolean)}
 
 /* ================================================================
@@ -577,37 +575,7 @@ function initEventListeners(){
     document.getElementById('v7ImageList').addEventListener('input',checkBuildBtnStatus);
     document.getElementById('buildForm').addEventListener('submit',startBuildProcess);
     document.getElementById('v7BuildBtn').addEventListener('click',startBuildProcess);
-    document.getElementById('downloadLink').addEventListener('click',checkDownloadFile);
     document.getElementById('fileSearchInput').addEventListener('input',debounce(filterExistingFiles,200));
-    let previewState='idle';
-    document.getElementById('previewBuild').addEventListener('click',function(e){
-        e.preventDefault();
-        const states=['idle','building','complete'];
-        previewState=states[(states.indexOf(previewState)+1)%3];
-        const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
-        const dl=document.getElementById('downloadLink'),pb=document.getElementById('progressBar');
-        const st=document.getElementById('taskStateText'),mt=document.getElementById('taskMessageText');
-        const tb=document.getElementById('btnToggleLog');
-        bc.classList.remove('active');bl.classList.remove('expanded');bl.innerHTML='';
-        dl.classList.remove('visible');pb.classList.remove('error','success');pb.style.width='0%';
-        tb.textContent='展开日志';logExpanded=false;
-        if(previewState==='idle'){
-            this.textContent='预览构建状态';
-        }else if(previewState==='building'){
-            bc.classList.add('active');st.textContent='构建中';mt.textContent='正在拉取镜像 (9/12)...';
-            pb.style.width='72%';bl.classList.add('expanded');tb.textContent='收起日志';logExpanded=true;
-            bl.innerHTML='<div class="log-entry"><span class="log-time">[17:23:45]</span> <span class="log-success">✅ 镜像列表生成完成</span></div>'+
-                '<div class="log-entry"><span class="log-time">[17:23:50]</span> <span class="log-info">ℹ️ 开始拉取镜像 (共 12 个)</span></div>'+
-                '<div class="log-entry"><span class="log-time">[17:24:01]</span> <span class="log-info">ℹ️ 正在拉取 deepflow-server:v6.6.5550...</span></div>'+
-                '<div class="log-entry"><span class="log-time">[17:25:08]</span> <span class="log-info">ℹ️ 正在拉取 pcap:v6.6.220...</span></div>';
-            bl.scrollTop=bl.scrollHeight;this.textContent='下一步: 完成态';
-        }else if(previewState==='complete'){
-            bc.classList.add('active');st.textContent='已完成';mt.textContent='构建成功！生成 TAR.GZ 升级包 (12 个镜像)';
-            pb.style.width='100%';pb.classList.add('success');
-            dl.classList.add('visible');dl.href='#download-mock';
-            this.textContent='返回空闲';
-        }
-    });
     document.getElementById('btnToggleLog').addEventListener('click',function(){
         logExpanded=!logExpanded;
         document.getElementById('buildLog').classList.toggle('expanded',logExpanded);

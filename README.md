@@ -178,7 +178,7 @@ redis:
   - Redis 配置。
 - `entrypoint.sh`
   - 容器启动入口，负责准备目录、拉取 `nuwa`、生成 `.ossutilconfig`。
-- `auto_get_patch_dockerfile`
+- `dockerfile`
   - 容器镜像构建文件。
 - `requirements.txt`
   - Python 依赖。
@@ -206,7 +206,7 @@ redis:
   - `app.log` 与任务运行日志。
 - `.trash/`
   - 临时文件和 OSS 补丁版本缓存。
-- `Apply/`
+- `apply/`
   - Kubernetes 部署清单。
 - `test/`
   - 脚本和页面测试样例，不是完整自动化测试体系。
@@ -501,13 +501,13 @@ python worker.py
 
 项目提供：
 
-- `auto_get_patch_dockerfile`
+- `dockerfile`
 - `entrypoint.sh`
 
 构建：
 
 ```bash
-docker build -f auto_get_patch_dockerfile -t auto-packing .
+docker build -f dockerfile -t auto-packing .
 ```
 
 运行 Web 容器示例：
@@ -543,7 +543,7 @@ docker run \
 
 ## 11. Kubernetes 部署说明
 
-`Apply/maintenance-app-deployment.yaml` 已经体现出当前推荐部署模型：
+`apply/maintenance-app-deployment.yaml` 已经体现出当前推荐部署模型：
 
 - 一个 `maintenance-app` Deployment
   - 提供 Web/API/SSE
@@ -556,7 +556,7 @@ docker run \
 
 ### 11.1 关键点
 
-- app 与 worker 使用同一个镜像：`maintenance-app:v1.7.3`
+- app 与 worker 使用同一个镜像：`maintenance-app:v2.0.0`
 - worker 通过 `args: ["python", "worker.py"]` 启动
 - Redis 密码通过 Secret 注入
 - app / worker 都依赖：
@@ -628,7 +628,7 @@ docker run \
 当前仓库中存在明显需要继续治理的点：
 
 - `bin/pull_save.sh` 中写死了镜像仓库登录用户名和密码。
-- `Apply/maintenance-app-deployment.yaml` 中示例 Secret 含明文 Redis 密码。
+- `apply/maintenance-app-deployment.yaml` 中示例 Secret 含明文 Redis 密码。
 
 这些内容说明该仓库当前更偏内部工具形态，不适合作为公开安全基线。
 
@@ -669,7 +669,7 @@ docker run \
    - 理解镜像拉取与保存。
 6. `bin/deepflow_patch_upgrade.sh`
    - 理解最终交付物如何被使用。
-7. `Apply/maintenance-app-deployment.yaml`
+7. `apply/maintenance-app-deployment.yaml`
    - 理解线上部署形态。
 8. `CLAUDE.md`
    - AI 助手的代码库指南，包含架构速览、命令、环境变量、已知问题。
