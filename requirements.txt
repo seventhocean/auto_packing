@@ -1,6 +1,7 @@
 click==7.1.2
 dataclasses==0.8
 Flask==1.1.4
+gunicorn==20.1.0
 uWSGI==2.0.30 
 itsdangerous==1.1.0
 Jinja2==2.11.3
@@ -10,3 +11,4 @@ zipp==3.6.0
 importlib-metadata==4.8.3
 requests==2.27.0
 PyYAML==6.0.1
+redis==4.3.6

@@ -1,1262 +1,587 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>DeepFlow 升级包构建工具</title>
-    <!-- 引入外部资源 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepFlow 升级包构建</title>
     <link rel="stylesheet" href="static/bootstrap.min.css">
     <link rel="stylesheet" href="static/all.min.css">
     <link rel="icon" href="static/favicon.ico" type="image/x-icon">
     <style>
-        /* 基础样式重置与全局配置 */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
+        /* ============================================================
+           TOKENS — V6 (NVIDIA Green)
+           ============================================================ */
         :root {
-            --primary-color: #5176f1;
-            --primary-light: #7393ff;
-            --primary-dark: #3a5ed9;
-            --success-color: #4caf50;
-            --success-light: #66bb6a;
-            --danger-color: #f44336;
-            --danger-light: #ef5350;
-            --bg-primary: #1e1e1e;
-            --bg-secondary: #2c2c2c;
-            --bg-tertiary: #3a3a3a;
-            --border-color: #444;
-            --text-primary: #fcfcfc;
-            --text-secondary: #e0e0e0;
-            --text-tertiary: #9e9e9e;
-            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-            --radius-sm: 6px;
-            --radius-md: 10px;
-            --radius-lg: 14px;
-            --radius-full: 50%;
-            --transition-fast: 0.2s ease;
-            --transition-normal: 0.3s ease;
-            --transition-slow: 0.5s ease;
-        }
-
-        /* 页面基础样式 */
-        body {
-            background-color: var(--bg-primary);
-            background-image:
-                radial-gradient(circle at 10% 20%, rgba(81, 118, 241, 0.05) 0%, transparent 20%),
-                radial-gradient(circle at 90% 80%, rgba(76, 175, 80, 0.05) 0%, transparent 20%);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 20px 0;
-            font-family: "Inter", "Microsoft YaHei", "PingFang SC", sans-serif;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 0 15px;
-        }
-
-        /* 标题样式 */
-        h1 {
-            font-size: 2.2rem;
-            font-weight: 600;
-            background: linear-gradient(120deg, var(--primary-light), var(--text-primary));
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            text-align: center;
-            margin-bottom: 2.5rem;
-            position: relative;
-            padding-bottom: 1rem;
-        }
-
-        h1::after {
-            content: "";
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80px;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
-            border-radius: 3px;
-        }
-
-        /* 卡片样式 */
-        .card {
-            background-color: var(--bg-secondary);
-            border: none;
-            box-shadow: var(--shadow-md);
-            border-radius: var(--radius-md);
-            padding: 30px;
-            margin-bottom: 30px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .card::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary-color), var(--success-color));
-        }
-
-        /* 表单相关样式 */
-        .section-title {
-            font-size: 1.5rem;
-            font-weight: 500;
-            color: var(--text-primary);
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .section-title i {
-            color: var(--primary-color);
-            font-size: 1.2em;
-        }
-
-        .section-desc {
-            font-size: 0.95rem;
-            color: var(--text-tertiary);
-            margin-bottom: 1.5rem;
-            line-height: 1.7;
-        }
-
-        .form-label {
-            color: var(--text-secondary);
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            display: block;
-        }
-
-        .form-select,
-        .form-control {
-            background-color: var(--bg-tertiary);
-            color: var(--primary-light);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-sm);
-            padding: 0.75rem 1rem;
-            font-size: 0.95rem;
-            transition: var(--transition-normal);
-        }
-
-        .form-select:focus,
-        .form-control:focus {
-            background-color: var(--bg-tertiary);
-            color: var(--primary-light);
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(81, 118, 241, 0.2);
-            outline: none;
-        }
-
-        .form-select option {
-            background-color: var(--bg-primary);
-            color: var(--text-secondary);
-            padding: 0.5rem;
-        }
-
-        .form-select option:checked {
-            background-color: var(--primary-dark);
-            color: white;
-        }
-
-        /* 进度条样式 */
-        .progress {
-            height: 28px;
-            border-radius: var(--radius-lg);
-            background-color: var(--bg-tertiary);
-            margin: 20px 0;
-            overflow: hidden;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .progress-bar {
-            border-radius: var(--radius-lg);
-            transition: width var(--transition-slow), background-color var(--transition-normal);
-            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
-            box-shadow: 0 0 10px rgba(81, 118, 241, 0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 500;
-            color: white;
-        }
-
-        .progress-bar.bg-success {
-            background: linear-gradient(90deg, var(--success-color), var(--success-light));
-            box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
-        }
-
-        .progress-bar.bg-danger {
-            background: linear-gradient(90deg, var(--danger-color), var(--danger-light));
-            box-shadow: 0 0 10px rgba(244, 67, 54, 0.4);
-        }
-
-        /* 呼吸动画效果 */
-        @keyframes breathe {
-
-            0%,
-            100% {
-                opacity: 1;
-                box-shadow: 0 0 10px rgba(81, 118, 241, 0.4);
-            }
-
-            50% {
-                opacity: 0.8;
-                box-shadow: 0 0 15px rgba(81, 118, 241, 0.6);
-            }
-        }
-
-        .progress-bar-animated {
-            animation: breathe 2s infinite ease-in-out;
-        }
-
-        /* 日志容器样式 */
-        .log-container {
-            height: 220px;
-            overflow-y: auto;
-            background-color: var(--bg-tertiary);
-            border-radius: var(--radius-sm);
-            padding: 15px;
-            font-family: "Consolas", "Monaco", monospace;
-            font-size: 14px;
-            border: 1px solid var(--border-color);
-            line-height: 1.7;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        /* 自定义滚动条 */
-        .log-container::-webkit-scrollbar,
-        .existing-files-container::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        .log-container::-webkit-scrollbar-track,
-        .existing-files-container::-webkit-scrollbar-track {
-            background: var(--bg-tertiary);
-            border-radius: 4px;
-        }
-
-        .log-container::-webkit-scrollbar-thumb,
-        .existing-files-container::-webkit-scrollbar-thumb {
-            background: #555;
-            border-radius: 4px;
-            transition: var(--transition-fast);
-        }
-
-        .log-container::-webkit-scrollbar-thumb:hover,
-        .existing-files-container::-webkit-scrollbar-thumb:hover {
-            background: var(--primary-color);
-        }
-
-        /* 日志类型样式 */
-        .log-time {
-            color: #90caf9;
-            font-weight: 500;
-        }
-
-        .log-info {
-            color: var(--text-secondary);
-        }
-
-        .log-success {
-            color: var(--success-light);
-            font-weight: 500;
-        }
-
-        .log-error {
-            color: var(--danger-light);
-            font-weight: bold;
-        }
-
-        /* 日志条目动画 */
-        .log-entry {
-            opacity: 0;
-            transform: translateY(5px);
-            animation: logFadeIn 0.3s forwards ease;
-        }
-
-        @keyframes logFadeIn {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* 按钮样式 */
-        .btn {
-            transition: var(--transition-normal);
-            border-radius: var(--radius-sm);
-            font-weight: 500;
-            padding: 0.6rem 1.2rem;
-            font-size: 0.95rem;
-            border: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-            box-shadow: var(--shadow-sm);
-        }
-
-        /* 按钮主题样式 */
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-            color: white;
-        }
-
-        .btn-primary:disabled {
-            background: linear-gradient(135deg, #4a69bd, #5c6bc0);
-            color: rgba(255, 255, 255, 0.7);
-            transform: none;
-            box-shadow: none;
-            cursor: not-allowed;
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #388e3c, var(--success-color));
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: linear-gradient(135deg, var(--success-color), var(--success-light));
-            color: white;
-        }
-
-        .btn-outline-light {
-            background: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: var(--text-secondary);
-        }
-
-        .btn-outline-light:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.5);
-            color: white;
-        }
-
-        .btn-outline-light:disabled {
-            border-color: rgba(255, 255, 255, 0.2);
-            color: rgba(255, 255, 255, 0.5);
-            transform: none;
-            box-shadow: none;
-            cursor: not-allowed;
-        }
-
-        .btn-secondary {
-            background: linear-gradient(135deg, #555, #666);
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: linear-gradient(135deg, #666, #777);
-            color: white;
-        }
-
-        /* 提示框样式 */
-        .alert {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-20px);
-            opacity: 0;
-            z-index: 1000;
-            max-width: 600px;
-            background-color: var(--bg-secondary);
-            border-color: var(--border-color);
-            color: var(--text-primary);
-            border-radius: var(--radius-sm);
-            box-shadow: var(--shadow-lg);
-            padding: 1.2rem;
-            transition: var(--transition-normal);
-        }
-
-        .alert.show {
-            transform: translateX(-50%) translateY(0);
-            opacity: 1;
-        }
-
-        .alert-heading {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .alert-info .alert-heading {
-            color: var(--primary-light);
-        }
-
-        .alert-danger .alert-heading {
-            color: var(--danger-light);
-        }
-
-        .alert p {
-            margin-bottom: 0;
-            color: var(--text-secondary);
-        }
-
-        .btn-close {
-            color: var(--text-tertiary);
-            opacity: 0.7;
-        }
-
-        .btn-close:hover {
-            color: white;
-            opacity: 1;
-        }
-
-        /* 已有文件列表样式 */
-        .existing-files-container {
-            max-height: 260px;
-            overflow-y: auto;
-            background-color: var(--bg-tertiary);
-            border-radius: var(--radius-sm);
-            padding: 15px;
-            margin-top: 10px;
-            width: 100%;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .file-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px solid var(--border-color);
-            transition: var(--transition-fast);
-        }
-
-        .file-item:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            padding-left: 8px;
-            border-radius: var(--radius-sm);
-        }
-
-        .file-item:last-child {
-            border-bottom: none;
-        }
-
-        .file-name {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            margin-right: 10px;
-            flex-grow: 1;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .file-name i {
-            color: var(--primary-color);
-            opacity: 0.8;
-        }
-
-        .file-size {
-            color: var(--text-tertiary);
-            font-size: 0.85rem;
-            margin-left: 8px;
-        }
-
-        /* 使用教程按钮 */
-        .tutorial-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            border-radius: var(--radius-full);
-            font-size: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: var(--shadow-md);
-            z-index: 999;
-            background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
-            color: white;
-            border: none;
-            cursor: pointer;
-            transition: var(--transition-normal);
-        }
-
-        .tutorial-btn:hover {
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: var(--shadow-lg);
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
-        }
-
-        .tutorial-btn:active {
-            transform: translateY(-1px);
-        }
-
-        /* 教程模态框样式 */
-        .modal {
-            backdrop-filter: blur(5px);
-        }
-
-        .modal-content {
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            border: none;
-            border-radius: var(--radius-md);
-            box-shadow: var(--shadow-lg);
-            overflow: hidden;
-        }
-
-        .modal-header {
-            border-color: var(--border-color);
-            padding: 1.2rem 1.5rem;
-            background: linear-gradient(90deg, var(--bg-secondary), var(--bg-tertiary));
-        }
-
-        .modal-title {
-            font-size: 1.3rem;
-            font-weight: 600;
-            color: var(--primary-light);
-        }
-
-        .modal-body {
-            padding: 1.5rem;
-            max-height: 70vh;
-            overflow-y: auto;
-        }
-
-        .modal-footer {
-            border-color: var(--border-color);
-            padding: 1rem 1.5rem;
-            background: linear-gradient(90deg, var(--bg-tertiary), var(--bg-secondary));
-        }
-
-        .tutorial-step {
-            margin-bottom: 25px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .tutorial-step:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-
-        .tutorial-step h5 {
-            color: var(--primary-light);
-            margin-bottom: 12px;
-            font-size: 1.1rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .tutorial-step h5 i {
-            background-color: rgba(81, 118, 241, 0.2);
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-        }
-
-        .tutorial-step p {
-            color: var(--text-secondary);
-            margin-bottom: 10px;
-            line-height: 1.7;
-        }
-
-        .tutorial-step ul {
-            padding-left: 1.5rem;
-            margin-bottom: 0;
-        }
-
-        .tutorial-step li {
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-            line-height: 1.7;
-        }
-
-        .tutorial-step li:last-child {
-            margin-bottom: 0;
-        }
-
-        /* 加载动画 */
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: var(--primary-color);
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* 响应式调整 */
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 1.8rem;
-                margin-bottom: 1.8rem;
-            }
-
-            .card {
-                padding: 20px;
-            }
-
-            .section-title {
-                font-size: 1.3rem;
-            }
-
-            .existing-files-container,
-            .log-container {
-                max-height: 180px;
-            }
-
-            .tutorial-btn {
-                width: 50px;
-                height: 50px;
-                font-size: 20px;
-                bottom: 20px;
-                right: 20px;
-            }
-
-            .modal-body {
-                padding: 1rem;
-            }
-
-            .modal-title {
-                font-size: 1.1rem;
-            }
-
-            .btn {
-                padding: 0.5rem 1rem;
-                font-size: 0.9rem;
-            }
+            --canvas: #000000;
+            --surface: #1a1a1a;
+            --surface-hover: #242424;
+            --line: #5e5e5e;
+            --line-subtle: rgba(255,255,255,0.08);
+            --text: #ffffff;
+            --text-secondary: rgba(255,255,255,0.7);
+            --text-muted: rgba(255,255,255,0.42);
+            --brand: #76b900;
+            --brand-hover: #5a8d00;
+            --on-brand: #000000;
+            --danger: #e52020;
+            --success: #3f8500;
+            --radius-sm: 2px;
+            --radius-md: 4px;
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 12px;
+            --spacing-lg: 16px;
+            --spacing-xl: 24px;
+            --font-xs: 11px;
+            --font-sm: 12px;
+            --font-base: 14px;
+            --font-lg: 16px;
+            --font-xl: 20px;
+            --transition: 0.15s ease;
+        }
+        body[data-mode="v7"] {
+            --canvas: #0b0e11;
+            --surface: #1e2329;
+            --surface-hover: #2b3139;
+            --line: #2b3139;
+            --line-subtle: rgba(255,255,255,0.06);
+            --text: #eaecef;
+            --text-secondary: #929aa5;
+            --text-muted: #707a8a;
+            --brand: #fcd535;
+            --brand-hover: #f0b90b;
+            --on-brand: #181a20;
+            --danger: #f6465d;
+            --success: #0ecb81;
+            --radius-sm: 4px;
+            --radius-md: 6px;
+        }
+
+        /* ============================================================
+           RESET
+           ============================================================ */
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{
+            background:var(--canvas);color:var(--text);
+            font-family:"Inter","PingFang SC","Microsoft YaHei",sans-serif;
+            font-size:var(--font-base);line-height:1.5;
+            -webkit-font-smoothing:antialiased;overflow:hidden;height:100vh;
+        }
+        ::selection{background:var(--brand);color:var(--on-brand)}
+
+        /* ============================================================
+           SHELL
+           ============================================================ */
+        .app-shell{display:flex;flex-direction:column;height:100vh}
+
+        /* ============================================================
+           HEADER
+           ============================================================ */
+        .app-header{
+            display:flex;align-items:center;justify-content:space-between;
+            height:44px;padding:0 var(--spacing-xl);
+            border-bottom:1px solid var(--line-subtle);
+            background:var(--canvas);flex-shrink:0;user-select:none;
+        }
+        .header-title{font-size:var(--font-lg);font-weight:700;color:var(--text);letter-spacing:-0.01em}
+        .header-title span{color:var(--brand)}
+        .mode-toggle{
+            display:flex;align-items:center;border:1px solid var(--line);
+            border-radius:999px;overflow:hidden;cursor:pointer;
+            font-size:var(--font-sm);font-weight:600;line-height:1;flex-shrink:0;
+        }
+        .mode-toggle span{padding:5px 14px;transition:all var(--transition);color:var(--text-secondary)}
+        .mode-toggle span.active{background:var(--brand);color:var(--on-brand)}
+
+        /* ============================================================
+           MAIN
+           ============================================================ */
+        .app-main{display:flex;flex:1;min-height:0;gap:1px;background:var(--line-subtle)}
+        .workspace{
+            flex:1;min-width:0;background:var(--canvas);
+            padding:var(--spacing-xl);display:flex;flex-direction:column;gap:var(--spacing-lg);
+        }
+        .packages{
+            width:300px;flex-shrink:0;background:var(--canvas);
+            display:flex;flex-direction:column;padding:var(--spacing-lg);gap:var(--spacing-sm);overflow:hidden;
+        }
+
+        /* ============================================================
+           WORKSPACE PANELS (V6/V7)
+           ============================================================ */
+        .workspace-panel{display:none;flex-direction:column;gap:var(--spacing-lg);flex:1}
+        .workspace-panel.active{display:flex}
+        .workspace-title{font-size:var(--font-xl);font-weight:700;color:var(--text)}
+        .workspace-desc{font-size:var(--font-base);color:var(--text-secondary);margin-top:var(--spacing-xs)}
+
+        /* ============================================================
+           FORM CARD — fixed height, same for V6/V7
+           ============================================================ */
+        .form-card{
+            background:var(--surface);border:1px solid var(--line-subtle);
+            border-radius:var(--radius-md);padding:var(--spacing-xl);
+            display:flex;flex-direction:column;gap:var(--spacing-lg);
+            flex-shrink:0;height:280px;
+        }
+        .form-card .form-body{flex:1;display:flex;flex-direction:column;gap:var(--spacing-lg);min-height:0}
+        .form-card .btn-build{margin-top:auto;align-self:flex-start}
+        .form-row{display:flex;flex-direction:column;gap:var(--spacing-xs)}
+        .form-label{
+            font-size:var(--font-sm);font-weight:600;color:var(--text-secondary);
+            text-transform:uppercase;letter-spacing:0.04em;
+        }
+        .form-select,.form-control{
+            background:var(--canvas);color:var(--text);border:1px solid var(--line);
+            border-radius:var(--radius-sm);padding:10px 14px;font-size:var(--font-base);
+            font-family:inherit;width:100%;outline:none;
+            transition:border-color var(--transition);min-height:42px;
+        }
+        .form-select:focus,.form-control:focus{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+        .form-select option{background:var(--surface);color:var(--text)}
+        .form-select:disabled,.form-control:disabled{opacity:0.4;cursor:not-allowed}
+        textarea.form-control{
+            resize:none;height:140px;overflow-y:auto;flex-shrink:0;
+            font-family:"SF Mono","Consolas","Monaco",monospace;font-size:13px;line-height:1.6;
+        }
+        .btn-build{
+            display:inline-flex;align-items:center;justify-content:center;gap:8px;
+            align-self:flex-start;padding:10px 28px;font-size:var(--font-base);font-weight:600;
+            font-family:inherit;color:var(--on-brand);background:var(--brand);border:none;
+            border-radius:var(--radius-sm);cursor:pointer;transition:background var(--transition);white-space:nowrap;
+        }
+        .btn-build:hover{background:var(--brand-hover)}
+        .btn-build:disabled{opacity:0.35;cursor:not-allowed;background:var(--surface);color:var(--text-muted);border:1px solid var(--line)}
+
+        /* ============================================================
+           BUILD CARD — fixed height, idle/building states
+           ============================================================ */
+        .build-card{
+            background:var(--surface);border:1px solid var(--line-subtle);
+            border-radius:var(--radius-md);padding:var(--spacing-xl);
+            display:flex;flex-direction:column;gap:var(--spacing-md);
+            flex:1;min-height:0;flex-shrink:0;
+        }
+        .build-idle{
+            display:flex;flex-direction:column;align-items:center;justify-content:center;
+            flex:1;color:var(--text-muted);font-size:var(--font-sm);gap:var(--spacing-sm);
+        }
+        .build-idle i{font-size:24px;opacity:0.3}
+        .build-running{display:none;flex-direction:column;flex:1;gap:var(--spacing-md);min-height:0}
+        .build-card.active .build-idle{display:none}
+        .build-card.active .build-running{display:flex}
+
+        /* Progress bar */
+        .progress-wrap{height:4px;background:var(--canvas);border-radius:2px;overflow:hidden;flex-shrink:0}
+        .progress-fill{height:100%;background:var(--brand);border-radius:2px;transition:width 0.3s ease}
+        .progress-fill.error{background:var(--danger)}
+        .progress-fill.success{background:var(--success)}
+
+        .build-status-row{
+            display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-md);
+            font-size:var(--font-sm);color:var(--text-secondary);flex-shrink:0;
+        }
+        .build-status-text{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .build-actions{display:flex;gap:var(--spacing-sm);flex-shrink:0}
+        .btn-sm{
+            padding:5px 14px;font-size:12px;font-weight:600;font-family:inherit;
+            border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--line);
+            background:transparent;color:var(--text-secondary);white-space:nowrap;
+            transition:background var(--transition),border-color var(--transition);
+        }
+        .btn-sm:hover{background:var(--surface-hover);border-color:var(--text-muted)}
+
+        /* Log area */
+        .build-log{
+            display:none;flex:1;min-height:0;
+            background:var(--canvas);border:1px solid var(--line-subtle);
+            border-radius:var(--radius-sm);padding:var(--spacing-sm) var(--spacing-md);
+            font-family:"SF Mono","Consolas","Monaco",monospace;font-size:12px;line-height:1.7;
+            color:var(--text-secondary);overflow-y:auto;
+        }
+        .build-log.expanded{display:block}
+        .build-log::-webkit-scrollbar{width:4px}
+        .build-log::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
+        .log-entry{padding:1px 0}
+        .log-time{color:var(--text-muted)}
+        .log-info{color:var(--text-secondary)}
+        .log-success{color:var(--success)}
+        .log-error{color:var(--danger)}
+
+        .spinner{
+            display:inline-block;width:16px;height:16px;border:2px solid var(--line);
+            border-top-color:var(--brand);border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;
+        }
+        @keyframes spin{to{transform:rotate(360deg)}}
+
+        /* ============================================================
+           PACKAGES
+           ============================================================ */
+        .packages-title{font-size:var(--font-lg);font-weight:700;color:var(--text);flex-shrink:0}
+        .packages-count{font-size:var(--font-sm);color:var(--text-muted)}
+        .packages-search{
+            background:var(--surface);color:var(--text);border:1px solid var(--line);
+            border-radius:var(--radius-sm);padding:8px 12px;font-size:var(--font-sm);
+            font-family:inherit;outline:none;width:100%;flex-shrink:0;
+            transition:border-color var(--transition);
+        }
+        .packages-search:focus{border-color:var(--brand)}
+        .packages-search::placeholder{color:var(--text-muted)}
+        .packages-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;min-height:0}
+        .packages-list::-webkit-scrollbar{width:4px}
+        .packages-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
+        .pkg-item{
+            display:flex;align-items:center;justify-content:space-between;
+            padding:8px 10px;border-radius:var(--radius-sm);gap:8px;
+            transition:background var(--transition);
+        }
+        .pkg-item:hover{background:var(--surface)}
+        .pkg-info{min-width:0;display:flex;flex-direction:column;gap:2px}
+        .pkg-name{font-size:var(--font-sm);font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .pkg-new{
+            display:inline-block;font-size:9px;font-weight:700;color:var(--on-brand);
+            background:var(--brand);padding:1px 5px;border-radius:2px;margin-left:6px;
+            text-transform:uppercase;letter-spacing:0.04em;vertical-align:middle;
+        }
+        .pkg-meta{font-size:var(--font-xs);color:var(--text-muted)}
+        .pkg-download{
+            flex-shrink:0;font-size:var(--font-sm);font-weight:600;color:var(--brand);
+            text-decoration:none;padding:4px 8px;border-radius:var(--radius-sm);
+            transition:background var(--transition);cursor:pointer;white-space:nowrap;
+        }
+        .pkg-download:hover{background:var(--surface-hover)}
+        .pkg-empty{display:flex;align-items:center;justify-content:center;flex:1;color:var(--text-muted);font-size:var(--font-sm)}
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media(max-width:768px){
+            .app-main{flex-direction:column}
+            .packages{width:100%;flex:none;max-height:200px}
+            .workspace{padding:var(--spacing-md)}
+        }
+        @media(prefers-reduced-motion:reduce){
+            *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}
         }
     </style>
 </head>
+<body data-mode="v6">
+<div class="app-shell">
 
-<body>
-    <div class="container">
-        <h1>DeepFlow 升级包构建工具</h1>
-        <div class="card">
-            <div class="row">
-                <!-- 左侧：现有版本选择表单 -->
-                <div class="col-md-6 pe-md-4">
-                    <h3 class="section-title">
-                        <i class="fas fa-cogs"></i> 构建新升级包
-                    </h3>
-                    <p class="section-desc">选择当前使用的版本和目标升级版本，系统将自动生成差异升级包</p>
-                    <form id="buildForm">
-                        <div class="row mb-4">
-                            <div class="col-md-12">
-                                <label class="form-label">当前Patch版本</label>
-                                <select class="form-select" id="currentVersion" required>
-                                    <option value="">加载中...</option>
-                                </select>
-                            </div>
-                            <div class="col-md-12 mt-3">
-                                <label class="form-label">目标Patch版本</label>
-                                <select class="form-select" id="targetVersion" required disabled>
-                                    <option value="">请先选择当前版本
-                                </select>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 py-3 fs-5" disabled>
-                            <i class="fas fa-play"></i> 开始构建
-                        </button>
-                    </form>
-                </div>
-
-                <!-- 右侧：新增的已有文件列表表单 -->
-                <div class="col-md-6 ps-md-4">
-                    <h3 class="section-title">
-                        <i class="fas fa-box-archive"></i> 已有升级包
-                    </h3>
-                    <p class="section-desc">可直接下载以下已生成的升级包，避免重复构建，节省时间和资源</p>
-                    <div class="existing-files-container" id="existingFilesContainer">
-                        <div class="text-center text-white" id="filesLoading">
-                            <span class="loading-spinner"></span> 加载中...
-                        </div>
-                        <div id="noFilesMessage"
-                            style="display: none; text-align: center; color: var(--text-secondary);">
-                            暂无已生成的升级包
-                        </div>
-                        <div id="filesList" style="display: none;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 构建进度与日志区域（默认隐藏） -->
-            <div id="progressSection" class="mt-4" style="display: none;">
-                <!-- 进度条 -->
-                <div class="progress">
-                    <div id="progressBar" class="progress-bar bg-primary progress-bar-striped progress-bar-animated"
-                        role="progressbar" style="width: 0%" aria-valuenow="0">0%</div>
-                </div>
-                <!-- 日志容器 -->
-                <div class="log-container mt-3" id="logOutput"></div>
-                <!-- 下载区域（默认隐藏） -->
-                <div id="downloadSection" class="text-center mt-4" style="display: none;">
-                    <a id="downloadLink" class="btn btn-success py-3 px-6 fs-5" target="_blank">
-                        <i class="fas fa-download"></i> 下载升级包
-                    </a>
-                </div>
-            </div>
+    <!-- HEADER -->
+    <header class="app-header">
+        <div class="header-title"><span>DeepFlow</span> 升级包构建</div>
+        <div class="mode-toggle" id="modeToggle" role="switch" aria-checked="false" aria-label="切换 V6 / V7 模式">
+            <span class="active" data-mode="v6">V6 Patch</span>
+            <span data-mode="v7">V7 Image</span>
         </div>
-    </div>
+    </header>
 
-    <!-- 使用教程按钮 -->
-    <button type="button" class="tutorial-btn" data-bs-toggle="modal" data-bs-target="#tutorialModal">
-        <i class="fas fa-question"></i>
-    </button>
+    <!-- MAIN -->
+    <div class="app-main">
+        <main class="workspace">
 
-    <!-- 使用教程模态框 -->
-    <div class="modal fade" id="tutorialModal" tabindex="-1" aria-labelledby="tutorialModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="tutorialModalLabel">DeepFlow 升级包构建工具使用教程</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <!-- V6 Panel -->
+            <div id="v6Workspace" class="workspace-panel active">
+                <div>
+                    <div class="workspace-title">Patch 升级</div>
+                    <div class="workspace-desc">选择当前版本与目标版本，自动计算差异镜像并打包。</div>
                 </div>
-                <div class="modal-body">
-                    <div class="tutorial-step">
-                        <h5><i class="fas fa-search"></i> 1. 查看已有升级包</h5>
-                        <p>页面右侧会显示所有已生成的升级包，文件名格式为"当前版本_to_目标版本.tar.gz"。如果已有您需要的升级包，可以直接点击右侧的"下载"按钮获取，无需重复构建。</p>
+                <form id="buildForm" class="form-card">
+                    <div class="form-body">
+                        <div class="form-row">
+                            <label class="form-label" for="currentVersion">当前 Patch 版本</label>
+                            <select class="form-select" id="currentVersion" required>
+                                <option value="">加载中...</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label class="form-label" for="targetVersion">目标 Patch 版本</label>
+                            <select class="form-select" id="targetVersion" required disabled>
+                                <option value="">请先选择当前版本</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="tutorial-step">
-                        <h5><i class="fas fa-wrench"></i> 2. 构建新升级包</h5>
-                        <p>如果没有您需要的升级包，请在左侧表单进行以下操作：</p>
-                        <ul>
-                            <li>从"当前Patch版本"下拉框选择您当前使用的版本</li>
-                            <li>从"目标Patch版本"下拉框选择您要升级到的版本（仅显示更新的版本）</li>
-                            <li>点击"开始构建"按钮启动构建流程</li>
-                        </ul>
-                    </div>
-                    <div class="tutorial-step">
-                        <h5><i class="fas fa-spinner"></i> 3. 查看构建进度</h5>
-                        <p>构建过程中，进度条会显示当前进度，下方日志区域会实时展示构建详情。构建完成后，会显示下载按钮，点击即可获取升级包。</p>
-                    </div>
-                    <div class="tutorial-step">
-                        <h5><i class="fas fa-exclamation-circle"></i> 4. 注意事项</h5>
-                        <ul>
-                            <li>构建过程中请勿关闭或刷新页面</li>
-                            <li>构建生成包会存在90秒,请及时点击【下载升级包】下载,90秒后可在【已有升级包】区域下载</li>
-                            <li>升级包生成后会保存在服务器，您可以在"已有升级包"区域再次下载</li>
-                            <li>如果构建失败，请查看日志信息排查问题后重试</li>
-                        </ul>
-                    </div>
+                    <button type="submit" class="btn-build" id="v6BuildBtn" disabled>
+                        <i class="fas fa-play"></i> 开始构建
+                    </button>
+                </form>
+            </div>
+
+            <!-- V7 Panel -->
+            <div id="v7Workspace" class="workspace-panel">
+                <div>
+                    <div class="workspace-title">镜像清单</div>
+                    <div class="workspace-desc">手动输入镜像名称与标签，每行一条或逗号分隔。</div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-check"></i> 我知道了
+                <div class="form-card">
+                    <div class="form-body">
+                        <div class="form-row">
+                            <label class="form-label" for="v7ImageList">镜像列表</label>
+                            <textarea class="form-control" id="v7ImageList" aria-required="true"
+                                placeholder="deepflow-server:v6.6.5550&#10;deepflow-agent:v6.6.5617&#10;pcap:v6.6.220"></textarea>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-build" id="v7BuildBtn" disabled>
+                        <i class="fas fa-play"></i> 开始构建
                     </button>
                 </div>
             </div>
-        </div>
+
+            <!-- BUILD CARD (shared) -->
+            <div class="build-card" id="buildCard">
+                <div class="build-idle">
+                    <i class="fas fa-chart-line"></i>
+                    <span>暂无构建任务</span>
+                </div>
+                <div class="build-running">
+                    <div class="progress-wrap">
+                        <div class="progress-fill" id="progressBar" style="width:0%;"></div>
+                    </div>
+                    <div class="build-status-row">
+                        <span class="build-status-text">
+                            <span id="taskStateText">等待中</span>
+                            &nbsp;·&nbsp;
+                            <span id="taskMessageText"></span>
+                        </span>
+                        <div class="build-actions">
+                            <button class="btn-sm" id="btnToggleLog">展开日志</button>
+                        </div>
+                    </div>
+                    <div class="build-log" id="buildLog"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- PACKAGES -->
+        <aside class="packages">
+            <div class="packages-title">已有升级包 <span class="packages-count" id="filesSummary">加载中...</span></div>
+            <input type="text" class="packages-search" id="fileSearchInput" placeholder="搜索..." aria-label="搜索已有升级包">
+            <div class="packages-list" id="existingFilesContainer">
+                <div class="pkg-empty" id="filesLoading"><span class="spinner"></span>&nbsp;加载中...</div>
+                <div class="pkg-empty" id="noFilesMessage" style="display:none;">暂无已生成的升级包</div>
+                <div id="filesList"></div>
+            </div>
+        </aside>
     </div>
+</div>
 
-    <!-- 引入Bootstrap JS -->
-    <script src="static/bootstrap.bundle.min.js"></script>
-    <script>
-        let versionData = [];  // 存储从后端获取的版本列表
-        let eventSource = null;  // SSE连接对象
+<script src="static/bootstrap.bundle.min.js"></script>
+<script>
+/* ================================================================
+   STATE
+   ================================================================ */
+let versionData=[],eventSource=null,currentSeries='v6',isBuilding=false;
+let lastLogMessage='',existingFilesData=[],logExpanded=false;
 
-        // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchVersions();  // 获取版本列表
-            fetchExistingFiles();  // 获取已有升级包列表
-            initEventListeners();  // 绑定事件监听
-        });
+/* ================================================================
+   UTILS
+   ================================================================ */
+function beforeUnloadHandler(e){e.preventDefault();e.returnValue='构建任务正在进行中，离开页面将丢失进度。';return e.returnValue}
+function debounce(fn,d){let t=null;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),d)}}
 
-        /**
-         * 从后端获取版本列表
-         */
-        async function fetchVersions() {
-            const currentSelect = document.getElementById('currentVersion');
-            currentSelect.innerHTML = '<option value=""><span class="loading-spinner"></span> 加载中...</option>';
+/* ================================================================
+   INIT
+   ================================================================ */
+document.addEventListener('DOMContentLoaded',()=>{initEventListeners();setMode(currentSeries);fetchVersions(currentSeries);fetchExistingFiles()});
 
-            try {
-                const res = await fetch('/versions');
-                const data = await res.json();
+/* ================================================================
+   MODE
+   ================================================================ */
+function setMode(m){
+    currentSeries=m;document.body.dataset.mode=m;
+    document.getElementById('v6Workspace').classList.toggle('active',m==='v6');
+    document.getElementById('v7Workspace').classList.toggle('active',m==='v7');
+    document.querySelectorAll('.mode-toggle span').forEach(s=>s.classList.toggle('active',s.dataset.mode===m));
+    document.querySelector('.mode-toggle').setAttribute('aria-checked',m==='v7');
+    if(!isBuilding)checkBuildBtnStatus();
+}
+function handleModeToggle(e){
+    const s=e.target.closest('span[data-mode]');if(!s||s.dataset.mode===currentSeries)return;
+    const m=s.dataset.mode;setMode(m);if(m==='v6'&&versionData.length===0)fetchVersions('v6');
+}
 
-                if (data.success && data.versions) {
-                    versionData = data.versions;
-                    renderVersionOptions();  // 渲染版本下拉框
-                } else {
-                    showAlert('获取版本失败', data.message || '未知错误', 'error');
-                    currentSelect.innerHTML = '<option value="">加载失败</option>';
-                }
-            } catch (err) {
-                showAlert('网络错误', `获取版本失败：${err.message}`, 'error');
-                currentSelect.innerHTML = '<option value="">网络异常</option>';
-            }
+/* ================================================================
+   VERSIONS
+   ================================================================ */
+async function fetchVersions(series){
+    if(series!=='v6'){if(versionData.length>0)return;renderVersionOptions(true);return}
+    document.getElementById('currentVersion').innerHTML='<option value="">加载中...</option>';
+    try{
+        const r=await fetch(`/versions?series=${encodeURIComponent(series)}`);
+        if(currentSeries!==series)return;
+        const d=await r.json();
+        if(d.success&&d.versions){versionData=d.versions;renderVersionOptions()}
+        else{versionData=[];renderVersionOptions(true)}
+    }catch(e){if(currentSeries!==series)return;versionData=[];renderVersionOptions(true)}
+}
+function renderVersionOptions(isError){
+    const c=document.getElementById('currentVersion'),t=document.getElementById('targetVersion');
+    c.innerHTML='<option value="">请选择当前版本</option>';
+    t.innerHTML='<option value="">请选择目标版本</option>';t.disabled=true;
+    if(isError)return;
+    versionData.forEach(v=>{const o=document.createElement('option');o.value=v.value;o.textContent=v.display;o.dataset.date=v.date;c.appendChild(o)})
+}
+function updateTargetVersionOptions(){
+    const c=document.getElementById('currentVersion'),o=c.selectedOptions[0],t=document.getElementById('targetVersion');
+    t.innerHTML='<option value="">请选择目标版本</option>';t.disabled=true;
+    if(!o)return;
+    const m=o.textContent.match(/^(\d+)-/);if(!m)return;
+    const cs=parseInt(m[1],10);
+    const vt=versionData.filter(v=>{const s=(v.display.match(/^(\d+)-/)||[0,0])[1];return parseInt(s,10)>cs});
+    if(vt.length===0){t.innerHTML='<option value="">暂无更新版本</option>'}
+    else{vt.forEach(v=>{const p=document.createElement('option');p.value=v.value;p.textContent=v.display;t.appendChild(p)});t.disabled=false}
+    checkBuildBtnStatus();
+}
+
+/* ================================================================
+   BUILD BUTTON
+   ================================================================ */
+function checkBuildBtnStatus(){
+    const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn');
+    if(isBuilding){b6.disabled=true;b7.disabled=true;return}
+    if(currentSeries==='v7'){b6.disabled=true;b7.disabled=document.getElementById('v7ImageList').value.trim().length===0}
+    else{b7.disabled=true;b6.disabled=!(document.getElementById('currentVersion').value&&document.getElementById('targetVersion').value)}
+}
+
+/* ================================================================
+   BUILD PROCESS
+   ================================================================ */
+function startBuildProcess(e){
+    if(e)e.preventDefault();if(isBuilding)return;
+    const cv=document.getElementById('currentVersion').value,tv=document.getElementById('targetVersion').value;
+    const vi=document.getElementById('v7ImageList').value;
+    const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn');
+    const ab=currentSeries==='v7'?b7:b6;
+    const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
+
+    isBuilding=true;window.addEventListener('beforeunload',beforeUnloadHandler);
+    ab.disabled=true;
+    ab.innerHTML='<span class="spinner"></span> 构建中...';
+    bc.classList.add('active');bl.classList.remove('expanded');bl.innerHTML='';
+    lastLogMessage='';logExpanded=false;
+    document.getElementById('taskStateText').textContent='排队中';
+    document.getElementById('taskMessageText').textContent='';
+    document.getElementById('btnToggleLog').textContent='展开日志';
+    updateProgressBar(0,'');checkBuildBtnStatus();
+    if(eventSource){eventSource.close();eventSource=null}
+
+    let sseUrl,sseRetries=0;const maxRetries=3;
+    if(currentSeries==='v7'){
+        const im=normalizeV7Images(vi);if(im.length===0){resetBuildState();return}
+        fetch('/build',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:'v7',images:im})})
+            .then(r=>r.json()).then(d=>{if(d.success&&d.task_id){sseUrl=`/build?task_id=${encodeURIComponent(d.task_id)}`;connectSSE()}else resetBuildState()})
+            .catch(()=>resetBuildState());
+        return;
+    }else{sseUrl=`/build?series=v6&current=${encodeURIComponent(cv)}&target=${encodeURIComponent(tv)}`}
+    function connectSSE(){
+        eventSource=new EventSource(sseUrl);
+        eventSource.onmessage=function(ev){sseRetries=0;try{handleBuildStatus(JSON.parse(ev.data))}catch(e){}}
+        eventSource.onerror=function(){
+            if(eventSource){eventSource.close();eventSource=null}
+            if(sseRetries<maxRetries&&isBuilding){sseRetries++;setTimeout(connectSSE,Math.min(1e3*Math.pow(2,sseRetries),8e3))}
+            else if(isBuilding)resetBuildState();
         }
+    }
+    connectSSE();
+}
+function resetBuildState(){
+    const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn'),bc=document.getElementById('buildCard');
+    b6.innerHTML='<i class="fas fa-play"></i> 开始构建';b7.innerHTML='<i class="fas fa-play"></i> 开始构建';
+    isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
+    lastLogMessage='';if(eventSource){eventSource.close();eventSource=null}
+    bc.classList.remove('active');checkBuildBtnStatus();
+}
+let newPackageName='';
+function handleBuildStatus(d){
+    const st=document.getElementById('taskStateText');
+    const mt=document.getElementById('taskMessageText'),logs=Array.isArray(d.logs)?d.logs:[];
+    if(logs.length>0){const l=logs[logs.length-1];if(l&&l.content)addLog(l.content,mapLogLevel(l.level))}
+    else if(d.message)addLog(d.message,mapStatusToLogType(d.status));
+    switch(d.status){
+        case'queued':st.textContent='排队中';updateProgressBar(d.percent||0,'');mt.textContent=d.message||'';break;
+        case'progress':st.textContent='构建中';updateProgressBar(d.percent,d.message);mt.textContent=d.message||'';break;
+        case'complete':
+            st.textContent='已完成';updateProgressBar(100,'success');mt.textContent='升级包已加入右侧列表';
+            newPackageName=d.package_name||'';
+            isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
+            if(eventSource){eventSource.close();eventSource=null}
+            {let b6=document.getElementById('v6BuildBtn');let b7=document.getElementById('v7BuildBtn');
+            b6.innerHTML='<i class="fas fa-play"></i> 开始构建';b7.innerHTML='<i class="fas fa-play"></i> 开始构建';}
+            fetchExistingFiles();checkBuildBtnStatus();
+            break;
+        case'error':st.textContent='失败';updateProgressBar(0,'error');mt.textContent=d.message||'';resetBuildState();break;
+    }
+}
 
-        /**
-         * 从后端获取已有升级包列表
-         */
-        async function fetchExistingFiles() {
-            const filesLoading = document.getElementById('filesLoading');
-            const noFilesMessage = document.getElementById('noFilesMessage');
-            const filesList = document.getElementById('filesList');
+/* ================================================================
+   PROGRESS & LOG
+   ================================================================ */
+function updateProgressBar(pct,modifier){
+    const b=document.getElementById('progressBar');const p=Math.max(0,Math.min(100,pct||0));
+    b.style.width=p+'%';b.classList.remove('error','success');
+    if(modifier==='error')b.classList.add('error');if(modifier==='success')b.classList.add('success');
+}
+function addLog(msg,type){
+    const c=sanitizeLogMessage(msg);if(!c||c===lastLogMessage)return;lastLogMessage=c;
+    const el=document.getElementById('buildLog'),d=document.createElement('div');d.className='log-entry';
+    const ts=new Date().toTimeString().slice(0,8);
+    const cls=type==='error'?'log-error':type==='success'?'log-success':'log-info';
+    d.innerHTML=`<span class="log-time">[${ts}]</span> <span class="${cls}">${c}</span>`;
+    el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+function sanitizeLogMessage(m){if(!m)return'';return String(m).replace(/\s*\(\s*\d{1,3}%\s*\)\s*$/,'').trim()}
+function mapStatusToLogType(s){return s==='complete'?'success':s==='error'?'error':'info'}
+function mapLogLevel(l){return l==='ERROR'?'error':l==='WARNING'?'info':'info'}
 
-            try {
-                const res = await fetch('/existing-packages');
-                const data = await res.json();
+/* ================================================================
+   PACKAGES
+   ================================================================ */
+async function fetchExistingFiles(){
+    const fl=document.getElementById('filesLoading'),nf=document.getElementById('noFilesMessage'),fs=document.getElementById('filesList');
+    fl.style.display='flex';nf.style.display='none';fs.innerHTML='';
+    try{
+        const r=await fetch('/existing-packages'),d=await r.json();fl.style.display='none';
+        if(d.success&&d.files&&d.files.length>0){existingFilesData=d.files;renderExistingFiles(d.files);updateFilesSummary(d.files.length)}
+        else{existingFilesData=[];nf.style.display='flex';updateFilesSummary(0)}
+    }catch(e){fl.style.display='none';existingFilesData=[];nf.style.display='flex';updateFilesSummary(0)}
+}
+function renderExistingFiles(files){
+    const fl=document.getElementById('filesList'),nf=document.getElementById('noFilesMessage');
+    if(!files||files.length===0){nf.style.display='flex';fl.innerHTML='';return}
+    nf.style.display='none';
+    fl.innerHTML=files.map((f,i)=>{
+        const m=f.name.match(/deepflow_patch_v(\d+)_(.+)_(.+)\.tar\.gz/);
+        const d=m?m[2]+' → '+m[3].replace(/_/g,'-'):f.name.replace('deepflow_patch_','').replace('.tar.gz','');
+        const mb=(f.size/1048576).toFixed(1);
+        const badge=(i===0&&newPackageName)?'<span class="pkg-new">NEW</span>':'';
+        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${f.name}">${d}${badge}</div><div class="pkg-meta">${mb} MB</div></div><a class="pkg-download" href="/download-existing/${encodeURIComponent(f.name)}" data-filename="${f.name}" onclick="return checkExistingFileDownload(event,this)"><i class="fas fa-download"></i> 下载</a></div>`;
+    }).join('');
+}
+function updateFilesSummary(n){document.getElementById('filesSummary').textContent=n+' 个包'}
+function filterExistingFiles(){
+    const q=document.getElementById('fileSearchInput').value.toLowerCase();
+    renderExistingFiles(q?existingFilesData.filter(f=>f.name.toLowerCase().includes(q)):existingFilesData);
+}
+async function checkExistingFileDownload(e,el){try{const r=await fetch(el.href,{method:'HEAD'});if(!r.ok){e.preventDefault();fetchExistingFiles()}return true}catch(err){e.preventDefault();return false}}
+function normalizeV7Images(raw){return raw.split(/[,，;\n\r]+/).map(s=>s.trim()).filter(Boolean)}
 
-                filesLoading.style.display = 'none';
-
-                if (data.success && data.files && data.files.length > 0) {
-                    // 有文件，渲染列表
-                    filesList.style.display = 'block';
-                    noFilesMessage.style.display = 'none';
-
-                    // 清空现有列表
-                    filesList.innerHTML = '';
-
-                    // 遍历文件列表，创建条目
-                    data.files.forEach(file => {
-                        const fileItem = document.createElement('div');
-                        fileItem.className = 'file-item';
-
-                        // 提取版本信息用于显示
-                        const versionMatch = file.name.match(/(.*)_to_(.*)\.tar\.gz/);
-                        let displayText = file.name;
-                        if (versionMatch && versionMatch.length >= 3) {
-                            displayText = `${versionMatch[1]} → ${versionMatch[2]}`;
-                        }
-
-                        // 格式化文件大小（MB）
-                        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-
-                        fileItem.innerHTML = `
-                            <div class="file-name" title="${file.name}">
-                                <i class="fas fa-file-archive"></i>
-                                ${displayText}
-                                <span class="file-size">(${fileSizeMB} MB)</span>
-                            </div>
-                            <a href="/download-existing/${encodeURIComponent(file.name)}" 
-                               class="btn btn-sm btn-outline-light download-existing-btn"
-                               data-filename="${file.name}">
-                                <i class="fas fa-download"></i> 下载
-                            </a>
-                        `;
-                        filesList.appendChild(fileItem);
-                    });
-
-                    // 为新增的下载按钮绑定事件
-                    document.querySelectorAll('.download-existing-btn').forEach(btn => {
-                        btn.addEventListener('click', checkExistingFileDownload);
-                    });
-                } else {
-                    // 无文件
-                    filesList.style.display = 'none';
-                    noFilesMessage.style.display = 'block';
-                }
-            } catch (err) {
-                filesLoading.style.display = 'none';
-                filesList.style.display = 'none';
-                noFilesMessage.style.display = 'block';
-                noFilesMessage.innerHTML = `加载失败：${err.message}`;
-                console.error('获取已有文件列表失败:', err);
-            }
-        }
-
-        /**
-         * 渲染版本下拉框选项（关键：不做二次排序，直接用后端返回顺序）
-         */
-        function renderVersionOptions() {
-            const currentSelect = document.getElementById('currentVersion');
-            const targetSelect = document.getElementById('targetVersion');
-            const buildBtn = document.querySelector('button[type="submit"]');
-
-            // 重置下拉框
-            currentSelect.innerHTML = '<option value="">请选择当前版本</option>';
-            targetSelect.innerHTML = '<option value="">请选择目标版本</option>';
-            targetSelect.disabled = true;
-            buildBtn.disabled = true;
-
-            // 直接使用后端返回的列表（已按序号排序），不做任何排序
-            versionData.forEach(ver => {
-                const opt = document.createElement('option');
-                opt.value = ver.value;
-                opt.textContent = ver.display;
-                opt.dataset.date = ver.date;  // 保留日期数据（仅用于后续筛选目标版本）
-                currentSelect.appendChild(opt);
-            });
-        }
-
-
-        /**
-         * 初始化所有事件监听
-         */
-        function initEventListeners() {
-            // 当前版本选择变化：更新目标版本可选范围
-            document.getElementById('currentVersion').addEventListener('change', updateTargetVersionOptions);
-            // 目标版本选择变化：检查构建按钮是否可启用
-            document.getElementById('targetVersion').addEventListener('change', checkBuildBtnStatus);
-            // 构建表单提交：触发构建流程
-            document.getElementById('buildForm').addEventListener('submit', startBuildProcess);
-            // 下载链接点击：校验文件是否存在
-            document.getElementById('downloadLink').addEventListener('click', checkDownloadFile);
-        }
-
-        /**
-         * 根据当前版本更新目标版本可选范围（按序号筛选，仅保留序号高于当前版本的目标版本）
-         */
-        function updateTargetVersionOptions() {
-            const currentSelect = document.getElementById('currentVersion');
-            const currentOpt = currentSelect.selectedOptions[0];
-            const targetSelect = document.getElementById('targetVersion');
-            targetSelect.innerHTML = '<option value="">请选择目标版本</option>';
-            targetSelect.disabled = true;
-
-            if (!currentOpt) return;
-
-            // 从当前选中版本的display文本中提取序号
-            const currentDisplay = currentOpt.textContent;
-            // const currentSeqMatch = currentDisplay.match(/^(\d{2})-/);
-            const currentSeqMatch = currentDisplay.match(/^(\d+)-/);
-            if (!currentSeqMatch) {
-                // 如果无法提取序号，保持禁用状态
-                return;
-            }
-            const currentSeq = parseInt(currentSeqMatch[1], 10);
-
-            // 筛选：仅保留序号高于当前版本的目标版本，沿用后端返回的顺序
-            const validTargets = versionData.filter(ver => {
-                // 从版本数据中提取序号
-                // const seqMatch = ver.display.match(/^(\d{2})-/);
-                const seqMatch = ver.display.match(/^(\d+)-/);
-                if (!seqMatch) return false;
-                const verSeq = parseInt(seqMatch[1], 10);
-                return verSeq > currentSeq;
-            });
-
-            if (validTargets.length === 0) {
-                targetSelect.innerHTML = '<option value="">暂无更新版本</option>';
-            } else {
-                // 直接渲染筛选后的列表（顺序与后端返回一致）
-                validTargets.forEach(ver => {
-                    const opt = document.createElement('option');
-                    opt.value = ver.value;
-                    opt.textContent = ver.display;
-                    opt.dataset.seq = ver.seq_num; // 存储序号用于可能的后续处理
-                    opt.dataset.date = ver.date;    // 仍保留日期数据
-                    targetSelect.appendChild(opt);
-                });
-                targetSelect.disabled = false;
-            }
-
-            checkBuildBtnStatus();
-        }
-
-        /**
-         * 检查构建按钮是否可启用（需同时选择当前和目标版本）
-         */
-        function checkBuildBtnStatus() {
-            const currentVal = document.getElementById('currentVersion').value;
-            const targetVal = document.getElementById('targetVersion').value;
-            const buildBtn = document.querySelector('button[type="submit"]');
-            buildBtn.disabled = !(currentVal && targetVal);
-        }
-
-        /**
-         * 启动构建流程（建立SSE连接，接收实时进度）
-         */
-        function startBuildProcess(e) {
-            e.preventDefault();  // 阻止表单默认提交
-
-            const currentVersion = document.getElementById('currentVersion').value;
-            const targetVersion = document.getElementById('targetVersion').value;
-            const buildBtn = document.querySelector('button[type="submit"]');
-            const progressSection = document.getElementById('progressSection');
-            const logOutput = document.getElementById('logOutput');
-            const downloadSection = document.getElementById('downloadSection');
-
-            // 初始化UI状态
-            buildBtn.disabled = true;
-            buildBtn.innerHTML = '<span class="loading-spinner"></span> 构建中...';
-            progressSection.style.display = 'block';
-            logOutput.innerHTML = '';
-            downloadSection.style.display = 'none';
-            updateProgressBar(0, '构建任务已启动，等待后端响应...');
-
-            // 关闭之前的SSE连接（避免重复连接）
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-            }
-
-            // 建立SSE连接，监听构建进度
-            eventSource = new EventSource(`/build?current=${encodeURIComponent(currentVersion)}&target=${encodeURIComponent(targetVersion)}`);
-
-            // 接收后端发送的状态消息
-            eventSource.onmessage = function (event) {
-                try {
-                    const statusData = JSON.parse(event.data);
-                    handleBuildStatus(statusData);  // 处理构建状态
-                } catch (err) {
-                    addLog(`消息解析失败：${err.message}`, 'error');
-                }
-            };
-
-            // SSE连接异常处理
-            eventSource.onerror = function (err) {
-                addLog(`SSE连接异常：${err.type}`, 'error');
-                resetBuildState();  // 重置构建状态
-            };
-        }
-
-        /**
-         * 处理后端返回的构建状态
-         */
-        function handleBuildStatus(statusData) {
-            const buildBtn = document.querySelector('button[type="submit"]');
-            const downloadLink = document.getElementById('downloadLink');
-            const downloadSection = document.getElementById('downloadSection');
-
-            switch (statusData.status) {
-                case 'progress':
-                    // 进度更新
-                    updateProgressBar(statusData.percent, statusData.message);
-                    addLog(statusData.message, 'info');
-                    break;
-                case 'complete':
-                    // 构建完成
-                    updateProgressBar(100, statusData.message);
-                    addLog(statusData.message, 'success');
-                    // 显示下载链接
-                    downloadLink.href = statusData.download_url;
-                    downloadSection.style.display = 'block';
-                    // 重置按钮状态
-                    buildBtn.disabled = false;
-                    buildBtn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
-                    // 关闭SSE连接
-                    if (eventSource) {
-                        eventSource.close();
-                        eventSource = null;
-                    }
-                    // 构建完成后刷新已有文件列表
-                    fetchExistingFiles();
-                    break;
-                case 'error':
-                    // 构建失败
-                    updateProgressBar(0, statusData.message);
-                    addLog(statusData.message, 'error');
-                    resetBuildState();  // 重置状态
-                    break;
-                default:
-                    addLog(`未知状态：${statusData.status}`, 'info');
-            }
-        }
-
-        /**
-         * 更新进度条
-         */
-        function updateProgressBar(percent, message) {
-            const progressBar = document.getElementById('progressBar');
-            const safePercent = Math.max(0, Math.min(100, percent));  // 确保进度在0-100之间
-
-            // 更新进度条样式和文本
-            progressBar.style.width = `${safePercent}%`;
-            progressBar.textContent = `${safePercent}%`;
-            progressBar.setAttribute('aria-valuenow', safePercent);
-
-            // 根据状态切换进度条颜色
-            if (message.includes('失败')) {
-                progressBar.className = 'progress-bar bg-danger progress-bar-striped';
-            } else if (safePercent === 100) {
-                progressBar.className = 'progress-bar bg-success progress-bar-striped';
-            } else {
-                progressBar.className = 'progress-bar bg-primary progress-bar-striped progress-bar-animated';
-            }
-        }
-
-        /**
-         * 添加日志到日志容器
-         */
-        function addLog(message, type = 'info') {
-            const logOutput = document.getElementById('logOutput');
-            const logDiv = document.createElement('div');
-            logDiv.className = 'log-entry';
-            const timeStamp = new Date().toTimeString().slice(0, 8);  // 提取时分秒
-
-            // 根据日志类型设置样式
-            if (type === 'error') {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-error">❌ ${message}</span>`;
-            } else if (type === 'success') {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-success">✅ ${message}</span>`;
-            } else {
-                logDiv.innerHTML = `<span class="log-time">[${timeStamp}]</span> <span class="log-info">ℹ️ ${message}</span>`;
-            }
-
-            logOutput.appendChild(logDiv);
-            // 滚动到最新日志
-            logOutput.scrollTop = logOutput.scrollHeight;
-        }
-
-        /**
-         * 重置构建状态（失败或异常时）
-         */
-        function resetBuildState() {
-            const buildBtn = document.querySelector('button[type="submit"]');
-            buildBtn.disabled = false;
-            buildBtn.innerHTML = '<i class="fas fa-play"></i> 开始构建';
-            // 关闭SSE连接
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-            }
-        }
-
-        /**
-         * 校验下载文件是否存在（避免无效下载）
-         */
-        async function checkDownloadFile(e) {
-            const downloadLink = this;
-            const downloadUrl = downloadLink.href;
-
-            // 临时禁用下载按钮，显示加载状态
-            downloadLink.classList.add('disabled');
-            downloadLink.innerHTML = '<span class="loading-spinner"></span> 校验中...';
-
-            try {
-                // 发送HEAD请求校验文件（不下载完整文件）
-                const res = await fetch(downloadUrl, { method: 'HEAD' });
-                if (res.ok) {
-                    // 文件存在，恢复按钮状态
-                    downloadLink.classList.remove('disabled');
-                    downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
-                } else {
-                    // 文件不存在，阻止下载
-                    e.preventDefault();
-                    downloadLink.classList.remove('disabled');
-                    downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
-                    showAlert('下载失败', `文件不存在或已过期（状态码：${res.status}）`, 'error');
-                }
-            } catch (err) {
-                // 网络错误，阻止下载
-                e.preventDefault();
-                downloadLink.classList.remove('disabled');
-                downloadLink.innerHTML = '<i class="fas fa-download"></i> 下载升级包';
-                showAlert('网络错误', `校验文件失败：${err.message}`, 'error');
-            }
-        }
-
-        /**
-         * 校验已有文件下载
-         */
-        async function checkExistingFileDownload(e) {
-            const downloadBtn = this;
-            const filename = downloadBtn.dataset.filename;
-            const downloadUrl = downloadBtn.href;
-
-            // 临时禁用下载按钮，显示加载状态
-            downloadBtn.classList.add('disabled');
-            downloadBtn.innerHTML = '<span class="loading-spinner"></span> 校验中...';
-
-            try {
-                // 发送HEAD请求校验文件（不下载完整文件）
-                const res = await fetch(downloadUrl, { method: 'HEAD' });
-                if (res.ok) {
-                    // 文件存在，恢复按钮状态
-                    downloadBtn.classList.remove('disabled');
-                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
-                } else {
-                    // 文件不存在，阻止下载
-                    e.preventDefault();
-                    downloadBtn.classList.remove('disabled');
-                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
-                    showAlert('下载失败', `文件 "${filename}" 不存在或已被删除`, 'error');
-                    // 刷新文件列表
-                    fetchExistingFiles();
-                }
-            } catch (err) {
-                // 网络错误，阻止下载
-                e.preventDefault();
-                downloadBtn.classList.remove('disabled');
-                downloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载';
-                showAlert('网络错误', `校验文件失败：${err.message}`, 'error');
-            }
-        }
-
-        /**
-         * 显示提示框（成功/错误）
-         */
-        function showAlert(title, message, type = 'info') {
-            // 创建提示框元素
-            const alertDiv = document.createElement('div');
-            const alertClass = type === 'error' ? 'alert-danger' : 'alert-info';
-            alertDiv.className = `alert ${alertClass} alert-dismissible fade`;
-            alertDiv.role = 'alert';
-
-            // 根据类型设置图标
-            const icon = type === 'error' ? 'exclamation-circle' : 'info-circle';
-
-            alertDiv.innerHTML = `
-                <h5 class="alert-heading"><i class="fas fa-${icon}"></i> ${title}</h5>
-                <p>${message}</p>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            `;
-
-            // 添加到页面并显示
-            document.querySelector('.container').prepend(alertDiv);
-
-            // 触发Bootstrap的显示动画
-            setTimeout(() => {
-                alertDiv.classList.add('show');
-            }, 10);
-
-            const alertInstance = new bootstrap.Alert(alertDiv);
-
-            // 5秒后自动关闭
-            setTimeout(() => {
-                alertInstance.close();
-                // 移除元素以清理DOM
-                setTimeout(() => {
-                    alertDiv.remove();
-                }, 300);
-            }, 5000);
-        }
-    </script>
+/* ================================================================
+   LISTENERS
+   ================================================================ */
+function initEventListeners(){
+    document.getElementById('modeToggle').addEventListener('click',handleModeToggle);
+    document.getElementById('currentVersion').addEventListener('change',updateTargetVersionOptions);
+    document.getElementById('targetVersion').addEventListener('change',checkBuildBtnStatus);
+    document.getElementById('v7ImageList').addEventListener('input',checkBuildBtnStatus);
+    document.getElementById('buildForm').addEventListener('submit',startBuildProcess);
+    document.getElementById('v7BuildBtn').addEventListener('click',startBuildProcess);
+    document.getElementById('fileSearchInput').addEventListener('input',debounce(filterExistingFiles,200));
+    document.getElementById('btnToggleLog').addEventListener('click',function(){
+        logExpanded=!logExpanded;
+        document.getElementById('buildLog').classList.toggle('expanded',logExpanded);
+        this.textContent=logExpanded?'收起日志':'展开日志';
+    });
+}
+</script>
 </body>
-
 </html>

@@ -48,7 +48,7 @@ show_help() {
     
     echo -e "${WHITE}选项说明:${NC}"
     echo -e "  ${GREEN}-h, --help     ${NC}显示此帮助信息"
-    echo -e "  ${GREEN}-c, --cmd      ${NC}指定容器工具（${BOLD}docker${NC}/${BOLD}nerdctl${NC}，默认docker）"
+    echo -e "  ${GREEN}-c, --cmd      ${NC}指定容器工具（${BOLD}docker${NC}/${BOLD}nerdctl${NC}，默认nerdctl）"
     echo -e "  ${GREEN}-d, --dir      ${NC}指定镜像保存目录（必填，例如：$BASE_DIR/image_tar）"
     echo -e "  ${GREEN}-f, --file     ${NC}指定镜像列表文件（默认：$DEFAULT_IMAGE_LIST）\n"
     
@@ -106,6 +106,10 @@ pull_and_save_single() {
     local save_file="$save_dir/${image_name}_${image_tag}.tar"
 
     # 3. 保存镜像为tar文件
+    if [ -f "$save_file" ]; then
+        log "${YELLOW}警告：$save_file 已存在（可能名称冲突），跳过${NC}"
+        return 0
+    fi
     log "${GREEN}开始保存镜像到：$save_file${NC}"
     if ! "$container_cmd" save -o "$save_file" "$full_image_name"; then
         log "${RED}错误：保存镜像失败：$full_image_name${NC}"
@@ -142,7 +146,8 @@ pull_from_file() {
         if [[ "$line" =~ _tag:[[:space:]]* ]]; then
             # 格式1：name_tag: vx.x.x → 提取为 name: vx.x.x
             image_name=$(echo "$line" | sed 's/_tag:[[:space:]]*v[0-9].*//' | xargs)
-            image_tag=$(echo "$line" | grep -oP '_tag:[[:space:]]*\Kv?[0-9.]+' | xargs)
+            # 用 sed 替代 grep -oP，兼容非 GNU 环境
+            image_tag=$(echo "$line" | sed -n 's/.*_tag:[[:space:]]*\(v\?[0-9][0-9.]*\).*/\1/p' | xargs)
         else
             # 格式2：name: vx.x.x → 直接分割
             image_name=$(echo "$line" | awk -F':' '{print $1}' | xargs)

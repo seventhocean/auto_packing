@@ -51,8 +51,10 @@ EXPOSE 8000
 # 环境变量
 ENV FLASK_APP=app.py \
     FLASK_ENV=production \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    GUNICORN_WORKERS=2 \
+    GUNICORN_THREADS=4
 
 # 启动
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["python", "app.py"]
+CMD ["sh", "-c", "exec gunicorn --workers ${GUNICORN_WORKERS:-2} --threads ${GUNICORN_THREADS:-4} --worker-class gthread --bind 0.0.0.0:8000 --timeout 0 --graceful-timeout 30 app:app"]

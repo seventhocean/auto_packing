@@ -1,21 +1,18 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 # 功能: 支持获取两个 Patch 版本的镜像版本差异
 # 要求: 当前脚本执行环境支持在 nuwa 项目目录内执行 git pull 更新项目内容
 # 启用严格错误检查（避免隐藏错误）
 set -euo pipefail
 
-# 检查传参数量
-    if [ $# -ne 2 ]; then
-        usage
-        exit 0
-    fi
-
 # 获取脚本所在目录
-CURRENT_DIRECTORY=$(cd "$(dirname "$0")" && pwd) 
-# 生成的镜像列表文件（支持通过环境变量覆盖，用于并发任务隔离）
-if [ -z "${PATCH_IMAGE_TAG_LIST_FILE:-}" ]; then
-    PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/patch_image_tag_list.txt"
-fi
+CURRENT_DIRECTORY=$(cd "$(dirname "$0")" && pwd)
+# nuwa 仓库中的大版本/小版本路径（可通过环境变量覆盖）
+NUWA_MAJOR="${NUWA_MAJOR:-6.6}"
+NUWA_MINOR="${NUWA_MINOR:-6.6.9}"
+# grep 匹配的镜像 tag 前缀（可通过环境变量覆盖）
+IMAGE_TAG_PREFIX="${IMAGE_TAG_PREFIX:-v6.6}"
+# 生成的镜像列表文件
+DEFAULT_PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/patch_image_tag_list.txt"
 # 临时回收站
 #TRASH="${CURRENT_DIRECTORY}/../.trash"
 # patch 列表（以 OSS 为准）
@@ -37,9 +34,6 @@ if [ ! -f "${OSS_PATCH_LIST}" ]; then
   touch "${OSS_PATCH_LIST}"
 fi
 
-# 获取传参传入的当前补丁版本和目标补丁版本
-CURRENT_PATCH_VERSION="$1"
-TARGET_PATCH_VERSION="$2"
 # 设置输出日志的颜色及等级
 NORMAL_COL="\033[0m"
 RED_COL="\033[1;31m"
@@ -62,12 +56,31 @@ usagelog(){ echo -e "[${timestamp}] [get_patch_image_tag_list.sh] $1 ${BLUE_COL}
 # 使用方法
 function usage() {
   debuglog  "【Usage】"
-  usagelog  "  bash $0 [当前补丁版本] [目标补丁版本]"
+  usagelog  "  bash $0 [当前补丁版本] [目标补丁版本] [输出文件路径(可选)]"
   debuglog  "【Example】"
-  usagelog  "  bash $0 01-20250430-26798-BUG 13-20250528-4661-BUG"
+  usagelog  "  bash $0 01-20250430-26798-BUG 13-20250528-4661-BUG /tmp/task_patch_image_tag_list.txt"
   debuglog  "【Tips】"
   usagelog  "  获取帮助信息: bash $0 [-h|--help]"   
 }
+
+# 检查传参数量
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+    usage
+    exit 0
+fi
+
+# 获取传参传入的当前补丁版本和目标补丁版本
+CURRENT_PATCH_VERSION="$1"
+TARGET_PATCH_VERSION="$2"
+PATCH_IMAGE_TAG_LIST_FILE="${3:-$DEFAULT_PATCH_IMAGE_TAG_LIST_FILE}"
+PATCH_IMAGE_TAG_LIST_DIR=$(dirname "${PATCH_IMAGE_TAG_LIST_FILE}")
+mkdir -p "${PATCH_IMAGE_TAG_LIST_DIR}"
+
+TMP_PATCH_IMAGE_TAG_LIST_FILE=$(mktemp "${TRASH}/patch_image_tag_list.XXXXXX")
+cleanup() {
+    rm -f "${TMP_PATCH_IMAGE_TAG_LIST_FILE}"
+}
+trap cleanup EXIT
 
 # 拉取最新项目内容
 function pull_nuwa_project() {
@@ -75,8 +88,10 @@ function pull_nuwa_project() {
     cd ${CURRENT_DIRECTORY}/../nuwa/ && git pull --ff-only>> $LOG_FILE
     if [ $? -eq 0 ];then
        infolog "https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成"
-    else   
+       return 0
+    else
        errorlog "https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取失败，请检查！！！"
+       return 1
     fi
 } 
 
@@ -123,24 +138,26 @@ function get_patch_image_tag_list() {
     for i in ${DIFF_PATCH_LIST[@]};do echo $i >> $LOG_FILE; done
     # 生成需要更新 Patch 的镜像列表集
     rm -f ${PATCH_IMAGE_TAG_LIST_FILE}
-    rm -f ${TRASH}/patch_image_tag_list.txt
-    mkdir -p ${TRASH}
     for patch in ${DIFF_PATCH_LIST[@]}; do
-        grep ":v6.6" ${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh|sed s'/ //g'  >> ${TRASH}/patch_image_tag_list.txt
+        grep ":${IMAGE_TAG_PREFIX}" ${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh|sed s'/ //g'  >> ${TMP_PATCH_IMAGE_TAG_LIST_FILE}
     done
     # 过滤需要更新的镜像列表
-    cat ${TRASH}/patch_image_tag_list.txt | sort -V | tac | awk -F: '!seen[$1]++' | tac | sed -E 's/^([^:]+):(.+)$/\1_tag: \2/' >> ${PATCH_IMAGE_TAG_LIST_FILE}
+    cat ${TMP_PATCH_IMAGE_TAG_LIST_FILE} | sort -V | tac | awk -F: '!seen[$1]++' | tac | sed -E 's/^([^:]+):(.+)$/\1_tag: \2/' >> ${PATCH_IMAGE_TAG_LIST_FILE}
 }
 
 # 主函数
 function main() {
-    pull_nuwa_project
+    pull_nuwa_project || {
+        errorlog "nuwa 仓库拉取失败，终止镜像列表生成"
+        exit 1
+    }
     infolog "开始生成镜像列表"
-    get_patch_image_tag_list 6.6 6.6.9
+    get_patch_image_tag_list "${NUWA_MAJOR}" "${NUWA_MINOR}"
     if [ $? -eq 0 ];then
        infolog "生成镜像列表完成"
-    else   
+    else
        errorlog "生成镜像列表失败，请检查！！！"
+       exit 1
     fi
 }
 

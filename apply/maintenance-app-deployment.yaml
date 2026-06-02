@@ -1,0 +1,389 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: getpatch
+---
+# 应用运行配置。这里只放业务应用读取的 Redis 参数，
+# 实际密码仍由 Secret 注入到容器环境变量 REDIS_PASSWORD。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maintenance-app-config
+  namespace: getpatch
+data:
+  config.yaml: |
+    redis:
+      host: maintenance-redis.getpatch.svc.cluster.local
+      port: 6379
+      db: 0
+      password: ""
+      key_prefix: auto_packing
+      success_ttl_seconds: 7200
+      failure_ttl_seconds: 3600
+      download_ttl_seconds: 90
+      max_logs: 100
+      max_concurrent_tasks: 3
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: maintenance-app-secrets
+  namespace: getpatch
+type: Opaque
+stringData:
+  redis-password: "YSDeepFlow@3q302"
+---
+# Redis Service，供 maintenance-app / maintenance-worker 通过服务名访问。
+apiVersion: v1
+kind: Service
+metadata:
+  name: maintenance-redis
+  namespace: getpatch
+  labels:
+    app: maintenance-redis
+spec:
+  selector:
+    app: maintenance-redis
+  ports:
+    - name: redis
+      protocol: TCP
+      port: 6379
+      targetPort: 6379
+  type: ClusterIP
+---
+# Redis 本体。这个 Deployment 才是真正运行 redis-server 的地方。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maintenance-redis
+  namespace: getpatch
+  labels:
+    app: maintenance-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maintenance-redis
+  template:
+    metadata:
+      labels:
+        app: maintenance-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2-alpine
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - exec redis-server --bind 0.0.0.0 --appendonly no --requirepass "$REDIS_PASSWORD"
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
+        ports:
+        - containerPort: 6379
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - redis-cli -a "$REDIS_PASSWORD" ping | grep PONG
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - redis-cli -a "$REDIS_PASSWORD" ping | grep PONG
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      restartPolicy: Always
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+---
+# Web/API 服务：
+# - 主容器镜像是 maintenance-app:v2.0.0
+# - initContainer 用 redis:7.2-alpine 只是为了复用 redis-cli，
+#   在启动前检测 Redis 是否可连通且认证成功
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maintenance-app
+  namespace: getpatch
+  labels:
+    app: maintenance-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maintenance-app
+  template:
+    metadata:
+      labels:
+        app: maintenance-app
+    spec:
+      initContainers:
+      # 这里只是“等待 Redis 就绪”的探测容器，不是业务容器。
+      - name: wait-for-redis
+        image: redis:7.2-alpine
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
+        command:
+        - /bin/sh
+        - -c
+        - until redis-cli -h maintenance-redis -p 6379 -a "$REDIS_PASSWORD" ping | grep PONG; do echo "waiting for redis auth ready"; sleep 2; done
+      # 解析GitLab
+      hostAliases:
+      - ip: "10.1.0.14"
+        hostnames:
+        - "gitlab.yunshan.net"
+      containers:
+      # 真正的 maintenance-app 业务容器。
+      - name: maintenance-app
+        image: maintenance-app:v2.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        env:
+        - name: PATH
+          value: "/app/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        - name: FLASK_APP
+          value: "app.py"
+        - name: FLASK_ENV
+          value: "production"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: GUNICORN_WORKERS
+          value: "2"
+        - name: GUNICORN_THREADS
+          value: "4"
+        - name: APP_CONFIG_PATH
+          value: "/app/config/config.yaml"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
+        # OSS凭据
+        - name: OSS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: oss-credentials
+              key: access-key-id
+        - name: OSS_ACCESS_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oss-credentials
+              key: access-key-secret
+        - name: OSS_ENDPOINT
+          value: "oss-cn-beijing.aliyuncs.com"
+        - name: OSS_REGION
+          value: "cn-beijing"
+        volumeMounts:
+        - name: gitlab-ssh-key
+          mountPath: /root/.ssh
+          readOnly: true
+        - name: containerd-sock
+          mountPath: /run/containerd/containerd.sock
+        - mountPath: /app/upgrade_packages
+          name: storage
+        - name: app-config
+          mountPath: /app/config
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        startupProbe:
+          httpGet:
+            path: /
+            port: 8000
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1024Mi"
+            cpu: "1000m"
+      restartPolicy: Always
+      volumes:
+      - name: gitlab-ssh-key
+        secret:
+          secretName: gitlab-ssh-key
+          defaultMode: 0400
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket
+      - name: storage
+        persistentVolumeClaim:
+          claimName: auto-pancking-pvc
+      - name: app-config
+        configMap:
+          name: maintenance-app-config
+---
+# 后台构建 worker：
+# - 与 maintenance-app 复用同一业务镜像
+# - 通过 args 覆盖启动命令，改为执行 python worker.py
+# - 同样使用 initContainer 等待 Redis 就绪
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maintenance-worker
+  namespace: getpatch
+  labels:
+    app: maintenance-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: maintenance-worker
+  template:
+    metadata:
+      labels:
+        app: maintenance-worker
+    spec:
+      initContainers:
+      # 这里只是“等待 Redis 就绪”的探测容器，不是 worker 本体。
+      - name: wait-for-redis
+        image: redis:7.2-alpine
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
+        command:
+        - /bin/sh
+        - -c
+        - until redis-cli -h maintenance-redis -p 6379 -a "$REDIS_PASSWORD" ping | grep PONG; do echo "waiting for redis auth ready"; sleep 2; done
+      hostAliases:
+      - ip: "10.1.0.14"
+        hostnames:
+        - "gitlab.yunshan.net"
+      containers:
+      # 真正的 worker 业务容器。
+      - name: maintenance-worker
+        image: maintenance-app:v2.0.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - python
+        - worker.py
+        env:
+        - name: PATH
+          value: "/app/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: APP_CONFIG_PATH
+          value: "/app/config/config.yaml"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: maintenance-app-secrets
+              key: redis-password
+        - name: OSS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: oss-credentials
+              key: access-key-id
+        - name: OSS_ACCESS_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: oss-credentials
+              key: access-key-secret
+        - name: OSS_ENDPOINT
+          value: "oss-cn-beijing.aliyuncs.com"
+        - name: OSS_REGION
+          value: "cn-beijing"
+        volumeMounts:
+        - name: gitlab-ssh-key
+          mountPath: /root/.ssh
+          readOnly: true
+        - name: containerd-sock
+          mountPath: /run/containerd/containerd.sock
+        - mountPath: /app/upgrade_packages
+          name: storage
+        - name: app-config
+          mountPath: /app/config
+          readOnly: true
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1024Mi"
+            cpu: "1000m"
+      restartPolicy: Always
+      volumes:
+      - name: gitlab-ssh-key
+        secret:
+          secretName: gitlab-ssh-key
+          defaultMode: 0400
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket
+      - name: storage
+        persistentVolumeClaim:
+          claimName: auto-pancking-pvc
+      - name: app-config
+        configMap:
+          name: maintenance-app-config
+---
+# 对外暴露 maintenance-app 的 Web 入口。
+apiVersion: v1
+kind: Service
+metadata:
+  name: maintenance-svc
+  namespace: getpatch
+spec:
+  selector:
+    app: maintenance-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+      nodePort: 30090
+  type: NodePort
