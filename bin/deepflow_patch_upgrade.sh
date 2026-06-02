@@ -14,7 +14,7 @@ image_dir="." # 镜像文件存放目录
 patch_image_list="patch_image_tag_list.txt" # 镜像标签列表文件
 values_yaml="/usr/local/deepflow/templates/values.yaml" # Helm values 文件路径
 values_custom="/usr/local/deepflow/templates/values-custom.yaml" # 自定义 values 文件
-values_trash="/usr/local/deepflow/templates/.trash" # 自定义 values 文件
+values_trash="/usr/local/deepflow/templates/.trash" # 备份回收目录
 source_registry="hub.deepflow.yunshan.net/dev" # 原始镜像仓库
 target_registry="hubmgt-uat.paic.com.cn/deepflow"     # 目标镜像仓库
 # 定义需要升级的组件列表
@@ -88,17 +88,22 @@ usage() {
 import_images() {
   echo -e "\n\033[1;34m[步骤 1/$current_step] 导入镜像文件...\033[0m"
   cd "$image_dir" || { echo "目录不存在: $image_dir"; exit 1; }
-  
+
+  local found=0
   for img_tar in *.tar; do
-    [ -f "$img_tar" ] || continue  # 跳过未找到的情况
+    [ -f "$img_tar" ] || continue
+    found=1
     echo "正在导入: $img_tar"
     if ! $container_cmd load -i "$img_tar"; then
       echo -e "\033[1;31m错误: 导入 $img_tar 失败\033[0m"
       exit 1
     fi
   done
+  if [ $found -eq 0 ]; then
+    echo -e "\033[1;31m错误: 在 $image_dir 中未找到任何 .tar 镜像文件\033[0m"
+    exit 1
+  fi
   echo -e "\033[1;32m✓ 所有镜像导入成功\033[0m"
-  sleep 2  # 添加2秒停顿
 }
 
 # 推送镜像到目标仓库
@@ -122,7 +127,6 @@ push_images() {
     $container_cmd push "$target_img" || { echo "推送失败: $image"; exit 1; }
   done < "$patch_image_list"
   echo -e "\033[1;32m✓ 所有镜像推送成功\033[0m"
-  sleep 2  # 添加2秒停顿
 }
 
 # 备份配置文件
@@ -131,7 +135,6 @@ backup_files() {
   local timestamp=$(date +%Y%m%d%H%M%S)
   cp -v "$values_yaml" "${values_yaml}.bak.${timestamp}" || exit 1
   cp -v "$values_custom" "${values_custom}.bak.${timestamp}" || exit 1
-  sleep 2  # 添加2秒停顿
 }
 
 # 替换 values.yaml 中的镜像标签
@@ -144,10 +147,11 @@ update_image_tags() {
     tag=$(echo "$tag" | tr -d '\r' | xargs)
     
     echo "更新: $image → $tag"
-    sed -i "s|\(${image}: \).*|\1${tag}|" "$values_yaml" || exit 1
+    # 转义 image 名中的 . 防止匹配任意字符
+    escaped_image=$(echo "$image" | sed 's/\./\\./g')
+    sed -i "s|\(${escaped_image}: \).*|\1${tag}|" "$values_yaml" || exit 1
   done < "$patch_image_list"
   echo -e "\033[1;32m✓ 标签更新完成\033[0m"
-  sleep 2  # 添加2秒停顿
 }
 
 # 更新自定义版本号
@@ -155,7 +159,6 @@ update_custom_version() {
   echo -e "\n\033[1;34m[步骤 5/$current_step] 更新版本号...\033[0m"
   sed -i "s/deepflowVersion: .*/deepflowVersion: ${upgrade_version}/" "$values_custom" || exit 1
   echo -e "\033[1;32m✓ 版本号更新为 $upgrade_version\033[0m"
-  sleep 2  # 添加2秒停顿
 }
 
 # 执行组件升级
@@ -176,7 +179,6 @@ upgrade_components() {
   done
   
   echo -e "\033[1;32m✓ 所有组件升级完成\033[0m"
-  sleep 2
 }
 
 
@@ -233,9 +235,9 @@ check_image() {
 # 回滚操作
 rollback_changes() {
   echo -e "\n\033[1;33m[回滚] 恢复配置文件...\033[0m"
-  # 查找最新的备份文件
-  local latest_values=$(ls -t "${values_yaml}".bak.* 2>/dev/null | head -1)
-  local latest_custom=$(ls -t "${values_custom}".bak.* 2>/dev/null | head -1)
+  # 查找最新的备份文件（用 find + sort 替代 ls -t，避免 pipefail 下无匹配时崩溃）
+  local latest_values=$(find "$(dirname "${values_yaml}")" -maxdepth 1 -name "$(basename "${values_yaml}").bak.*" -type f 2>/dev/null | sort -r | head -1)
+  local latest_custom=$(find "$(dirname "${values_custom}")" -maxdepth 1 -name "$(basename "${values_custom}").bak.*" -type f 2>/dev/null | sort -r | head -1)
    
   echo -e "\033[31m"${latest_values}" -> "${values_yaml}"\033[0m"
   echo -e "\033[31m"${latest_custom}" -> "${values_custom}"\033[0m"
@@ -251,16 +253,16 @@ rollback_changes() {
   [ -d "${values_trash}" ] || mkdir "${values_trash}"
 
   if [ -n "$latest_values" ]; then
-    mv -v "$values_yaml" "${values_trash}" && mv -v "$latest_values" "$values_yaml" || exit 1
+    cp -f "$latest_values" "$values_yaml" || { echo -e "\033[31m恢复 values.yaml 失败\033[0m"; exit 1; }
   else
-    echo -e "\033[31m没有找到可用的备份 values.yaml\033[0m"  
+    echo -e "\033[31m没有找到可用的备份 values.yaml\033[0m"
     exit 1
   fi
 
   if [ -n "$latest_custom" ]; then
-    mv -v "$values_custom" "${values_trash}" && mv -v "$latest_custom" "$values_custom" || exit 1
+    cp -f "$latest_custom" "$values_custom" || { echo -e "\033[31m恢复 values-custom.yaml 失败\033[0m"; exit 1; }
   else
-    echo -e "\033[31m没有找到可用的备份 values-custom.yaml\033[0m"  
+    echo -e "\033[31m没有找到可用的备份 values-custom.yaml\033[0m"
     exit 1
   fi
 

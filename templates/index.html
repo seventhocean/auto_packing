@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeepFlow 升级包构建</title>
     <link rel="stylesheet" href="static/bootstrap.min.css">
     <link rel="stylesheet" href="static/all.min.css">
@@ -458,7 +458,7 @@
             color: #eef4ff;
             padding: 13px 16px;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
             font-size: 1rem;
             color-scheme: dark;
         }
@@ -535,6 +535,7 @@
             background: linear-gradient(135deg, #4c5f88, #60719b);
             color: rgba(255, 255, 255, 0.68);
             transform: none;
+            cursor: not-allowed;
         }
 
         .btn-success {
@@ -948,6 +949,16 @@
             }
         }
 
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
         @media (max-width: 1200px) {
             .hero,
             .layout,
@@ -1090,7 +1101,7 @@
                         <div id="v6Panel" class="series-panel active" data-series="v6">
                             <div class="section-header">
                                 <div class="section-copy">
-                                    <h3 class="section-title"><i class="fas fa-code-branch card-accent"></i> V6 自动升级</h3>
+                                    <h2 class="section-title"><i class="fas fa-code-branch card-accent"></i> V6 自动升级</h2>
                                     <p class="section-desc">
                                         选择当前版和目标版，系统自动生成差异镜像并打包。
                                     </p>
@@ -1127,7 +1138,7 @@
                         <div id="v7Panel" class="series-panel" data-series="v7">
                             <div class="section-header">
                                 <div class="section-copy">
-                                    <h3 class="section-title"><i class="fas fa-list-check card-accent"></i> V7 镜像清单</h3>
+                                    <h2 class="section-title"><i class="fas fa-list-check card-accent"></i> V7 镜像清单</h2>
                                     <p class="section-desc">
                                         手动填写镜像和标签。支持每行一条或逗号分隔。
                                     </p>
@@ -1139,7 +1150,7 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label" for="v7ImageList">镜像列表</label>
-                                <textarea class="form-control" id="v7ImageList"
+                                <textarea class="form-control" id="v7ImageList" aria-required="true"
                                     placeholder="支持每行一条或逗号分隔，例如：deepflow-agent:v6.6.5617"></textarea>
                             </div>
                             <button type="button" class="btn btn-primary build-submit" id="v7BuildBtn" disabled>
@@ -1151,7 +1162,7 @@
                     <section class="card-shell task-shell">
                         <div class="section-header">
                             <div class="section-copy">
-                                <h3 class="section-title"><i class="fas fa-stream"></i> 当前任务状态</h3>
+                                <h2 class="section-title"><i class="fas fa-stream"></i> 当前任务状态</h2>
                                 <p class="section-desc">
                                     显示本次任务的进度、日志和下载入口。
                                 </p>
@@ -1188,7 +1199,7 @@
             <aside class="resource-panel">
                 <div class="section-header">
                     <div class="section-copy">
-                        <h3 class="section-title"><i class="fas fa-box-archive"></i> 已有升级包</h3>
+                        <h2 class="section-title"><i class="fas fa-box-archive"></i> 已有升级包</h2>
                         <p class="section-desc">
                             先检查这里，避免重复构建。
                         </p>
@@ -1199,7 +1210,8 @@
                     </div>
                 </div>
                 <div class="resource-toolbar">
-                    <input type="text" class="form-control" id="fileSearchInput" placeholder="搜索文件名或版本">
+                    <label for="fileSearchInput" class="visually-hidden">搜索升级包</label>
+                    <input type="text" class="form-control" id="fileSearchInput" placeholder="搜索文件名或版本" aria-label="搜索已有升级包">
                     <button type="button" class="btn btn-outline-light" id="refreshFilesBtn">
                         <i class="fas fa-rotate"></i>
                     </button>
@@ -1221,8 +1233,8 @@
         </div>
     </div>
 
-    <button type="button" class="tutorial-btn" data-bs-toggle="modal" data-bs-target="#tutorialModal">
-        <i class="fas fa-question"></i>
+    <button type="button" class="tutorial-btn" data-bs-toggle="modal" data-bs-target="#tutorialModal" aria-label="使用说明">
+        <i class="fas fa-question" aria-hidden="true"></i>
     </button>
 
     <div class="modal fade" id="tutorialModal" tabindex="-1" aria-labelledby="tutorialModalLabel" aria-hidden="true">
@@ -1296,6 +1308,20 @@ deepflow-server_tag: v6.6.5617</span>
 
     <script src="static/bootstrap.bundle.min.js"></script>
     <script>
+        function beforeUnloadHandler(e) {
+            e.preventDefault();
+            e.returnValue = '构建任务正在进行中，离开页面将丢失进度。';
+            return e.returnValue;
+        }
+
+        function debounce(fn, delay) {
+            let timer = null;
+            return function (...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
         let versionData = [];
         let eventSource = null;
         let currentSeries = 'v6';
@@ -1313,7 +1339,8 @@ deepflow-server_tag: v6.6.5617</span>
 
         async function fetchVersions(series) {
             if (series !== 'v6') {
-                versionData = [];
+                // 切换到 V7 时不清空 versionData，切换回 V6 时可以复用缓存
+                if (versionData.length > 0) return;
                 renderVersionOptions(true);
                 return;
             }
@@ -1323,6 +1350,8 @@ deepflow-server_tag: v6.6.5617</span>
 
             try {
                 const res = await fetch(`/versions?series=${encodeURIComponent(series)}`);
+                // 防止快速切换 V6/V7 时旧请求返回后覆盖当前模式的数据
+                if (currentSeries !== series) return;
                 const data = await res.json();
                 if (data.success && data.versions) {
                     versionData = data.versions;
@@ -1333,6 +1362,7 @@ deepflow-server_tag: v6.6.5617</span>
                     showAlert('获取版本失败', data.message || '未知错误', 'error');
                 }
             } catch (err) {
+                if (currentSeries !== series) return;
                 versionData = [];
                 renderVersionOptions(true);
                 showAlert('网络错误', `获取版本失败：${err.message}`, 'error');
@@ -1453,7 +1483,7 @@ deepflow-server_tag: v6.6.5617</span>
             document.getElementById('v7BuildBtn').addEventListener('click', startBuildProcess);
             document.getElementById('downloadLink').addEventListener('click', checkDownloadFile);
             document.getElementById('refreshFilesBtn').addEventListener('click', fetchExistingFiles);
-            document.getElementById('fileSearchInput').addEventListener('input', filterExistingFiles);
+            document.getElementById('fileSearchInput').addEventListener('input', debounce(filterExistingFiles, 200));
         }
 
         function handleModeChange(event) {
@@ -1558,6 +1588,7 @@ deepflow-server_tag: v6.6.5617</span>
             const downloadSection = document.getElementById('downloadSection');
 
             isBuilding = true;
+            window.addEventListener('beforeunload', beforeUnloadHandler);
             activeTaskSeries = currentSeries;
             activeBtn.disabled = true;
             activeBtn.innerHTML = '<span class="loading-spinner"></span> 构建中...';
@@ -1576,7 +1607,9 @@ deepflow-server_tag: v6.6.5617</span>
                 eventSource = null;
             }
 
-            let buildUrl = `/build?series=${encodeURIComponent(currentSeries)}`;
+            let sseUrl;
+            let sseRetries = 0;
+            const maxSseRetries = 3;
             if (currentSeries === 'v7') {
                 const images = normalizeV7Images(v7Images);
                 if (images.length === 0) {
@@ -1584,25 +1617,56 @@ deepflow-server_tag: v6.6.5617</span>
                     resetBuildState();
                     return;
                 }
-                buildUrl += `&images=${encodeURIComponent(images.join(','))}`;
+                // V7: POST JSON 提交镜像列表，避免 URL 超长
+                fetch('/build', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ series: 'v7', images: images })
+                }).then(res => res.json()).then(data => {
+                    if (data.success && data.task_id) {
+                        sseUrl = `/build?task_id=${encodeURIComponent(data.task_id)}`;
+                        connectSSE();
+                    } else {
+                        showAlert('任务创建失败', data.message || '未知错误', 'error');
+                        resetBuildState();
+                    }
+                }).catch(err => {
+                    showAlert('网络错误', `任务创建失败：${err.message}`, 'error');
+                    resetBuildState();
+                });
+                return; // POST 的异步回调中 connectSSE
             } else {
-                buildUrl += `&current=${encodeURIComponent(currentVersion)}&target=${encodeURIComponent(targetVersion)}`;
+                sseUrl = `/build?series=v6&current=${encodeURIComponent(currentVersion)}&target=${encodeURIComponent(targetVersion)}`;
             }
 
-            eventSource = new EventSource(buildUrl);
-            eventSource.onmessage = function (event) {
-                try {
-                    const statusData = JSON.parse(event.data);
-                    handleBuildStatus(statusData);
-                } catch (err) {
-                    addLog(`消息解析失败：${err.message}`, 'error');
-                }
-            };
-
-            eventSource.onerror = function (err) {
-                addLog(`SSE连接异常：${err.type}`, 'error');
-                resetBuildState();
-            };
+            function connectSSE() {
+                eventSource = new EventSource(sseUrl);
+                eventSource.onmessage = function (event) {
+                    sseRetries = 0; // 成功收到消息，重置重试计数
+                    try {
+                        const statusData = JSON.parse(event.data);
+                        handleBuildStatus(statusData);
+                    } catch (err) {
+                        addLog(`消息解析失败：${err.message}`, 'error');
+                    }
+                };
+                eventSource.onerror = function () {
+                    if (eventSource) {
+                        eventSource.close();
+                        eventSource = null;
+                    }
+                    if (sseRetries < maxSseRetries && isBuilding) {
+                        sseRetries++;
+                        const delay = Math.min(1000 * Math.pow(2, sseRetries), 8000);
+                        addLog(`SSE 断开，${(delay/1000).toFixed(0)}s 后重试 (${sseRetries}/${maxSseRetries})`, 'info');
+                        setTimeout(connectSSE, delay);
+                    } else if (isBuilding) {
+                        addLog('SSE 连接失败，已达最大重试次数', 'error');
+                        resetBuildState();
+                    }
+                };
+            }
+            connectSSE();
         }
 
         function handleBuildStatus(statusData) {
@@ -1634,7 +1698,12 @@ deepflow-server_tag: v6.6.5617</span>
                     updateProgressBar(100, statusData.message);
                     downloadLink.href = statusData.download_url;
                     downloadSection.style.display = 'block';
-                    resetBuildState(true);
+                    // 完成时只清理 SSE 连接和按钮状态，保留进度区（含下载按钮）可见
+                    isBuilding = false;
+                    window.removeEventListener('beforeunload', beforeUnloadHandler);
+                    if (eventSource) { eventSource.close(); eventSource = null; }
+                    fetchExistingFiles(); // 刷新已有包列表
+                    checkBuildBtnStatus();
                     fetchExistingFiles();
                     break;
                 case 'error':
@@ -1697,17 +1766,17 @@ deepflow-server_tag: v6.6.5617</span>
             v7Btn.disabled = true;
             lastLogMessage = '';
             isBuilding = false;
+            window.removeEventListener('beforeunload', beforeUnloadHandler);
             activeTaskSeries = null;
 
-            if (!isComplete && eventSource) {
+            if (eventSource) {
                 eventSource.close();
                 eventSource = null;
             }
 
-            if (isComplete && eventSource) {
-                eventSource.close();
-                eventSource = null;
-            }
+            // 构建取消或出错时，隐藏进度区并恢复空闲占位
+            document.getElementById('progressSection').style.display = 'none';
+            document.getElementById('idlePanel').style.display = 'block';
 
             checkBuildBtnStatus();
         }
@@ -1722,8 +1791,8 @@ deepflow-server_tag: v6.6.5617</span>
         function sanitizeLogMessage(message) {
             if (!message) return '';
             let cleaned = String(message);
-            cleaned = cleaned.replace(/\(\s*\d{1,3}%\s*\)/g, '').trim();
-            cleaned = cleaned.replace(/(\s*\d{1,3}%\s*)/g, '').trim();
+            // 只移除末尾的进度百分比标记，如 "处理中...(65%)"
+            cleaned = cleaned.replace(/\s*\(\s*\d{1,3}%\s*\)\s*$/, '').trim();
             return cleaned;
         }
 

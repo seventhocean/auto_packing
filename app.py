@@ -182,7 +182,8 @@ def initialize_task_status(task_id, message):
 
 
 def schedule_task_cleanup(task_id, delay_seconds):
-    update_task_status(task_id, {}, ttl_seconds=delay_seconds)
+    redis_client.expire(task_meta_key(task_id), delay_seconds)
+    redis_client.expire(task_logs_key(task_id), delay_seconds)
 
 
 def try_acquire_build_slot(task_id):
@@ -200,6 +201,18 @@ def release_build_slot(task_id):
         current_value = redis_client.decr(active_builds_key())
         if current_value < 0:
             redis_client.set(active_builds_key(), 0)
+
+
+def reconcile_build_counter():
+    """修复因 worker 崩溃导致的 builds:active 计数泄漏。
+    扫描所有现有的 task slot key，用实际数量同步计数器。
+    """
+    slot_pattern = f"{REDIS_CONFIG['key_prefix']}:task:*:slot"
+    actual_count = 0
+    for _ in redis_client.scan_iter(match=slot_pattern):
+        actual_count += 1
+    redis_client.set(active_builds_key(), actual_count)
+    write_log(f"builds:active 计数器已同步为 {actual_count}", level="INFO")
 
 
 def enqueue_build_task(payload):
@@ -220,23 +233,19 @@ def write_log(content, level="INFO", task_id=None):
         append_task_log(task_id, timestamp, level, content)
 
 def update_progress(task_id, new_percent, message, level="INFO"):
-    """更新任务进度的辅助函数，确保进度平滑增加"""
+    """更新任务进度。直接跳到目标百分比，不做逐 1% 的中间写入。"""
     task_status = get_task_status(task_id, include_logs=False)
     if not task_status:
         return
 
     current_percent = task_status.get('percent', 0)
     if new_percent > current_percent:
-        steps = new_percent - current_percent
-        for i in range(steps):
-            percent = current_percent + i + 1
-            task_status.update({
-                "status": "progress",
-                "percent": percent,
-                "message": message if i == steps - 1 else task_status.get('message', '')
-            })
-            set_task_status(task_id, task_status)
-            time.sleep(0.1)
+        task_status.update({
+            "status": "progress",
+            "percent": new_percent,
+            "message": message
+        })
+        set_task_status(task_id, task_status)
 
 def get_oss_versions():
     """从OSS获取x86_64架构的补丁版本列表（供前端下拉框用）
@@ -265,7 +274,7 @@ def get_oss_versions():
 
                 # 处理前端显示的版本名（去掉.tar.gz和_x86_64）
                 version_with_arch = file_name[:-len(".tar.gz")]
-                display_version = version_with_arch.rstrip('_x86_64')
+                display_version = re.sub(r'_x86_64$', '', version_with_arch)
                 
                 if display_version not in seen_versions:
                     seen_versions.add(display_version)
@@ -314,7 +323,13 @@ def get_existing_packages():
                 })
         
         # 按文件修改时间降序排序（最新生成的包排在前面）
-        packages.sort(key=lambda x: os.path.getmtime(os.path.join(UPGRADE_PACKAGE_DIR, x["name"])), reverse=True)
+        # 防御性处理：glob 和 getmtime 之间文件可能被删除
+        def _safe_mtime(pkg):
+            try:
+                return os.path.getmtime(os.path.join(UPGRADE_PACKAGE_DIR, pkg["name"]))
+            except FileNotFoundError:
+                return 0
+        packages.sort(key=_safe_mtime, reverse=True)
         write_log(f"获取已有升级包成功，共{len(packages)}个有效包")
         return packages
     
@@ -408,7 +423,8 @@ def run_build_task(task_id, current_version, target_version):
                     check=True,
                     stdout=f,  # 捕获标准输出
                     stderr=subprocess.STDOUT, # 标准错误合并到标准输出
-                    universal_newlines=True
+                    universal_newlines=True,
+                    timeout=600  # git pull + nuwa grep, 10 分钟上限
                 )
             
             update_progress(task_id, 25, "验证镜像列表生成结果")
@@ -438,7 +454,8 @@ def run_build_task(task_id, current_version, target_version):
                     check=True,
                     stdout=f,
                     stderr=subprocess.STDOUT,
-                    universal_newlines=True
+                    universal_newlines=True,
+                    timeout=3600  # nerdctl pull 大镜像，1 小时上限
                 )
             
             # 验证镜像拉取结果：任务目录必须有.tar文件
@@ -469,13 +486,14 @@ def run_build_task(task_id, current_version, target_version):
                 tar_result = subprocess.run(
                     [
                         "tar", "-czf", upgrade_path,  # 核心参数：创建gzip压缩包
-                        "--transform", "s/.*\///",    # 关键：仅保留文件名，删除路径前缀
+                        "--transform", r"s/.*\///",    # 关键：仅保留文件名，删除路径前缀
                         *files_to_pack                # 待打包的所有文件
                     ],
                     check=True,
                     stdout=f,
                     stderr=subprocess.STDOUT,
-                    universal_newlines=True
+                    universal_newlines=True,
+                    timeout=1800  # tar 大文件压缩，30 分钟上限
                 )
 
             if not os.path.exists(upgrade_path) or os.path.getsize(upgrade_path) == 0:
@@ -585,7 +603,8 @@ def run_build_task_v7(task_id, images):
                     check=True,
                     stdout=f,
                     stderr=subprocess.STDOUT,
-                    universal_newlines=True
+                    universal_newlines=True,
+                    timeout=3600  # nerdctl pull 大镜像，1 小时上限
                 )
 
             tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
@@ -609,13 +628,14 @@ def run_build_task_v7(task_id, images):
                 subprocess.run(
                     [
                         "tar", "-czf", upgrade_path,
-                        "--transform", "s/.*\///",
+                        "--transform", r"s/.*\///",
                         *files_to_pack
                     ],
                     check=True,
                     stdout=f,
                     stderr=subprocess.STDOUT,
-                    universal_newlines=True
+                    universal_newlines=True,
+                    timeout=1800  # tar 大文件压缩，30 分钟上限
                 )
 
             if not os.path.exists(upgrade_path) or os.path.getsize(upgrade_path) == 0:
@@ -792,14 +812,70 @@ def api_task_status(task_id):
 
 
 # -------------------------- 构建任务（兼容前端SSE） --------------------------
+@app.route('/build', methods=['POST'])
+def api_build_post():
+    """V7 专用：通过 POST JSON 提交镜像列表，避免 URL 超长。返回 task_id 供前端 SSE 连接。"""
+    data = request.get_json(silent=True) or {}
+    series = data.get('series', 'v7')
+    if series == 'v7':
+        images = data.get('images', [])
+        if not isinstance(images, list) or not images:
+            return jsonify({"success": False, "message": "缺少必要参数：images 不能为空"}), 400
+        images = [img.strip() for img in images if isinstance(img, str) and img.strip()]
+        if not images:
+            return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
+        timestamp = int(time.time() * 1000)
+        task_id = f"build_v7_{timestamp}_{uuid.uuid4().hex[:8]}"
+        try:
+            initialize_task_status(task_id, "任务已创建，等待 worker 调度")
+            enqueue_build_task({"task_id": task_id, "task_type": "v7", "images": images})
+        except Exception as e:
+            update_task_status(task_id, {
+                "status": "error", "message": f"任务入队失败：{str(e)}",
+                "complete": True, "error": True
+            }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
+            return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
+        return jsonify({"success": True, "task_id": task_id})
+    else:
+        return jsonify({"success": False, "message": f"不支持的 series: {series}"}), 400
+
+
 @app.route('/build', methods=['GET'])
 def api_build():
-    """原有接口：启动构建任务，通过SSE实时推送进度和日志"""
-    # 检查并发任务数
-    # 获取前端传递的版本参数
+    """构建入口：V6 用 GET 参数入队；通过 task_id 参数可仅观察已有任务。返回 SSE 流。"""
+    task_id = request.args.get('task_id')
+    # 仅观察已有任务（不创建新任务）
+    if task_id:
+        def watch_sse():
+            try:
+                while True:
+                    task_status = get_task_status(task_id)
+                    if not task_status:
+                        retry = 0
+                        while retry < 3:
+                            task_status = get_task_status(task_id)
+                            if task_status:
+                                break
+                            time.sleep(0.5)
+                            retry += 1
+                        if not task_status:
+                            yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': '任务状态已过期', 'logs': []})}\n\n"
+                            break
+                    yield f"data: {json.dumps(task_status)}\n\n"
+                    if task_status.get('complete', False):
+                        break
+                    time.sleep(1)
+            except GeneratorExit:
+                pass
+            except Exception as e:
+                write_log(f"SSE 推送异常 (task={task_id}): {str(e)}", level="ERROR")
+                yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': f'推送异常: {str(e)}', 'logs': []})}\n\n"
+        return Response(watch_sse(), mimetype='text/event-stream')
+
+    # 旧版 GET 入队流程（V6 + 兼容旧的 V7 GET 调用）
+    series = request.args.get('series', 'v6')
     current_version = request.args.get('current')
     target_version = request.args.get('target')
-    series = request.args.get('series', 'v6')
     v7_images = request.args.get('images', '')
 
     if series == 'v7':
@@ -856,45 +932,51 @@ def api_build():
 
     # 建立SSE连接，实时推送进度和日志
     def generate_sse():
-        # 初始状态推送
-        retry_count = 0
-        initial_status = None
-        while retry_count < 2 and not initial_status:
-            initial_status = get_task_status(task_id) or {
-                'status': 'progress',
-                'percent': 0,
-                'message': '任务初始化中...',
-                'logs': []
-            }
-            if not initial_status:
-                time.sleep(0.5)
-                retry_count += 1
-        yield f"data: {json.dumps(initial_status)}\n\n"
-        
-        # 循环推送状态
-        while True:
-            task_status = get_task_status(task_id)
-            if not task_status:
-                # 重试3次，若仍不存在则判定过期
-                retry = 0
-                while retry < 3:
-                    task_status = get_task_status(task_id)
-                    if task_status:
-                        break
+        try:
+            # 初始状态推送
+            retry_count = 0
+            initial_status = None
+            while retry_count < 2 and not initial_status:
+                initial_status = get_task_status(task_id) or {
+                    'status': 'progress',
+                    'percent': 0,
+                    'message': '任务初始化中...',
+                    'logs': []
+                }
+                if not initial_status:
                     time.sleep(0.5)
-                    retry += 1
+                    retry_count += 1
+            yield f"data: {json.dumps(initial_status)}\n\n"
+
+            # 循环推送状态
+            while True:
+                task_status = get_task_status(task_id)
                 if not task_status:
-                    yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': '任务状态已过期，请刷新页面重试', 'logs': []})}\n\n"
+                    # 重试3次，若仍不存在则判定过期
+                    retry = 0
+                    while retry < 3:
+                        task_status = get_task_status(task_id)
+                        if task_status:
+                            break
+                        time.sleep(0.5)
+                        retry += 1
+                    if not task_status:
+                        yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': '任务状态已过期，请刷新页面重试', 'logs': []})}\n\n"
+                        break
+
+                yield f"data: {json.dumps(task_status)}\n\n"
+
+                # 任务完成，终止循环
+                if task_status.get('complete', False):
                     break
 
-            yield f"data: {json.dumps(task_status)}\n\n"
-            
-            # 任务完成，终止循环
-            if task_status.get('complete', False):
-                break
-            
-            # 控制推送频率
-            time.sleep(1)  # 提高推送频率，使进度更新更及时
+                # 控制推送频率
+                time.sleep(1)
+        except GeneratorExit:
+            pass
+        except Exception as e:
+            write_log(f"SSE 推送异常 (task={task_id}): {str(e)}", level="ERROR")
+            yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': f'服务端推送异常: {str(e)}', 'logs': []})}\n\n"
 
     # 设置SSE响应头
     return Response(generate_sse(), mimetype='text/event-stream')

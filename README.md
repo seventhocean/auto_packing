@@ -671,6 +671,12 @@ docker run \
    - 理解最终交付物如何被使用。
 7. `Apply/maintenance-app-deployment.yaml`
    - 理解线上部署形态。
+8. `CLAUDE.md`
+   - AI 助手的代码库指南，包含架构速览、命令、环境变量、已知问题。
+9. `ISSUES.md`
+   - 当前已知的代码问题清单（按 P0/P1/P2/P3 分级）。
+10. `docs/FRONTEND_REVIEW.md`
+    - 前端审查报告与改进建议。
 
 ## 15. 一句话总结当前项目逻辑
 

@@ -11,6 +11,7 @@ from app import (
     build_processing_key,
     build_queue_key,
     get_task_status,
+    reconcile_build_counter,
     release_build_slot,
     redis_client,
     run_build_task,
@@ -34,6 +35,7 @@ def heartbeat_loop():
 
 def reclaim_stale_tasks():
     processing_pattern = "{}:build:processing:*".format(REDIS_CONFIG["key_prefix"])
+    reclaimed_count = 0
     for processing_key in redis_client.scan_iter(match=processing_pattern):
         worker_id = processing_key.split(":")[-1]
         heartbeat_key = worker_heartbeat_key(worker_id)
@@ -48,7 +50,11 @@ def reclaim_stale_tasks():
         for raw_payload in reversed(pending_tasks):
             redis_client.rpush(build_queue_key(), raw_payload)
         redis_client.delete(processing_key)
+        reclaimed_count += 1
         write_log("检测到失活 worker {}，已回收 {} 个任务".format(worker_id, len(pending_tasks)), level="WARNING")
+
+    if reclaimed_count > 0:
+        reconcile_build_counter()
 
 
 def reclaim_loop():
@@ -61,13 +67,24 @@ def process_task(payload):
     task_id = payload["task_id"]
     task_type = payload["task_type"]
     run_started = False
+    wait_start = time.time()
+    max_wait_seconds = 600  # 等待槽位最长 10 分钟
 
     while not try_acquire_build_slot(task_id):
+        if time.time() - wait_start > max_wait_seconds:
+            update_task_status(task_id, {
+                "status": "error",
+                "message": "等待构建槽位超时（{}秒），请稍后重试".format(max_wait_seconds),
+                "complete": True,
+                "error": True
+            }, ttl_seconds=REDIS_CONFIG["failure_ttl_seconds"])
+            write_log("任务[{}]等待槽位超时，已标记失败".format(task_id), level="ERROR")
+            return
         update_task_status(task_id, {
             "status": "queued",
             "message": "等待可用构建 worker，请稍后"
         })
-        time.sleep(1)
+        time.sleep(2)
 
     try:
         update_task_status(task_id, {

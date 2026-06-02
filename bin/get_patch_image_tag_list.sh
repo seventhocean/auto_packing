@@ -1,11 +1,16 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 # 功能: 支持获取两个 Patch 版本的镜像版本差异
 # 要求: 当前脚本执行环境支持在 nuwa 项目目录内执行 git pull 更新项目内容
 # 启用严格错误检查（避免隐藏错误）
 set -euo pipefail
 
 # 获取脚本所在目录
-CURRENT_DIRECTORY=$(cd "$(dirname "$0")" && pwd) 
+CURRENT_DIRECTORY=$(cd "$(dirname "$0")" && pwd)
+# nuwa 仓库中的大版本/小版本路径（可通过环境变量覆盖）
+NUWA_MAJOR="${NUWA_MAJOR:-6.6}"
+NUWA_MINOR="${NUWA_MINOR:-6.6.9}"
+# grep 匹配的镜像 tag 前缀（可通过环境变量覆盖）
+IMAGE_TAG_PREFIX="${IMAGE_TAG_PREFIX:-v6.6}"
 # 生成的镜像列表文件
 DEFAULT_PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/patch_image_tag_list.txt"
 # 临时回收站
@@ -83,8 +88,10 @@ function pull_nuwa_project() {
     cd ${CURRENT_DIRECTORY}/../nuwa/ && git pull --ff-only>> $LOG_FILE
     if [ $? -eq 0 ];then
        infolog "https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成"
-    else   
+       return 0
+    else
        errorlog "https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取失败，请检查！！！"
+       return 1
     fi
 } 
 
@@ -106,7 +113,7 @@ function get_patch_image_tag_list() {
     # 生成需要更新 Patch 的镜像列表集
     rm -f ${PATCH_IMAGE_TAG_LIST_FILE}
     for patch in ${DIFF_PATCH_LIST[@]}; do
-        grep ":v6.6" ${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh|sed s'/ //g'  >> ${TMP_PATCH_IMAGE_TAG_LIST_FILE}
+        grep ":${IMAGE_TAG_PREFIX}" ${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh|sed s'/ //g'  >> ${TMP_PATCH_IMAGE_TAG_LIST_FILE}
     done
     # 过滤需要更新的镜像列表
     cat ${TMP_PATCH_IMAGE_TAG_LIST_FILE} | sort -V | tac | awk -F: '!seen[$1]++' | tac | sed -E 's/^([^:]+):(.+)$/\1_tag: \2/' >> ${PATCH_IMAGE_TAG_LIST_FILE}
@@ -114,13 +121,17 @@ function get_patch_image_tag_list() {
 
 # 主函数
 function main() {
-    pull_nuwa_project
+    pull_nuwa_project || {
+        errorlog "nuwa 仓库拉取失败，终止镜像列表生成"
+        exit 1
+    }
     infolog "开始生成镜像列表"
-    get_patch_image_tag_list 6.6 6.6.9
+    get_patch_image_tag_list "${NUWA_MAJOR}" "${NUWA_MINOR}"
     if [ $? -eq 0 ];then
        infolog "生成镜像列表完成"
-    else   
+    else
        errorlog "生成镜像列表失败，请检查！！！"
+       exit 1
     fi
 }
 
