@@ -12,3 +12,21 @@ logs/
 
 .DS_Store
 Thumbs.db
+
+# 构建产物
+auto_packing_latest
+auto_packing_latest.tar
+*.tar.gz
+upgrade_packages/
+
+# 运行时生成的目录
+nuwa/
+images/
+.trash/
+latest_image_list/patch_image_tag_list_*.txt
+build/
+dist/
+
+# 排查文档 & 旧代码快照
+troubleshooting/
+test/

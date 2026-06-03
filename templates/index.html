@@ -509,7 +509,18 @@ function handleBuildStatus(d){
             b6.innerHTML='<i class="fas fa-play"></i> 开始构建';b7.innerHTML='<i class="fas fa-play"></i> 开始构建';}
             fetchExistingFiles();checkBuildBtnStatus();
             break;
-        case'error':st.textContent='失败';updateProgressBar(0,'error');mt.textContent=d.message||'';resetBuildState();break;
+        case'error':
+            st.textContent='失败';
+            updateProgressBar(0,'error');
+            mt.textContent=d.message||'';
+            addLog(d.message,'error');
+            isBuilding=false;
+            window.removeEventListener('beforeunload',beforeUnloadHandler);
+            if(eventSource){eventSource.close();eventSource=null}
+            document.getElementById('btnToggleLog').textContent='收起日志';
+            bl.classList.add('expanded');
+            checkBuildBtnStatus();
+            break;
     }
 }
 

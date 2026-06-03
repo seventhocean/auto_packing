@@ -14,3 +14,8 @@ dist/
 nuwa/
 Dockerfile*
 README.md
+auto_packing_latest
+auto_packing_latest.tar
+troubleshooting/
+test/
+docs/

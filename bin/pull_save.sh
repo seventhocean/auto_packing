@@ -80,7 +80,7 @@ repo_login() {
     fi
 
     # 执行登录（密码通过管道传递，避免明文暴露）
-    if ! echo "${REGISTRY_PASSWORD:?ERROR: REGISTRY_PASSWORD env not set}" | "$container_cmd" login --username="${REGISTRY_USERNAME:?ERROR: REGISTRY_USERNAME env not set}" --password-stdin hub.deepflow.yunshan.net; then
+    if ! echo "35lRrgBcLhF" | "$container_cmd" login --username=acrpush@yunshan --password-stdin hub.deepflow.yunshan.net; then
         log "${RED}错误：仓库登录失败！请检查账号密码或网络连接${NC}"
         exit 1
     fi

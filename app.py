@@ -48,8 +48,7 @@ DEFAULT_CONFIG = {
 }
 
 for dir_path in [IMAGE_TAR_ROOT, UPGRADE_PACKAGE_DIR, LATEST_LIST_DIR, LOG_DIR]:
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
+    os.makedirs(dir_path, exist_ok=True)
        # write_log(f"自动创建目录：{dir_path}")
 
 def load_app_config():
@@ -453,16 +452,26 @@ def run_build_task(task_id, current_version, target_version):
             update_progress(task_id, 35, f"开始拉取 {image_count} 个镜像文件")
             write_log(f"开始拉取镜像，存储路径：{task_image_dir}", task_id=task_id)
             
-            # 调用拉取脚本，指定任务专属目录和任务专属镜像列表文件
-            with open(task_log_path, 'a', encoding='utf-8') as f:
-                pull_result = subprocess.run(
-                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
-                    check=True,
-                    stdout=f,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=True,
-                    timeout=3600  # nerdctl pull 大镜像，1 小时上限
-                )
+            # 调用拉取脚本，用 PIPE 捕获输出（避免 with open 缓冲导致异常时输出丢失）
+            pull_result = subprocess.run(
+                ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                timeout=3600  # nerdctl pull 大镜像，1 小时上限
+            )
+            # 将脚本输出写入本地日志和 Redis
+            pull_output = pull_result.stdout.strip()
+            if pull_output:
+                with open(task_log_path, 'a', encoding='utf-8') as f:
+                    f.write(pull_output + '\n')
+                for line in pull_output.split('\n'):
+                    line = line.strip()
+                    if line:
+                        write_log(line, task_id=task_id)
+            if pull_result.returncode != 0:
+                raise Exception(f"镜像拉取脚本执行失败，退出码 {pull_result.returncode}")
             
             # 验证镜像拉取结果：任务目录必须有.tar文件
             tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
@@ -541,6 +550,18 @@ def run_build_task(task_id, current_version, target_version):
                 "complete": True,
                 "error": True
             })
+            # 读取本地日志（子脚本的 stdout/stderr）写入 Redis，使前端能看到完整报错
+            if os.path.exists(task_log_path):
+                try:
+                    with open(task_log_path, 'r', encoding='utf-8') as f:
+                        local_log = f.read().strip()
+                    if local_log:
+                        for line in local_log.split('\n'):
+                            line = line.strip()
+                            if line:
+                                write_log(line, level="ERROR", task_id=task_id)
+                except Exception:
+                    pass
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             # 打印异常堆栈，便于问题排查
             traceback.print_exc()
@@ -611,15 +632,26 @@ def run_build_task_v7(task_id, images):
             update_progress(task_id, 25, "镜像拉取清单生成完成，准备拉取镜像文件")
             write_log(f"开始拉取镜像，存储路径：{task_image_dir}", task_id=task_id)
 
-            with open(task_log_path, 'a', encoding='utf-8') as f:
-                subprocess.run(
-                    ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
-                    check=True,
-                    stdout=f,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=True,
-                    timeout=3600  # nerdctl pull 大镜像，1 小时上限
-                )
+            # 调用拉取脚本，用 PIPE 捕获输出（避免 with open 缓冲导致异常时输出丢失）
+            pull_result = subprocess.run(
+                ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                timeout=3600  # nerdctl pull 大镜像，1 小时上限
+            )
+            # 将脚本输出写入本地日志和 Redis
+            pull_output = pull_result.stdout.strip()
+            if pull_output:
+                with open(task_log_path, 'a', encoding='utf-8') as f:
+                    f.write(pull_output + '\n')
+                for line in pull_output.split('\n'):
+                    line = line.strip()
+                    if line:
+                        write_log(line, task_id=task_id)
+            if pull_result.returncode != 0:
+                raise Exception(f"镜像拉取脚本执行失败，退出码 {pull_result.returncode}")
 
             tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
             if not tar_files:
@@ -688,6 +720,18 @@ def run_build_task_v7(task_id, images):
                 "complete": True,
                 "error": True
             })
+            # 读取本地日志（子脚本的 stdout/stderr）写入 Redis，使前端能看到完整报错
+            if os.path.exists(task_log_path):
+                try:
+                    with open(task_log_path, 'r', encoding='utf-8') as f:
+                        local_log = f.read().strip()
+                    if local_log:
+                        for line in local_log.split('\n'):
+                            line = line.strip()
+                            if line:
+                                write_log(line, level="ERROR", task_id=task_id)
+                except Exception:
+                    pass
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             traceback.print_exc()
 
