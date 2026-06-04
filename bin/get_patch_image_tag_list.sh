@@ -139,7 +139,10 @@ function get_patch_image_tag_list() {
     # 生成需要更新 Patch 的镜像列表集
     rm -f ${PATCH_IMAGE_TAG_LIST_FILE}
     for patch in ${DIFF_PATCH_LIST[@]}; do
-        grep ":${IMAGE_TAG_PREFIX}" ${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh|sed s'/ //g'  >> ${TMP_PATCH_IMAGE_TAG_LIST_FILE}
+        make_file="${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh"
+        if [ -f "$make_file" ]; then
+            grep ":${IMAGE_TAG_PREFIX}" "$make_file" >> ${TMP_PATCH_IMAGE_TAG_LIST_FILE} 2>/dev/null || true
+        fi
     done
     # 过滤需要更新的镜像列表
     cat ${TMP_PATCH_IMAGE_TAG_LIST_FILE} | sort -V | tac | awk -F: '!seen[$1]++' | tac | sed -E 's/^([^:]+):(.+)$/\1_tag: \2/' >> ${PATCH_IMAGE_TAG_LIST_FILE}

@@ -371,7 +371,7 @@
    STATE
    ================================================================ */
 let versionData=[],eventSource=null,currentSeries='v6',isBuilding=false;
-let lastLogMessage='',existingFilesData=[],logExpanded=false;
+let existingFilesData=[],logExpanded=false,renderedLogCount=0;
 
 /* ================================================================
    UTILS
@@ -458,7 +458,7 @@ function startBuildProcess(e){
     ab.disabled=true;
     ab.innerHTML='<span class="spinner"></span> 构建中...';
     bc.classList.add('active');bl.classList.remove('expanded');bl.innerHTML='';
-    lastLogMessage='';logExpanded=false;
+    logExpanded=false;renderedLogCount=0;
     document.getElementById('taskStateText').textContent='排队中';
     document.getElementById('taskMessageText').textContent='';
     document.getElementById('btnToggleLog').textContent='展开日志';
@@ -488,15 +488,24 @@ function resetBuildState(){
     const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn'),bc=document.getElementById('buildCard');
     b6.innerHTML='<i class="fas fa-play"></i> 开始构建';b7.innerHTML='<i class="fas fa-play"></i> 开始构建';
     isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
-    lastLogMessage='';if(eventSource){eventSource.close();eventSource=null}
+    renderedLogCount=0;if(eventSource){eventSource.close();eventSource=null}
     bc.classList.remove('active');checkBuildBtnStatus();
 }
 let newPackageName='';
 function handleBuildStatus(d){
     const st=document.getElementById('taskStateText');
     const mt=document.getElementById('taskMessageText'),logs=Array.isArray(d.logs)?d.logs:[];
-    if(logs.length>0){const l=logs[logs.length-1];if(l&&l.content)addLog(l.content,mapLogLevel(l.level))}
-    else if(d.message)addLog(d.message,mapStatusToLogType(d.status));
+    // 只渲染新增的日志（跳过已渲染的部分）
+    if(logs.length>renderedLogCount){
+        const newLogs=logs.slice(renderedLogCount);
+        for(let i=0;i<newLogs.length;i++){
+            const l=newLogs[i];
+            if(l&&l.content)addLog(l.content,mapLogLevel(l.level))
+        }
+        renderedLogCount=logs.length;
+    }
+    // 如果日志被 ltrim 截断了，修正计数器避免溢出
+    if(logs.length<renderedLogCount)renderedLogCount=logs.length;
     switch(d.status){
         case'queued':st.textContent='排队中';updateProgressBar(d.percent||0,'');mt.textContent=d.message||'';break;
         case'progress':st.textContent='构建中';updateProgressBar(d.percent,d.message);mt.textContent=d.message||'';break;
@@ -533,14 +542,13 @@ function updateProgressBar(pct,modifier){
     if(modifier==='error')b.classList.add('error');if(modifier==='success')b.classList.add('success');
 }
 function addLog(msg,type){
-    const c=sanitizeLogMessage(msg);if(!c||c===lastLogMessage)return;lastLogMessage=c;
+    const c=String(msg).trim();if(!c)return;
     const el=document.getElementById('buildLog'),d=document.createElement('div');d.className='log-entry';
     const ts=new Date().toTimeString().slice(0,8);
     const cls=type==='error'?'log-error':type==='success'?'log-success':'log-info';
     d.innerHTML=`<span class="log-time">[${ts}]</span> <span class="${cls}">${c}</span>`;
     el.appendChild(d);el.scrollTop=el.scrollHeight;
 }
-function sanitizeLogMessage(m){if(!m)return'';return String(m).replace(/\s*\(\s*\d{1,3}%\s*\)\s*$/,'').trim()}
 function mapStatusToLogType(s){return s==='complete'?'success':s==='error'?'error':'info'}
 function mapLogLevel(l){return l==='ERROR'?'error':l==='WARNING'?'info':'info'}
 

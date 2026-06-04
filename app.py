@@ -219,6 +219,75 @@ def enqueue_build_task(payload):
 
 
 # -------------------------- 工具函数（文件列表处理） --------------------------
+# ANSI 转义码过滤：nerdctl 输出含进度条颜色码，前端不需要
+_ANSI_RE = re.compile(r'\x1B\[[0-9;]*[a-zA-Z]')
+# pull_save.sh / get_patch_image_tag_list.sh 输出自带 [YYYY-MM-DD HH:MM:SS] 前缀，去掉避免双重时间戳
+_SHELL_TS_RE = re.compile(r'^\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\]\s*')
+
+def _strip_ansi(text):
+    return _ANSI_RE.sub('', text)
+
+def _clean_shell_line(line):
+    """过滤 ANSI 码 + 去掉脚本自带的时间戳前缀"""
+    line = _strip_ansi(line).strip()
+    return _SHELL_TS_RE.sub('', line)
+
+def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", heartbeat_interval=5):
+    """用 Popen 逐行读取子脚本输出，过滤 ANSI 码，实时写入 Redis 日志。
+
+    策略：
+    1. 关键事件（登录、开始/完成、错误）立即写入 Redis
+    2. 耗时操作期间（如拉取 layer），每 heartbeat_interval 秒写一条最新进度，给前端心跳反馈
+    3. 所有输出完整写入本地文件
+    """
+    import time as _time
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        bufsize=1  # 行缓冲
+    )
+    last_logged = ""
+    last_heartbeat = _time.time()
+    latest_progress = ""  # 缓存最新进度行（已清理），用于心跳推送
+
+    for line in iter(proc.stdout.readline, ''):
+        # 完整清理：去 ANSI 码 + 去脚本自带时间戳
+        clean = _clean_shell_line(line)
+        if not clean:
+            continue
+
+        # 所有输出完整写入本地文件（保留原始 ANSI 清理后的内容）
+        with open(task_log_path, 'a', encoding='utf-8') as f:
+            f.write(clean + '\n')
+
+        # 已清理的内容缓存为进度行
+        latest_progress = clean
+        lower = clean.lower()
+
+        # 判断是否为关键事件（立即推送）
+        is_key = any(kw in lower for kw in [
+            '开始登录', '登录成功', 'login',
+            '开始拉取镜像：', '镜像拉取成功：',
+            '开始保存镜像', '镜像保存成功', '保存成功',
+            '错误：', 'error:', 'warning:', '警告：',
+            '所有镜像处理完成', '===== 所有镜像处理完成'
+        ])
+
+        if is_key and clean != last_logged:
+            write_log(clean, task_id=task_id)
+            last_logged = clean
+            last_heartbeat = _time.time()
+        elif _time.time() - last_heartbeat >= heartbeat_interval and latest_progress:
+            # 超时心跳推送：用最新进度行通知前端
+            write_log(latest_progress, task_id=task_id)
+            last_heartbeat = _time.time()
+
+    proc.wait()
+    return proc.returncode
+
+
 def write_log(content, level="INFO", task_id=None):
     """写日志（含时间戳，同时输出到文件和控制台）"""
     log_file = os.path.join(LOG_DIR, 'app.log')
@@ -451,28 +520,16 @@ def run_build_task(task_id, current_version, target_version):
             # 执行pull_save.sh，拉取镜像到任务专属目录
             update_progress(task_id, 35, f"开始拉取 {image_count} 个镜像文件")
             write_log(f"开始拉取镜像，存储路径：{task_image_dir}", task_id=task_id)
-            
-            # 调用拉取脚本，用 PIPE 捕获输出（避免 with open 缓冲导致异常时输出丢失）
-            pull_result = subprocess.run(
+
+            # 调用拉取脚本，逐行流式输出到 Redis（带 ANSI 过滤）
+            rc = _run_and_stream(
+                task_id,
                 ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                timeout=3600  # nerdctl pull 大镜像，1 小时上限
+                task_log_path
             )
-            # 将脚本输出写入本地日志和 Redis
-            pull_output = pull_result.stdout.strip()
-            if pull_output:
-                with open(task_log_path, 'a', encoding='utf-8') as f:
-                    f.write(pull_output + '\n')
-                for line in pull_output.split('\n'):
-                    line = line.strip()
-                    if line:
-                        write_log(line, task_id=task_id)
-            if pull_result.returncode != 0:
-                raise Exception(f"镜像拉取脚本执行失败，退出码 {pull_result.returncode}")
-            
+            if rc != 0:
+                raise Exception(f"镜像拉取脚本执行失败，退出码 {rc}")
+
             # 验证镜像拉取结果：任务目录必须有.tar文件
             tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
             if not tar_files:
@@ -632,26 +689,14 @@ def run_build_task_v7(task_id, images):
             update_progress(task_id, 25, "镜像拉取清单生成完成，准备拉取镜像文件")
             write_log(f"开始拉取镜像，存储路径：{task_image_dir}", task_id=task_id)
 
-            # 调用拉取脚本，用 PIPE 捕获输出（避免 with open 缓冲导致异常时输出丢失）
-            pull_result = subprocess.run(
+            # 调用拉取脚本，逐行流式输出到 Redis（带 ANSI 过滤）
+            rc = _run_and_stream(
+                task_id,
                 ["/bin/bash", PULL_SCRIPT_PATH, "-d", task_image_dir, "-f", task_patch_list_path],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                timeout=3600  # nerdctl pull 大镜像，1 小时上限
+                task_log_path
             )
-            # 将脚本输出写入本地日志和 Redis
-            pull_output = pull_result.stdout.strip()
-            if pull_output:
-                with open(task_log_path, 'a', encoding='utf-8') as f:
-                    f.write(pull_output + '\n')
-                for line in pull_output.split('\n'):
-                    line = line.strip()
-                    if line:
-                        write_log(line, task_id=task_id)
-            if pull_result.returncode != 0:
-                raise Exception(f"镜像拉取脚本执行失败，退出码 {pull_result.returncode}")
+            if rc != 0:
+                raise Exception(f"镜像拉取脚本执行失败，退出码 {rc}")
 
             tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
             if not tar_files:
