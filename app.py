@@ -548,14 +548,17 @@ def run_build_task(task_id, current_version, target_version):
             target_patch_version = target_version.split('-')[0]
             upgrade_package = f"deepflow_patch_v669_{current_patch_version}_{target_patch_version}.tar.gz"
             upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
-            
-            # 执行TAR.GZ打包（--transform确保解包后无嵌套目录）
+
+            # 包名去掉 .tar.gz 后缀作为解包后的目录名
+            extract_dir = upgrade_package.rsplit('.tar.gz', 1)[0]
+
+            # 执行TAR.GZ打包（--transform 将文件放入同名目录）
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 tar_result = subprocess.run(
                     [
-                        "tar", "-czf", upgrade_path,  # 核心参数：创建gzip压缩包
-                        "--transform", r"s/.*\///",    # 关键：仅保留文件名，删除路径前缀
-                        *files_to_pack                # 待打包的所有文件
+                        "tar", "-czf", upgrade_path,
+                        "--transform", f"s|.*|{extract_dir}/&|",   # 文件放入 extract_dir/ 目录
+                        *files_to_pack
                     ],
                     check=True,
                     stdout=f,
@@ -700,11 +703,13 @@ def run_build_task_v7(task_id, images):
             upgrade_package = f"deepflow_patch_v7_{task_id}.tar.gz"
             upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
 
+            extract_dir = upgrade_package.rsplit('.tar.gz', 1)[0]
+
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 subprocess.run(
                     [
                         "tar", "-czf", upgrade_path,
-                        "--transform", r"s/.*\///",
+                        "--transform", f"s|.*|{extract_dir}/&|",
                         *files_to_pack
                     ],
                     check=True,
