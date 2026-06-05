@@ -145,7 +145,7 @@ function get_patch_image_tag_list() {
         fi
     done
     # 过滤需要更新的镜像列表
-    cat ${TMP_PATCH_IMAGE_TAG_LIST_FILE} | sort -V | tac | awk -F: '!seen[$1]++' | tac | sed -E 's/^([^:]+):(.+)$/\1_tag: \2/' >> ${PATCH_IMAGE_TAG_LIST_FILE}
+    cat ${TMP_PATCH_IMAGE_TAG_LIST_FILE} | sed 's/^[[:space:]]*//' | sort -V | tac | awk -F: '!seen[$1]++' | tac | sed -E 's/^([^:]+):(.+)$/\1_tag: \2/' >> ${PATCH_IMAGE_TAG_LIST_FILE}
 }
 
 # 主函数
