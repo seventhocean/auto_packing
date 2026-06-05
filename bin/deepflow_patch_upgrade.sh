@@ -142,10 +142,14 @@ update_image_tags() {
   echo -e "\n\033[1;34m[步骤 4/$current_step] 更新镜像标签...\033[0m"
   [ -f "$patch_image_list" ] || { echo "缺少文件: $patch_image_list"; exit 1; }
 
-  while IFS=: read -r image tag; do
-    image=$(echo "$image" | tr -d '\r' | xargs)
+  while IFS=: read -r image_part tag; do
+    # 移除可能的回车符和空格
+    image_part=$(echo "$image_part" | tr -d '\r' | xargs)
     tag=$(echo "$tag" | tr -d '\r' | xargs)
-    
+
+    # 删除 _tag 后缀（兼容两种格式）
+    image=${image_part%_tag}
+
     echo "更新: $image → $tag"
     # 转义 image 名中的 . 防止匹配任意字符
     escaped_image=$(echo "$image" | sed 's/\./\\./g')
@@ -196,8 +200,9 @@ check_image() {
   while IFS= read -r line; do
       [[ -z "$line" || "$line" =~ ^# ]] && continue
 
-      # 处理格式并清理特殊字符
-      processed_line=$(echo "$line" | sed -E -e 's/_tag:[[:space:]]+/:/' -e 's/\r//g' -e 's/[[:space:]]*$//')
+      # 处理格式：去回车、去首尾空格、统一转为 name:tag 格式
+      # 兼容两种格式：name_tag: v6.6.822 和 name: v6.6.822
+      processed_line=$(echo "$line" | tr -d '\r' | sed -E -e 's/_tag:[[:space:]]+/:/' -e 's/:[[:space:]]+/:/' | xargs)
 
       # 提取镜像名和版本
       image_name=$(echo "$processed_line" | cut -d: -f1)
