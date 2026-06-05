@@ -232,13 +232,12 @@ def _clean_shell_line(line):
     line = _strip_ansi(line).strip()
     return _SHELL_TS_RE.sub('', line)
 
-def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", heartbeat_interval=5):
+def _run_and_stream(task_id, cmd, task_log_path, log_prefix=""):
     """用 Popen 逐行读取子脚本输出，过滤 ANSI 码，实时写入 Redis 日志。
 
     策略：
     1. 关键事件（登录、开始/完成、错误）立即写入 Redis
-    2. 耗时操作期间（如拉取 layer），每 heartbeat_interval 秒写一条最新进度，给前端心跳反馈
-    3. 所有输出完整写入本地文件
+    2. 所有输出完整写入本地文件（排查问题时查看）
     """
     import time as _time
     proc = subprocess.Popen(
@@ -249,8 +248,6 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", heartbeat_interv
         bufsize=1  # 行缓冲
     )
     last_logged = ""
-    last_heartbeat = _time.time()
-    latest_progress = ""  # 缓存最新进度行（已清理），用于心跳推送
 
     for line in iter(proc.stdout.readline, ''):
         # 完整清理：去 ANSI 码 + 去脚本自带时间戳
@@ -258,12 +255,10 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", heartbeat_interv
         if not clean:
             continue
 
-        # 所有输出完整写入本地文件（保留原始 ANSI 清理后的内容）
+        # 所有输出完整写入本地文件
         with open(task_log_path, 'a', encoding='utf-8') as f:
             f.write(clean + '\n')
 
-        # 已清理的内容缓存为进度行
-        latest_progress = clean
         lower = clean.lower()
 
         # 判断是否为关键事件（立即推送）
@@ -272,17 +267,13 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", heartbeat_interv
             '开始拉取镜像：', '镜像拉取成功：',
             '开始保存镜像', '镜像保存成功', '保存成功',
             '错误：', 'error:', 'warning:', '警告：',
-            '所有镜像处理完成', '===== 所有镜像处理完成'
+            '所有镜像处理完成', '===== 所有镜像处理完成',
+            'failed', 'fatal'
         ])
 
         if is_key and clean != last_logged:
             write_log(clean, task_id=task_id)
             last_logged = clean
-            last_heartbeat = _time.time()
-        elif _time.time() - last_heartbeat >= heartbeat_interval and latest_progress:
-            # 超时心跳推送：用最新进度行通知前端
-            write_log(latest_progress, task_id=task_id)
-            last_heartbeat = _time.time()
 
     proc.wait()
     return proc.returncode
@@ -540,10 +531,15 @@ def run_build_task(task_id, current_version, target_version):
 
             # 准备打包
             update_progress(task_id, 70, "准备打包升级包")
-            
+
             if not os.path.exists(UPGRADE_SCRIPT_PATH) or not os.path.isfile(UPGRADE_SCRIPT_PATH):
                 raise Exception(f"升级脚本不存在：{UPGRADE_SCRIPT_PATH}")
-            files_to_pack = tar_files + [task_patch_list_path, UPGRADE_SCRIPT_PATH]
+
+            # 复制镜像列表到任务目录的标准文件名，确保 upgrade 脚本能找到
+            standard_list_path = os.path.join(task_image_dir, "patch_image_tag_list.txt")
+            shutil.copy2(task_patch_list_path, standard_list_path)
+
+            files_to_pack = tar_files + [standard_list_path, UPGRADE_SCRIPT_PATH]
             write_log(f"准备打包 {len(files_to_pack)} 个文件", task_id=task_id)
 
             # 打包TAR.GZ升级包（仅包含当前任务的镜像+镜像列表）
@@ -607,18 +603,7 @@ def run_build_task(task_id, current_version, target_version):
                 "complete": True,
                 "error": True
             })
-            # 读取本地日志（子脚本的 stdout/stderr）写入 Redis，使前端能看到完整报错
-            if os.path.exists(task_log_path):
-                try:
-                    with open(task_log_path, 'r', encoding='utf-8') as f:
-                        local_log = f.read().strip()
-                    if local_log:
-                        for line in local_log.split('\n'):
-                            line = line.strip()
-                            if line:
-                                write_log(line, level="ERROR", task_id=task_id)
-                except Exception:
-                    pass
+            # _run_and_stream 已经实时写入 Redis 日志，这里只写错误信息即可
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             # 打印异常堆栈，便于问题排查
             traceback.print_exc()
@@ -765,18 +750,7 @@ def run_build_task_v7(task_id, images):
                 "complete": True,
                 "error": True
             })
-            # 读取本地日志（子脚本的 stdout/stderr）写入 Redis，使前端能看到完整报错
-            if os.path.exists(task_log_path):
-                try:
-                    with open(task_log_path, 'r', encoding='utf-8') as f:
-                        local_log = f.read().strip()
-                    if local_log:
-                        for line in local_log.split('\n'):
-                            line = line.strip()
-                            if line:
-                                write_log(line, level="ERROR", task_id=task_id)
-                except Exception:
-                    pass
+            # _run_and_stream 已经实时写入 Redis 日志，这里只写错误信息即可
             write_log(f"任务失败：{error_msg}", level="ERROR", task_id=task_id)
             traceback.print_exc()
 
