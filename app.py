@@ -552,12 +552,13 @@ def run_build_task(task_id, current_version, target_version):
             # 包名去掉 .tar.gz 后缀作为解包后的目录名
             extract_dir = upgrade_package.rsplit('.tar.gz', 1)[0]
 
-            # 执行TAR.GZ打包（--transform 将文件放入同名目录）
+            # 执行TAR.GZ打包（两步 transform：先去路径前缀，再加目录前缀）
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 tar_result = subprocess.run(
                     [
                         "tar", "-czf", upgrade_path,
-                        "--transform", f"s|.*|{extract_dir}/&|",   # 文件放入 extract_dir/ 目录
+                        "--transform", r"s|.*/||",             # 第一步：去掉文件路径前缀
+                        "--transform", f"s|.*|{extract_dir}/&|",  # 第二步：加上目录前缀
                         *files_to_pack
                     ],
                     check=True,
@@ -709,6 +710,7 @@ def run_build_task_v7(task_id, images):
                 subprocess.run(
                     [
                         "tar", "-czf", upgrade_path,
+                        "--transform", r"s|.*/||",
                         "--transform", f"s|.*|{extract_dir}/&|",
                         *files_to_pack
                     ],
