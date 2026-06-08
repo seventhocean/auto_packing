@@ -73,9 +73,10 @@ show_help() {
 ##镜像仓库登录（使用预设账号密码）
 repo_login() {
     log "${YELLOW}开始登录镜像仓库：hub.deepflow.yunshan.net${NC}"
-    # 检查容器工具是否存在
-    if ! command -v "$container_cmd" &> /dev/null; then
-        log "${RED}错误：容器工具 $container_cmd 未安装或未配置到环境变量${NC}"
+    # 检查容器工具是否存在（只取第一个词作为命令名）
+    local _cmd_bin=$(echo "$container_cmd" | awk '{print $1}')
+    if ! command -v "$_cmd_bin" &> /dev/null; then
+        log "${RED}错误：容器工具 $_cmd_bin 未安装或未配置到环境变量${NC}"
         exit 1
     fi
 
