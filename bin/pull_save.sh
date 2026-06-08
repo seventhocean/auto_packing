@@ -22,7 +22,7 @@ LOG_FILE="$BASE_DIR/../logs/app.log"
 
 # 容器工具（默认nerdctl，支持通过--cmd切换为docker）
 #container_cmd="docker"
-container_cmd="nerdctl"
+container_cmd="nerdctl -n k8s.io"
 # 镜像仓库前缀（默认DeepFlow仓库）
 repo="hub.deepflow.yunshan.net/dev/"
 # 镜像保存目录（默认空，需通过--dir指定）
