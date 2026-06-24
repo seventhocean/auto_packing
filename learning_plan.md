@@ -118,64 +118,245 @@
 
 ---
 
-## 三、监控项目（每天 2-3 小时，核心重点）
+## 三、监控项目 + Ansible（每天 2-3 小时，核心重点）
 
-### 20 天里程碑
+> **定位调整**：部署部分你已经熟，快速过；重点放在 **Exporter 开发（练 Python）** 和 **Ansible 批量运维** 上。
+
+### 里程碑（调整后）
 
 | 阶段 | 天数 | 目标 |
 |---|---|---|
-| **Week 1** | Day 1-7 | Prometheus + node_exporter + Grafana 跑起来，能看到主机指标 |
-| **Week 2** | Day 8-14 | Alertmanager + 飞书/钉钉告警 + Loki 日志接入 |
-| **Week 3** | Day 15-20 | 自定义 Exporter + K8s 监控 + 写进简历 |
+| **Phase 1** | Day 1-2 | Prometheus + node_exporter + Grafana 跑起来（你熟，快速过）|
+| **Phase 2** | Day 3-4 | Alertmanager + 飞书/钉钉告警 + Ansible 批量部署 Exporter |
+| **Phase 3** | Day 5-9 | **自定义 Exporter 开发（重点！Python 实战）** |
+| **Phase 4** | Day 10-12 | Blackbox Exporter + K8s 监控 + 写进简历 |
 | **最后** | Day 21-30 | 复习 + 模拟面试 + 投递 |
 
-### Week 1：基础监控（必做）
+### Phase 1：基础监控（Day 1-2，快速过）
 
 ```
-目标：打开 Grafana 能看到 10 台机器的 CPU/内存/磁盘/网络
+目标：半天搞定部署，打开 Grafana 能看到 10 台机器的指标
 ```
 
-- [ ] VM1 安装 Prometheus（Docker 部署）
-- [ ] 所有 VM 安装 node_exporter
+- [ ] VM1 用 Docker Compose 一键拉起 Prometheus + Grafana
+- [ ] 所有 VM 安装 node_exporter（**用 Ansible 批量装，不要手动**）
 - [ ] Prometheus 配置 scrape_configs，抓取所有节点
-- [ ] 安装 Grafana，导入 Dashboard（ID 1860 是经典主机面板）
+- [ ] Grafana 导入 Dashboard（ID 1860）
 - [ ] 练习 PromQL：avg(cpu)、sum by(instance)(rate(...))
 
-**关键：遇到问题记录下来，这就是面试素材。**
+**关键：部署不是重点，快速过。遇到的问题记下来就行。**
 
-### Week 2：告警 + 日志
+### Phase 2：告警 + Ansible（Day 3-4）
 
 ```
-目标：某台机器 CPU 超过 80% 能在飞书收到通知
+目标：告警能推到飞书；Ansible 能批量管理 10 台 VM
 ```
 
 - [ ] Alertmanager 部署 + 和 Prometheus 对接
 - [ ] 配置告警规则：CPU / 内存 / 磁盘 / 进程挂了
 - [ ] 飞书 webhook 通知
-- [ ] 配置 inhibit_rules 抑制（主机 down 时不重复告警服务异常）
-- [ ] Loki + Promtail 部署，接入 Docker 日志
+- [ ] 配置 inhibit_rules 抑制规则
 
-### Week 3：进阶 + 写简历
+**Ansible 部分（重要！）：**
+
+- [ ] 写 Ansible Inventory（10 台 VM 分组：prometheus / exporters / business）
+- [ ] Playbook 1：批量安装 node_exporter + 注册 systemd 服务
+- [ ] Playbook 2：批量推送 Prometheus scrape_configs + 热加载
+- [ ] Playbook 3：批量部署 Blackbox Exporter
+- [ ] Playbook 4：一键清理环境（uninstall 所有监控组件）
+
+**Ansible 面试可以讲：**
+- "10 台机器的 Exporter 部署用 Ansible 批量完成，不用手动 SSH"
+- "配置变更用 Ansible 推送 + Prometheus reload API 热加载，不重启"
+
+### Phase 3：自定义 Exporter 开发（Day 5-9，核心重点）⭐
 
 ```
-目标：能讲出"自定义 Exporter"和"K8s 监控"
+目标：用 Python 写 2-3 个自定义 Exporter，练 Python + 能写进简历
 ```
 
-- [ ] 用 Python 写一个自定义 Exporter（比如监控某个业务接口）
-  - `prometheus_client` 库，30 行代码
-- [ ] cAdvisor + kube-state-metrics 接入
-- [ ] Blackbox Exporter 探测 HTTP 站点
-- [ ] 整理成简历描述 + 准备 5 个面试问题答案
+这是整个监控项目的**核心价值** — 不是搭 Prometheus（谁都会），而是你能写 Exporter。
 
-### 简历描述（草案）
+#### Exporter 1：HTTP 接口监控 Exporter（Day 5-6）
 
-**云原生监控告警体系** — 个人实践
+```python
+# 功能：监控一组 HTTP 接口的响应时间和状态码
+# 练习点：requests 库、dict 操作、异常处理、多线程
 
-- 基于 Prometheus + Grafana + Loki 搭建三层可观测体系（指标/日志/告警），覆盖 10+ 节点
-- 采集：node_exporter + cAdvisor + kube-state-metrics 采集主机/Docker/K8s 指标，自定义 Blackbox Exporter 探测站点可用性
-- 告警：Alertmanager 按严重等级路由，飞书/钉钉 webhook 通知，配置抑制规则避免告警风暴
-- 可视化：Grafana 分层面板（基础设施/中间件/应用），配置告警阈值联动
-- 实战：基于监控定位过 Pod OOMKilled、磁盘打满、慢查询等真实问题
+import time
+import requests
+from prometheus_client import start_http_server, Gauge, Counter
+
+# 指标定义
+REQUEST_DURATION = Gauge('http_request_duration_seconds', 'Request duration', ['host', 'endpoint', 'status'])
+REQUEST_TOTAL = Counter('http_requests_total', 'Total requests', ['host', 'endpoint', 'status'])
+
+def collect_metrics(targets):
+    """遍历目标列表，请求每个接口，记录指标"""
+    for target in targets:
+        try:
+            start = time.time()
+            resp = requests.get(target['url'], timeout=5)
+            duration = time.time() - start
+            REQUEST_DURATION.labels(
+                host=target['host'], endpoint=target['endpoint'],
+                status=resp.status_code
+            ).set(duration)
+            REQUEST_TOTAL.labels(
+                host=target['host'], endpoint=target['endpoint'],
+                status=resp.status_code
+            ).inc()
+        except requests.RequestException as e:
+            # 异常处理：超时、连接拒绝等
+            REQUEST_TOTAL.labels(
+                host=target['host'], endpoint=target['endpoint'],
+                status='error'
+            ).inc()
+
+if __name__ == '__main__':
+    start_http_server(9200)  # 暴露 /metrics 端口
+    targets = [
+        {'host': 'web1', 'endpoint': '/api/health', 'url': 'http://10.0.0.1:8080/api/health'},
+        # ...
+    ]
+    while True:
+        collect_metrics(targets)
+        time.sleep(15)
+```
+
+**练习到的 Python 知识点：**
+- `requests` 库发 HTTP 请求
+- `dict` 带 label 操作（`labels(host=...).set()`）
+- `try/except` 异常处理
+- `time` 模块计时
+- 函数定义 + 参数传递
+
+#### Exporter 2：进程/端口存活监控 Exporter（Day 7）
+
+```python
+# 功能：监控指定进程是否存活、端口是否通
+# 练习点：subprocess、socket、文件读写（读配置）
+
+import socket
+import subprocess
+from prometheus_client import start_http_server, Gauge
+
+PROCESS_UP = Gauge('process_up', 'Whether process is running', ['process_name'])
+PORT_ALIVE = Gauge('port_alive', 'Whether port is reachable', ['host', 'port'])
+
+def check_process(name):
+    """检查进程是否存活（用 ps + grep 模拟）"""
+    try:
+        result = subprocess.run(
+            ['pgrep', '-f', name],
+            capture_output=True, text=True, timeout=5
+        )
+        return 1 if result.returncode == 0 else 0
+    except Exception:
+        return 0
+
+def check_port(host, port):
+    """检查端口是否可达"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return 1 if result == 0 else 0
+    except Exception:
+        return 0
+
+if __name__ == '__main__':
+    start_http_server(9201)
+    # 从配置文件读取要监控的进程和端口
+    processes = ['prometheus', 'grafana-server', 'alertmanager']
+    ports = [('10.0.0.1', 9090), ('10.0.0.1', 3000)]
+
+    while True:
+        for p in processes:
+            PROCESS_UP.labels(process_name=p).set(check_process(p))
+        for host, port in ports:
+            PORT_ALIVE.labels(host=host, port=port).set(check_port(host, port))
+        time.sleep(10)
+```
+
+**练习到的 Python 知识点：**
+- `subprocess.run()` 调用系统命令
+- `socket` 网络连接
+- 文件读写（读配置文件）
+- 函数封装
+
+#### Exporter 3（可选）：MySQL 慢查询监控 Exporter（Day 8-9）
+
+```python
+# 功能：连接 MySQL，查询慢查询数量
+# 练习点：pymysql/mysql-connector、SQL 查询、数据解析
+# 如果你 MySQL 基础 OK，可以加上这个
+```
+
+**如果 MySQL 不熟，跳过这个，把前两个做扎实就行。**
+
+### Phase 4：收尾 + 写简历（Day 10-12）
+
+- [ ] Blackbox Exporter 部署，探测 HTTP/TCP 站点
+- [ ] 整理所有 Exporter 代码，写 README
+- [ ] 用 Ansible Playbook 管理所有 Exporter 的部署/更新
+- [ ] 整理成简历描述 + 准备面试问题
+
+### 简历描述（更新版）
+
+**云原生监控告警体系** — 个人实践 | 2026.06
+
+- 基于 Prometheus + Grafana + Alertmanager 搭建监控告警体系，覆盖 10+ 节点，使用 Ansible 批量管理 Exporter 部署
+- 使用 Python（prometheus_client）开发自定义 Exporter：HTTP 接口响应监控、进程/端口存活探测，暴露指标供 Prometheus 采集
+- Alertmanager 按严重等级路由告警，飞书 webhook 通知，配置 inhibit_rules 避免告警风暴
+- Grafana 分层面板（基础设施/中间件/应用），结合业务指标实现端到端可观测
+
+### 面试官会问的问题（准备 5 个）
+
+1. **Exporter 的 pull 模型是什么？和 push 模型有什么区别？**
+   → Prometheus 主动拉 /metrics 端点；Pushgateway 用于短生命周期任务
+
+2. **你的自定义 Exporter 怎么暴露指标？prometheus_client 的 Gauge 和 Counter 区别？**
+   → Gauge 可增可减（温度、响应时间）；Counter 只增不减（请求总数）
+
+3. **PromQL 的 rate() 和 irate() 区别？**
+   → rate 看时间段内平均增长率；irate 看最后两个数据点的瞬时增长率
+
+4. **Alertmanager 的 group_wait / group_interval / repeat_interval 分别是什么？**
+   → 分组等待 / 分组间隔 / 重复通知间隔
+
+5. **Ansible 怎么实现批量部署？Playbook 和 ad-hoc 命令的区别？**
+   → Playbook 是声明式 YAML，可重复执行；ad-hoc 是一次性命令
+
+---
+
+## 四、Ansible 速成（穿插在监控项目中）
+
+> 不用专门花时间学，在做监控项目的过程中顺便练。
+
+### 你需要掌握的
+
+| 概念 | 用途 | 练习场景 |
+|---|---|---|
+| Inventory | 主机分组 | 10 台 VM 分成 prometheus / exporters / business 组 |
+| Playbook | 声明式自动化任务 | 批量安装 node_exporter |
+| Handler | 触发式操作 | 配置变更后 reload Prometheus |
+| Template (Jinja2) | 动态配置文件 | 每台机器不同的 scrape_configs |
+| Roles | 复用 Playbook | 把 Exporter 部署封装成 role |
+| Ad-hoc 命令 | 一次性批量操作 | `ansible all -m ping`、`ansible all -m shell -a "uptime"` |
+
+### 学习路径
+
+1. **Day 3**：先写一个 Inventory + 一个最简单的 Playbook（批量 ping）
+2. **Day 4**：写批量安装 node_exporter 的 Playbook
+3. **Day 10**：把后续所有部署操作都用 Ansible 做
+4. 遇到问题直接问 AI 或查文档，不要看教程视频
+
+### 推荐资源
+
+- [Ansible 官方入门](https://docs.ansible.com/ansible/latest/getting_started/)
+- 遇到问题直接 `ansible-doc <module_name>` 查模块文档
 
 ---
 
