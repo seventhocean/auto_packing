@@ -157,6 +157,26 @@ class AppLogicTest(unittest.TestCase):
         resp = client.get('/build?series=v6&current=../../etc&target=02-x')
         self.assertEqual(resp.status_code, 400)
 
+    def test_incremental_logs_by_seq(self):
+        ap.initialize_task_status('log-task', 'queued')
+        ap.append_task_log('log-task', '2026-01-01 00:00:00', 'INFO', 'a')
+        ap.append_task_log('log-task', '2026-01-01 00:00:01', 'INFO', 'b')
+        ap.append_task_log('log-task', '2026-01-01 00:00:02', 'INFO', 'c')
+
+        full = ap.get_task_status('log-task')
+        self.assertEqual([l['content'] for l in full['logs']], ['a', 'b', 'c'])
+        self.assertEqual(full['log_seq'], 3)
+
+        incremental = ap.get_task_status('log-task', since_seq=2)
+        self.assertEqual([l['content'] for l in incremental['logs']], ['c'])
+        self.assertEqual(incremental['log_seq'], 3)
+
+        client = ap.app.test_client()
+        resp = client.get('/task-status/log-task?since=1')
+        self.assertEqual(resp.status_code, 200)
+        logs = resp.get_json()['status']['logs']
+        self.assertEqual([l['content'] for l in logs], ['b', 'c'])
+
     def test_run_and_stream_times_out(self):
         log_path = os.path.join(self.tmpdir, 'timeout.log')
         started = time.time()

@@ -48,8 +48,8 @@
 
 ### 🔴 高优先级（影响日常使用）
 
-**1. V6 版本选择器用原生 `<select>`，100+ 版本无法搜索**
-`index.html:1110` — 需替换为自定义可搜索下拉组件。最大体验瓶颈。
+**1. ~~V6 版本选择器用原生 `<select>`，100+ 版本无法搜索~~**
+已修复：替换为自定义可搜索下拉（支持关键字过滤、键盘上下键/回车选择、点击外部关闭）；目标版本按 `seq_num` 过滤。
 
 **2. 无升级预览面板**
 `index.html` — 选版本后不显示中间跨越版本数、预计镜像数、预计包大小。
@@ -65,25 +65,25 @@
 **5. `pull_save.sh:83` 硬编码凭据**
 内网环境，暂不修复。后续应恢复为环境变量。
 
-**6. `debug=True` 在生产代码中**
-`app.py:954` — debug 模式启动 reloader 和 werkzeug debugger。
+**6. ~~`debug=True` 在生产代码中~~**
+已修复：`app.py` 仅在 `FLASK_DEBUG=1` 时启用 debug。
 
 **7. 无 OSS 版本缓存**
-`app.py:241` — 每次构建都执行 `ossutil ls` 网络请求。应加 TTL 缓存。
+`get_oss_versions()` — 每次构建/页面加载都执行 `ossutil ls` 网络请求。可考虑短 TTL 缓存。
 
-**8. SSE 每次推送完整日志列表**
-`app.py:131` — 应推送增量日志而非全量。前端已有去重逻辑作为补偿。
+**8. ~~SSE 每次推送完整日志列表~~**
+已修复：日志条目带单调递增 `seq`，SSE/`/task-status` 支持 `?since=<seq>` 只返回增量日志。
 
-**9. `retry_on_timeout=True` 可能导致 INCR 重复**
-`app.py:91` — 非幂等 Redis 操作超时重试会重复计数。
+**9. ~~`retry_on_timeout=True` 可能导致 INCR 重复~~**
+已修复：并发准入改为 `SET NX` slot，不再依赖非幂等的 `INCR builds:active`。
 
 ### 🟢 低优先级
 
 **10. `reclaim_stale_tasks` 逆序重入队**
 `worker.py:48` — `reversed()` + `rpush` 改变任务优先级。
 
-**11. 无 `/health` 端点**
-K8s 探针用 `GET /` 渲染完整 HTML。
+**11. ~~无 `/health` 端点~~**
+已修复：新增 `GET /health`，K8s 探针已切换。
 
 **12. `upgrade_packages/` 无自动清理**
 历史包只增不减。
@@ -119,3 +119,5 @@ K8s 探针用 `GET /` 渲染完整 HTML。
 | 12 | P2 | shell 参数错误时返回 0；nuwa 缺失时报错不清晰 | 修正退出码并增加 nuwa 目录检查 |
 | 13 | P1 | 心跳/回收线程遇 Redis 异常会静默退出，导致任务被误回收 | 线程循环内捕获异常并记录告警 |
 | 14 | P2 | worker 主循环 Redis 异常会直接退出 | 捕获后 sleep 5s 重试 |
+| 15 | P1 | SSE/状态接口每秒推送完整日志列表 | 日志增加 `seq` 游标，支持 `?since=<seq>` 增量返回，前端按游标重连 |
+| 16 | P1 | V6 版本选择器为原生 select，100+ 版本不可搜索 | 替换为可搜索下拉组件，支持过滤/键盘操作，目标版本按 `seq_num` 过滤 |

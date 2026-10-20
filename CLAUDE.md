@@ -121,7 +121,7 @@ docker run -p 8000:8000 \
 - **顶部 Hero**：标题 + 系统概览（当前模式、已有包数量）
 - **左侧工作区**（`main.workspace`）：
   - V6/V7 下拉切换（`#seriesModeSelect`），切换时改变 `body[data-series]` 触发不同配色主题
-  - V6 Panel：两个可搜索版本选择器（原生 `<select>` + `fetchVersions()`）
+  - V6 Panel：两个可搜索版本选择器（自定义 combobox + `fetchVersions()`）
   - V7 Panel：`<textarea>` 输入镜像列表
   - 任务状态区：进度条 + 日志 + 下载按钮 / 空闲占位
 - **右侧资源区**（`aside.resource-panel`）：已有升级包列表 + 搜索 + 刷新
@@ -214,6 +214,8 @@ redis:
 - ✅ worker 收到非法队列消息会崩溃 → 跳过并告警
 - ✅ `debug=True` 硬编码 → 由 `FLASK_DEBUG=1` 控制
 - ✅ 缺少 `/health` → 新增轻量健康检查，K8s 探针已切换
+- ✅ SSE 全量推送日志 → 日志带 `seq`，支持 `?since=<seq>` 增量推送，前端按游标重连
+- ✅ V6 原生 `<select>` 不可搜索 → 改为自定义可搜索下拉，支持键盘操作
 
 ### 仍存在的问题
 
@@ -223,7 +225,7 @@ redis:
 - **无取消构建按钮** — 任务提交后无法中止（现有超时兜底）
 - **`pull_save.sh:84`** 硬编码凭据（内网环境，暂不修复）
 - **无 OSS 版本缓存** — 每次 API 调用都执行 `ossutil ls`
-- **SSE 长连接占用 gunicorn 线程** — 且每秒全量读取日志，建议改增量推送
+- **SSE 长连接占用 gunicorn 线程** — 每个构建页面会长期占用一个线程，用户较多时需提高 workers/threads
 - **`upgrade_packages/` 无自动清理**
 - **PVC 名拼写错误**: `auto-pancking-pvc`
 

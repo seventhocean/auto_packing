@@ -111,6 +111,10 @@ def task_logs_key(task_id):
     return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:logs"
 
 
+def task_log_seq_key(task_id):
+    return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:log_seq"
+
+
 def task_slot_key(task_id):
     return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:slot"
 
@@ -131,7 +135,7 @@ def worker_heartbeat_key(worker_id):
     return f"{REDIS_CONFIG['key_prefix']}:worker:{worker_id}:heartbeat"
 
 
-def get_task_status(task_id, include_logs=True):
+def get_task_status(task_id, include_logs=True, since_seq=0):
     status_json = redis_client.get(task_meta_key(task_id))
     if not status_json:
         return None
@@ -139,8 +143,30 @@ def get_task_status(task_id, include_logs=True):
     status = json.loads(status_json)
     if include_logs:
         logs = redis_client.lrange(task_logs_key(task_id), 0, -1)
-        status['logs'] = [json.loads(item) for item in logs]
+        entries = [json.loads(item) for item in logs]
+        # 只返回游标之后的新日志，避免 SSE 每秒重复推送全量日志
+        if since_seq:
+            entries = [entry for entry in entries if entry.get('seq', 0) > since_seq]
+        status['logs'] = entries
+
+        last_seq = redis_client.get(task_log_seq_key(task_id))
+        status['log_seq'] = int(last_seq) if last_seq else (entries[-1].get('seq', 0) if entries else 0)
     return status
+
+
+def _parse_since_seq():
+    """解析 SSE/状态接口的日志游标，非法值按 0 处理。"""
+    try:
+        return max(0, int(request.args.get('since', 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _advance_log_cursor(cursor, task_status):
+    try:
+        return max(cursor, int(task_status.get('log_seq') or 0))
+    except (TypeError, ValueError):
+        return cursor
 
 
 def set_task_status(task_id, status, ttl_seconds=None):
@@ -150,6 +176,7 @@ def set_task_status(task_id, status, ttl_seconds=None):
     if ttl_seconds:
         redis_client.expire(task_meta_key(task_id), ttl_seconds)
         redis_client.expire(task_logs_key(task_id), ttl_seconds)
+        redis_client.expire(task_log_seq_key(task_id), ttl_seconds)
 
 
 def update_task_status(task_id, updates, ttl_seconds=None):
@@ -167,7 +194,10 @@ def append_task_log(task_id, timestamp, level, content):
     if not redis_client.exists(task_meta_key(task_id)):
         return
 
+    # seq 单调递增：日志被 ltrim 后，客户端仍可用它做稳定的增量游标
+    seq = redis_client.incr(task_log_seq_key(task_id))
     log_entry = json.dumps({
+        'seq': seq,
         'timestamp': timestamp,
         'level': level,
         'content': content
@@ -189,11 +219,13 @@ def initialize_task_status(task_id, message):
         "download_expire_at": None
     })
     redis_client.delete(task_logs_key(task_id))
+    redis_client.delete(task_log_seq_key(task_id))
 
 
 def schedule_task_cleanup(task_id, delay_seconds):
     redis_client.expire(task_meta_key(task_id), delay_seconds)
     redis_client.expire(task_logs_key(task_id), delay_seconds)
+    redis_client.expire(task_log_seq_key(task_id), delay_seconds)
 
 
 def _count_active_slots():
@@ -956,8 +988,9 @@ def api_get_versions():
 # -------------------------- 查询任务状态 --------------------------
 @app.route('/task-status/<task_id>', methods=['GET'])
 def api_task_status(task_id):
-    """查询指定任务的当前状态，包含日志信息"""
-    task_status = get_task_status(task_id)
+    """查询指定任务的当前状态，包含日志信息。支持 ?since=<seq> 增量返回日志。"""
+    since_seq = _parse_since_seq()
+    task_status = get_task_status(task_id, since_seq=since_seq)
     if task_status:
         return jsonify({
             "success": True,
@@ -1006,13 +1039,14 @@ def api_build():
     # 仅观察已有任务（不创建新任务）
     if task_id:
         def watch_sse():
+            since_seq = _parse_since_seq()
             try:
                 while True:
-                    task_status = get_task_status(task_id)
+                    task_status = get_task_status(task_id, since_seq=since_seq)
                     if not task_status:
                         retry = 0
                         while retry < 3:
-                            task_status = get_task_status(task_id)
+                            task_status = get_task_status(task_id, since_seq=since_seq)
                             if task_status:
                                 break
                             time.sleep(0.5)
@@ -1020,6 +1054,7 @@ def api_build():
                         if not task_status:
                             yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': '任务状态已过期', 'logs': []})}\n\n"
                             break
+                    since_seq = _advance_log_cursor(since_seq, task_status)
                     yield f"data: {json.dumps(task_status)}\n\n"
                     if task_status.get('complete', False):
                         break
@@ -1093,30 +1128,26 @@ def api_build():
 
     # 建立SSE连接，实时推送进度和日志
     def generate_sse():
+        since_seq = _parse_since_seq()
         try:
             # 初始状态推送
-            retry_count = 0
-            initial_status = None
-            while retry_count < 2 and not initial_status:
-                initial_status = get_task_status(task_id) or {
-                    'status': 'progress',
-                    'percent': 0,
-                    'message': '任务初始化中...',
-                    'logs': []
-                }
-                if not initial_status:
-                    time.sleep(0.5)
-                    retry_count += 1
+            initial_status = get_task_status(task_id, since_seq=since_seq) or {
+                'status': 'progress',
+                'percent': 0,
+                'message': '任务初始化中...',
+                'logs': []
+            }
+            since_seq = _advance_log_cursor(since_seq, initial_status)
             yield f"data: {json.dumps(initial_status)}\n\n"
 
             # 循环推送状态
             while True:
-                task_status = get_task_status(task_id)
+                task_status = get_task_status(task_id, since_seq=since_seq)
                 if not task_status:
                     # 重试3次，若仍不存在则判定过期
                     retry = 0
                     while retry < 3:
-                        task_status = get_task_status(task_id)
+                        task_status = get_task_status(task_id, since_seq=since_seq)
                         if task_status:
                             break
                         time.sleep(0.5)
@@ -1125,6 +1156,7 @@ def api_build():
                         yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': '任务状态已过期，请刷新页面重试', 'logs': []})}\n\n"
                         break
 
+                since_seq = _advance_log_cursor(since_seq, task_status)
                 yield f"data: {json.dumps(task_status)}\n\n"
 
                 # 任务完成，终止循环

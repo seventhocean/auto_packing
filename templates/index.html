@@ -139,6 +139,31 @@
         .form-select:focus,.form-control:focus{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
         .form-select option{background:var(--surface);color:var(--text)}
         .form-select:disabled,.form-control:disabled{opacity:0.4;cursor:not-allowed}
+
+        /* Searchable version picker */
+        .combo{position:relative}
+        .combo-input{padding-right:36px}
+        .combo-toggle{
+            position:absolute;right:12px;top:50%;transform:translateY(-50%);
+            color:var(--text-muted);font-size:12px;pointer-events:none;
+        }
+        .combo.disabled{opacity:0.4}
+        .combo-list{
+            position:absolute;z-index:30;left:0;right:0;top:calc(100% + 4px);
+            max-height:240px;overflow-y:auto;background:var(--surface);
+            border:1px solid var(--line);border-radius:var(--radius-sm);
+            box-shadow:0 8px 24px rgba(0,0,0,0.35);padding:4px;
+        }
+        .combo-option{
+            padding:8px 10px;border-radius:var(--radius-sm);font-size:var(--font-sm);
+            color:var(--text-secondary);cursor:pointer;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+        }
+        .combo-option:hover,.combo-option.active{background:var(--surface-hover);color:var(--text)}
+        .combo-option.selected{color:var(--brand);font-weight:600}
+        .combo-empty{padding:8px 10px;font-size:var(--font-sm);color:var(--text-muted)}
+        .combo-list::-webkit-scrollbar{width:4px}
+        .combo-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
         textarea.form-control{
             resize:none;height:140px;overflow-y:auto;flex-shrink:0;
             font-family:"SF Mono","Consolas","Monaco",monospace;font-size:13px;line-height:1.6;
@@ -289,16 +314,24 @@
                 <form id="buildForm" class="form-card">
                     <div class="form-body">
                         <div class="form-row">
-                            <label class="form-label" for="currentVersion">当前 Patch 版本</label>
-                            <select class="form-select" id="currentVersion" required>
-                                <option value="">加载中...</option>
-                            </select>
+                            <label class="form-label" for="currentVersionInput">当前 Patch 版本</label>
+                            <div class="combo" id="currentVersionCombo">
+                                <input class="form-control combo-input" id="currentVersionInput" type="text"
+                                    role="combobox" aria-expanded="false" aria-controls="currentVersionList"
+                                    aria-autocomplete="list" autocomplete="off" placeholder="加载中...">
+                                <i class="fas fa-chevron-down combo-toggle" aria-hidden="true"></i>
+                                <div class="combo-list" id="currentVersionList" role="listbox" hidden></div>
+                            </div>
                         </div>
                         <div class="form-row">
-                            <label class="form-label" for="targetVersion">目标 Patch 版本</label>
-                            <select class="form-select" id="targetVersion" required disabled>
-                                <option value="">请先选择当前版本</option>
-                            </select>
+                            <label class="form-label" for="targetVersionInput">目标 Patch 版本</label>
+                            <div class="combo disabled" id="targetVersionCombo">
+                                <input class="form-control combo-input" id="targetVersionInput" type="text"
+                                    role="combobox" aria-expanded="false" aria-controls="targetVersionList"
+                                    aria-autocomplete="list" autocomplete="off" placeholder="请先选择当前版本" disabled>
+                                <i class="fas fa-chevron-down combo-toggle" aria-hidden="true"></i>
+                                <div class="combo-list" id="targetVersionList" role="listbox" hidden></div>
+                            </div>
                         </div>
                     </div>
                     <button type="submit" class="btn-build" id="v6BuildBtn" disabled>
@@ -371,7 +404,7 @@
    STATE
    ================================================================ */
 let versionData=[],eventSource=null,currentSeries='v6',isBuilding=false;
-let existingFilesData=[],logExpanded=false,renderedLogCount=0;
+let existingFilesData=[],logExpanded=false,lastLogSeq=0;
 
 /* ================================================================
    UTILS
@@ -383,7 +416,7 @@ function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 /* ================================================================
    INIT
    ================================================================ */
-document.addEventListener('DOMContentLoaded',()=>{initEventListeners();setMode(currentSeries);fetchVersions(currentSeries);fetchExistingFiles()});
+document.addEventListener('DOMContentLoaded',()=>{initVersionPickers();initEventListeners();setMode(currentSeries);fetchVersions(currentSeries);fetchExistingFiles()});
 
 /* ================================================================
    MODE
@@ -404,9 +437,110 @@ function handleModeToggle(e){
 /* ================================================================
    VERSIONS
    ================================================================ */
+let currentPicker=null,targetPicker=null;
+
+function initVersionPickers(){
+    currentPicker=createVersionPicker({
+        inputId:'currentVersionInput',listId:'currentVersionList',comboId:'currentVersionCombo',
+        placeholder:'请选择当前版本',onChange:handleCurrentVersionChange
+    });
+    targetPicker=createVersionPicker({
+        inputId:'targetVersionInput',listId:'targetVersionList',comboId:'targetVersionCombo',
+        placeholder:'请选择目标版本',onChange:checkBuildBtnStatus
+    });
+    targetPicker.setDisabled(true);
+}
+
+function createVersionPicker(cfg){
+    const input=document.getElementById(cfg.inputId);
+    const list=document.getElementById(cfg.listId);
+    const combo=document.getElementById(cfg.comboId);
+    let options=[],selected=null,visible=[],activeIndex=-1,disabled=false;
+
+    function setExpanded(v){list.hidden=!v;input.setAttribute('aria-expanded',v?'true':'false');if(!v)activeIndex=-1}
+    function close(){setExpanded(false)}
+    function choose(o){selected=o;input.value=o?o.display:'';close();if(cfg.onChange)cfg.onChange(o||null)}
+    function updateActive(){
+        const children=Array.from(list.children);
+        children.forEach((el,i)=>el.classList.toggle('active',i===activeIndex));
+        const el=children[activeIndex];
+        if(el&&el.scrollIntoView)el.scrollIntoView({block:'nearest'});
+    }
+    function render(){
+        if(disabled){close();return}
+        const q=input.value.trim().toLowerCase();
+        const filtering=!(selected&&input.value===selected.display);
+        visible=(filtering&&q)?options.filter(o=>o.display.toLowerCase().includes(q)||o.value.toLowerCase().includes(q)):options.slice();
+        list.innerHTML='';
+        if(visible.length===0){
+            const e=document.createElement('div');e.className='combo-empty';
+            e.textContent=options.length?'无匹配版本':'暂无可选版本';list.appendChild(e);
+        }else{
+            visible.forEach(o=>{
+                const el=document.createElement('div');
+                el.className='combo-option'+((selected&&o.value===selected.value)?' selected':'');
+                el.setAttribute('role','option');
+                el.setAttribute('aria-selected',(selected&&o.value===selected.value)?'true':'false');
+                el.textContent=o.display;
+                // mousedown + preventDefault：选择时 input 不触发 blur
+                el.addEventListener('mousedown',ev=>{ev.preventDefault();choose(o)});
+                list.appendChild(el);
+            });
+        }
+        activeIndex=-1;setExpanded(true);
+    }
+
+    input.addEventListener('focus',()=>{if(!disabled)render()});
+    input.addEventListener('click',()=>{if(!disabled&&list.hidden)render()});
+    input.addEventListener('input',()=>{
+        if(disabled)return;
+        selected=null;
+        if(cfg.onChange)cfg.onChange(null);
+        render();
+    });
+    input.addEventListener('keydown',ev=>{
+        if(disabled)return;
+        if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){
+            ev.preventDefault();
+            if(list.hidden)render();
+            if(visible.length===0)return;
+            const delta=ev.key==='ArrowDown'?1:-1;
+            activeIndex=(activeIndex+delta+visible.length)%visible.length;
+            updateActive();
+        }else if(ev.key==='Enter'){
+            if(!list.hidden&&visible[activeIndex]){ev.preventDefault();choose(visible[activeIndex])}
+        }else if(ev.key==='Escape'){
+            close();
+        }
+    });
+    input.addEventListener('blur',()=>{
+        setTimeout(()=>{
+            if(combo.contains(document.activeElement))return;
+            if(selected){input.value=selected.display}
+            else if(input.value.trim()){input.value='';if(cfg.onChange)cfg.onChange(null)}
+            close();
+        },0);
+    });
+    document.addEventListener('click',ev=>{if(!combo.contains(ev.target))close()});
+
+    return {
+        getValue(){return selected?selected.value:''},
+        setOptions(opts,placeholder){
+            options=Array.isArray(opts)?opts:[];
+            selected=null;input.value='';
+            if(placeholder)input.placeholder=placeholder;
+            close();
+        },
+        setDisabled(v){
+            disabled=!!v;input.disabled=disabled;combo.classList.toggle('disabled',disabled);
+            if(disabled){selected=null;input.value='';close()}
+        }
+    };
+}
+
 async function fetchVersions(series){
     if(series!=='v6'){if(versionData.length>0)return;renderVersionOptions(true);return}
-    document.getElementById('currentVersion').innerHTML='<option value="">加载中...</option>';
+    if(currentPicker)currentPicker.setOptions([], '加载中...');
     try{
         const r=await fetch(`/versions?series=${encodeURIComponent(series)}`);
         if(currentSeries!==series)return;
@@ -416,21 +550,20 @@ async function fetchVersions(series){
     }catch(e){if(currentSeries!==series)return;versionData=[];renderVersionOptions(true)}
 }
 function renderVersionOptions(isError){
-    const c=document.getElementById('currentVersion'),t=document.getElementById('targetVersion');
-    c.innerHTML='<option value="">请选择当前版本</option>';
-    t.innerHTML='<option value="">请选择目标版本</option>';t.disabled=true;
-    if(isError)return;
-    versionData.forEach(v=>{const o=document.createElement('option');o.value=v.value;o.textContent=v.display;o.dataset.date=v.date;c.appendChild(o)})
+    if(!currentPicker)return;
+    currentPicker.setOptions(isError?[]:versionData,isError?'版本加载失败':'请选择当前版本');
+    handleCurrentVersionChange(null);
 }
-function updateTargetVersionOptions(){
-    const c=document.getElementById('currentVersion'),o=c.selectedOptions[0],t=document.getElementById('targetVersion');
-    t.innerHTML='<option value="">请选择目标版本</option>';t.disabled=true;
-    if(!o)return;
-    const m=o.textContent.match(/^(\d+)-/);if(!m)return;
-    const cs=parseInt(m[1],10);
-    const vt=versionData.filter(v=>{const s=(v.display.match(/^(\d+)-/)||[0,0])[1];return parseInt(s,10)>cs});
-    if(vt.length===0){t.innerHTML='<option value="">暂无更新版本</option>'}
-    else{vt.forEach(v=>{const p=document.createElement('option');p.value=v.value;p.textContent=v.display;t.appendChild(p)});t.disabled=false}
+function handleCurrentVersionChange(option){
+    if(!option){
+        targetPicker.setOptions([], '请先选择当前版本');
+        targetPicker.setDisabled(true);
+    }else{
+        const currentSeq=Number(option.seq_num);
+        const newer=versionData.filter(v=>Number(v.seq_num)>currentSeq);
+        targetPicker.setOptions(newer,newer.length?'请选择目标版本':'暂无更新版本');
+        targetPicker.setDisabled(newer.length===0);
+    }
     checkBuildBtnStatus();
 }
 
@@ -441,7 +574,12 @@ function checkBuildBtnStatus(){
     const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn');
     if(isBuilding){b6.disabled=true;b7.disabled=true;return}
     if(currentSeries==='v7'){b6.disabled=true;b7.disabled=document.getElementById('v7ImageList').value.trim().length===0}
-    else{b7.disabled=true;b6.disabled=!(document.getElementById('currentVersion').value&&document.getElementById('targetVersion').value)}
+    else{
+        b7.disabled=true;
+        const cv=currentPicker?currentPicker.getValue():'';
+        const tv=targetPicker?targetPicker.getValue():'';
+        b6.disabled=!(cv&&tv);
+    }
 }
 
 /* ================================================================
@@ -449,8 +587,9 @@ function checkBuildBtnStatus(){
    ================================================================ */
 function startBuildProcess(e){
     if(e)e.preventDefault();if(isBuilding)return;
-    const cv=document.getElementById('currentVersion').value,tv=document.getElementById('targetVersion').value;
+    const cv=currentPicker?currentPicker.getValue():'',tv=targetPicker?targetPicker.getValue():'';
     const vi=document.getElementById('v7ImageList').value;
+    if(currentSeries==='v6'&&(!cv||!tv))return;
     const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn');
     const ab=currentSeries==='v7'?b7:b6;
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
@@ -459,7 +598,7 @@ function startBuildProcess(e){
     ab.disabled=true;
     ab.innerHTML='<span class="spinner"></span> 构建中...';
     bc.classList.add('active');bl.classList.remove('expanded');bl.innerHTML='';
-    logExpanded=false;renderedLogCount=0;
+    logExpanded=false;lastLogSeq=0;
     document.getElementById('taskStateText').textContent='排队中';
     document.getElementById('taskMessageText').textContent='';
     document.getElementById('btnToggleLog').textContent='展开日志';
@@ -475,7 +614,8 @@ function startBuildProcess(e){
         return;
     }else{sseUrl=`/build?series=v6&current=${encodeURIComponent(cv)}&target=${encodeURIComponent(tv)}`}
     function connectSSE(){
-        eventSource=new EventSource(sseUrl);
+        const sep=sseUrl.includes('?')?'&':'?';
+        eventSource=new EventSource(sseUrl+sep+'since='+encodeURIComponent(lastLogSeq));
         eventSource.onmessage=function(ev){sseRetries=0;try{handleBuildStatus(JSON.parse(ev.data))}catch(e){}}
         eventSource.onerror=function(){
             if(eventSource){eventSource.close();eventSource=null}
@@ -489,24 +629,19 @@ function resetBuildState(){
     const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn'),bc=document.getElementById('buildCard');
     b6.innerHTML='<i class="fas fa-play"></i> 开始构建';b7.innerHTML='<i class="fas fa-play"></i> 开始构建';
     isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
-    renderedLogCount=0;if(eventSource){eventSource.close();eventSource=null}
+    lastLogSeq=0;if(eventSource){eventSource.close();eventSource=null}
     bc.classList.remove('active');checkBuildBtnStatus();
 }
 let newPackageName='';
 function handleBuildStatus(d){
     const st=document.getElementById('taskStateText');
     const mt=document.getElementById('taskMessageText'),logs=Array.isArray(d.logs)?d.logs:[];
-    // 只渲染新增的日志（跳过已渲染的部分）
-    if(logs.length>renderedLogCount){
-        const newLogs=logs.slice(renderedLogCount);
-        for(let i=0;i<newLogs.length;i++){
-            const l=newLogs[i];
-            if(l&&l.content)addLog(l.content,mapLogLevel(l.level))
-        }
-        renderedLogCount=logs.length;
-    }
-    // 如果日志被 ltrim 截断了，修正计数器避免溢出
-    if(logs.length<renderedLogCount)renderedLogCount=logs.length;
+    // 服务端只推送游标之后的新日志，直接追加即可
+    logs.forEach(l=>{
+        if(l&&l.content)addLog(l.content,mapLogLevel(l.level));
+        if(l&&Number.isInteger(l.seq)&&l.seq>lastLogSeq)lastLogSeq=l.seq;
+    });
+    if(Number.isInteger(d.log_seq)&&d.log_seq>lastLogSeq)lastLogSeq=d.log_seq;
     switch(d.status){
         case'queued':st.textContent='排队中';updateProgressBar(d.percent||0,'');mt.textContent=d.message||'';break;
         case'progress':st.textContent='构建中';updateProgressBar(d.percent,d.message);mt.textContent=d.message||'';break;
@@ -591,8 +726,6 @@ function normalizeV7Images(raw){return raw.split(/[,，;\n\r]+/).map(s=>s.trim()
    ================================================================ */
 function initEventListeners(){
     document.getElementById('modeToggle').addEventListener('click',handleModeToggle);
-    document.getElementById('currentVersion').addEventListener('change',updateTargetVersionOptions);
-    document.getElementById('targetVersion').addEventListener('change',checkBuildBtnStatus);
     document.getElementById('v7ImageList').addEventListener('input',checkBuildBtnStatus);
     document.getElementById('buildForm').addEventListener('submit',startBuildProcess);
     document.getElementById('v7BuildBtn').addEventListener('click',startBuildProcess);
