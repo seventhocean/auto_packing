@@ -121,7 +121,7 @@
             background:var(--surface);border:1px solid var(--line-subtle);
             border-radius:var(--radius-md);padding:var(--spacing-xl);
             display:flex;flex-direction:column;gap:var(--spacing-lg);
-            flex-shrink:0;height:280px;
+            flex-shrink:0;height:300px;
         }
         .form-card .form-body{flex:1;display:flex;flex-direction:column;gap:var(--spacing-lg);min-height:0}
         .form-card .btn-build{margin-top:auto;align-self:flex-start}
@@ -139,6 +139,12 @@
         .form-select:focus,.form-control:focus{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
         .form-select option{background:var(--surface);color:var(--text)}
         .form-select:disabled,.form-control:disabled{opacity:0.4;cursor:not-allowed}
+        .form-hint{
+            min-height:16px;font-size:var(--font-xs);line-height:1.5;color:var(--text-muted);
+            display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;
+        }
+        .form-hint a{color:var(--brand);text-decoration:none}
+        .form-hint a:hover{text-decoration:underline}
 
         /* Searchable version picker */
         .combo{position:relative}
@@ -335,6 +341,7 @@
                                 <div class="combo-list" id="targetVersionList" role="listbox" hidden></div>
                             </div>
                         </div>
+                        <div class="form-hint" id="v6Preview" aria-live="polite"></div>
                     </div>
                     <button type="submit" class="btn-build" id="v6BuildBtn" disabled>
                         <i class="fas fa-play"></i> 开始构建
@@ -449,7 +456,7 @@ function initVersionPickers(){
     });
     targetPicker=createVersionPicker({
         inputId:'targetVersionInput',listId:'targetVersionList',comboId:'targetVersionCombo',
-        placeholder:'请选择目标版本',onChange:checkBuildBtnStatus
+        placeholder:'请选择目标版本',onChange:handleTargetVersionChange
     });
     targetPicker.setDisabled(true);
 }
@@ -528,6 +535,7 @@ function createVersionPicker(cfg){
 
     return {
         getValue(){return selected?selected.value:''},
+        getSelected(){return selected},
         setOptions(opts,placeholder){
             options=Array.isArray(opts)?opts:[];
             selected=null;input.value='';
@@ -567,7 +575,36 @@ function handleCurrentVersionChange(option){
         targetPicker.setOptions(newer,newer.length?'请选择目标版本':'暂无更新版本');
         targetPicker.setDisabled(newer.length===0);
     }
+    updateV6Preview();
     checkBuildBtnStatus();
+}
+function handleTargetVersionChange(){
+    updateV6Preview();
+    checkBuildBtnStatus();
+}
+function updateV6Preview(){
+    const el=document.getElementById('v6Preview');
+    if(!el)return;
+    el.textContent='';
+    const cur=currentPicker?currentPicker.getSelected():null;
+    const tgt=targetPicker?targetPicker.getSelected():null;
+    if(!cur||!tgt)return;
+
+    const span=Number(tgt.seq_num)-Number(cur.seq_num);
+    const from=String(cur.value).split('-')[0];
+    const to=String(tgt.value).split('-')[0];
+    const expected=`deepflow_patch_v669_${from}_${to}.tar.gz`;
+    const existing=(existingFilesData||[]).find(f=>f.name===expected);
+
+    const info=document.createElement('span');
+    info.textContent=`将跨越 ${span} 个 patch`;
+    el.appendChild(info);
+    if(existing){
+        const link=document.createElement('a');
+        link.href=`/download-existing/${encodeURIComponent(existing.name)}`;
+        link.textContent='已有同名升级包，可直接下载';
+        el.appendChild(link);
+    }
 }
 
 /* ================================================================
@@ -730,7 +767,8 @@ async function fetchExistingFiles(){
         const r=await fetch('/existing-packages'),d=await r.json();fl.style.display='none';
         if(d.success&&d.files&&d.files.length>0){existingFilesData=d.files;renderExistingFiles(d.files);updateFilesSummary(d.files.length);newPackageName=''}
         else{existingFilesData=[];nf.style.display='flex';updateFilesSummary(0);newPackageName=''}
-    }catch(e){fl.style.display='none';existingFilesData=[];nf.style.display='flex';updateFilesSummary(0)}
+        updateV6Preview();
+    }catch(e){fl.style.display='none';existingFilesData=[];nf.style.display='flex';updateFilesSummary(0);updateV6Preview()}
 }
 function renderExistingFiles(files){
     const fl=document.getElementById('filesList'),nf=document.getElementById('noFilesMessage');
