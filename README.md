@@ -476,7 +476,7 @@ tar -czf ... --transform 's|.*/||' --transform 's|.*|<包名>/&|'
 
 先准备：
 
-- Python 3.6+
+- Python 3.12（与容器镜像一致；Flask 3.1 要求 3.9+）
 - Redis 可访问
 - `nuwa/` 仓库访问能力
 - `ossutil` 配置
@@ -601,17 +601,12 @@ docker run \
 
 当前 `requirements.txt` 里包含：
 
-- Flask 1.1.4
-- gunicorn 20.1.0
-- redis 4.3.6
-- PyYAML 6.0.1
-- requests 2.27.0
+- Flask 3.1.0
+- gunicorn 23.0.0
+- redis 5.2.1
+- PyYAML 6.0.2
 
-另外还保留了：
-
-- uWSGI 2.0.30
-
-但当前 Docker 默认启动命令实际使用的是 Gunicorn，而不是 uWSGI。
+容器基础镜像为 `python:3.12-slim-bookworm`，默认使用 Gunicorn 启动。
 
 ### 12.2 外部依赖
 

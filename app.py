@@ -1017,7 +1017,7 @@ def api_download_existing(filename):
         response = send_file(
             file_path,
             as_attachment=True,
-            attachment_filename=filename,
+            download_name=filename,
             mimetype='application/gzip'
         )
         response.headers['Accept-Ranges'] = 'bytes'
@@ -1298,7 +1298,7 @@ def api_download(task_id):
         response = send_file(
             package_path,
             as_attachment=True,
-            attachment_filename=task_status['package_name'],
+            download_name=task_status['package_name'],
             mimetype='application/gzip'
         )
         response.headers['Accept-Ranges'] = 'bytes'

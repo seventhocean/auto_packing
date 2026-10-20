@@ -11,8 +11,8 @@ DeepFlow 补丁包构建与分发工具。从"单进程 Flask"演进为 **Flask 
 ## How to run
 
 ```bash
-# 本地开发（需要 Redis）
-python -m venv venv && source venv/bin/activate
+# 本地开发（需要 Python 3.12 与 Redis）
+python3.12 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 # Terminal 1: Flask API
 python app.py                        # 0.0.0.0:8000, debug/threaded
@@ -20,7 +20,7 @@ python app.py                        # 0.0.0.0:8000, debug/threaded
 python worker.py
 ```
 
-生产环境使用 gunicorn（见 Dockerfile:60）:
+生产环境使用 gunicorn（见 Dockerfile CMD）:
 ```bash
 gunicorn --workers 2 --threads 4 --worker-class gthread --bind 0.0.0.0:8000 --timeout 0 app:app
 ```
@@ -238,7 +238,7 @@ redis:
 ├── app.py              # Flask API + 构建逻辑 + Redis 状态管理
 ├── worker.py           # Redis 队列消费者 + 心跳 + 任务回收
 ├── config.yaml         # Redis 配置
-├── dockerfile          # 容器镜像 (python:3.6-slim, gunicorn)
+├── dockerfile          # 容器镜像 (python:3.12-slim-bookworm, gunicorn)
 ├── entrypoint.sh       # 容器启动：克隆 nuwa + 生成 ossutilconfig
 ├── requirements.txt    # Flask + gunicorn + redis + PyYAML + dataclasses
 ├── .gitignore

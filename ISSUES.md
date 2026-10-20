@@ -90,8 +90,8 @@
 
 **13. PVC 名拼写错误**: `auto-pancking-pvc`
 
-**14. Dockerfile 混用 Debian 版本仓库**
-`python:3.6-slim` 用 bullseye 仓库。
+**14. ~~Dockerfile 混用 Debian 版本仓库~~**
+已升级为 `python:3.12-slim-bookworm`，依赖同步升级到 Flask 3.1 / gunicorn 23 / redis 5.2，并用通配 sed 配置镜像源。
 
 **15. `ossutil`/`nerdctl` 二进制随仓库分发**
 
@@ -124,3 +124,4 @@
 | 17 | P1 | 任务提交后无法中止（拉取最长 2h） | 新增取消接口与前端按钮；worker/SSE 监听取消标记并终止进程组 |
 | 18 | P1 | 构建失败时前端 `handleBuildStatus` 引用未定义的 `bl`，错误处理直接抛异常 | 修正为直接操作日志面板并同步展开状态 |
 | 19 | P2 | 已选版本对与已有升级包无关联提示 | 表单下方提示跨越 patch 数；命中同名包时给出直接下载链接 |
+| 20 | P1 | Python 3.6 EOL，Dockerfile 混用 Debian 源 | 升级到 python:3.12-slim-bookworm；Flask 3.1 / gunicorn 23 / redis 5.2 / PyYAML 6.0.2；`send_file` 改用 `download_name` |

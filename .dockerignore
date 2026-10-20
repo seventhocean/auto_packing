@@ -1,10 +1,12 @@
 .git
 .gitignore
+.gitmodules
 *.tar
+*.tar.gz
 *.zip
 *.log
 __pycache__/
-*.pyc
+*.py[cod]
 node_modules/
 myenv/
 .venv/
@@ -13,9 +15,22 @@ build/
 dist/
 nuwa/
 Dockerfile*
+dockerfile
 README.md
+CLAUDE.md
+DESIGN*.md
+ISSUES.md
 auto_packing_latest
 auto_packing_latest.tar
 troubleshooting/
 test/
+tests/
 docs/
+
+# 运行时产物 / 配置，不应进入镜像
+.trash/
+logs/
+images/
+latest_image_list/
+upgrade_packages/
+bin/.ossutilconfig
