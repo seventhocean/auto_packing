@@ -159,6 +159,7 @@ redis:
 - 槽位以 `task:<id>:slot` 为准：先 `SET NX` 抢占，再统计现有 slot 数量；超过 `max_concurrent_tasks` 时释放并继续排队。
 - slot 带 6 小时 TTL 兜底，worker 异常退出后不会永久占用并发额度。
 - `builds:active` 仅作为观测值，由实际 slot 数量同步。
+- 每个 worker 进程串行处理任务，实际并发上限为 `min(max_concurrent_tasks, worker 副本数)`；当前 2 个副本，面向 1~2 个用户同时构建。
 - worker 通过 `heartbeat_loop()` 每 5 秒写一次心跳，TTL 为 15 秒。
 - 另一个 `reclaim_loop()` 每 30 秒扫描一次 processing 队列：
   - 若某个 worker 的心跳不存在，则把其 processing 队列中的任务重新放回 build queue。

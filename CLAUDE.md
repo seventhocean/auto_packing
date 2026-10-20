@@ -64,6 +64,7 @@ docker run -p 8000:8000 \
 - `builds:active` 仅作为观测值，由 slot 数量同步，不再作为准入依据
 - 超限时任务保持 `queued` 状态，worker 循环重试
 - 构建结束（成功/失败）后 `release_build_slot()` 在 finally 中调用
+- 每个 worker 进程串行处理任务，实际并发上限 = `min(max_concurrent_tasks, worker 副本数)`；当前 2 个副本，适合 1~2 个用户同时构建
 - Worker 心跳 TTL 15s，失活后 `reclaim_loop` 将其 processing 队列任务回收到 build queue
 
 ### Redis key 设计
@@ -226,7 +227,7 @@ redis:
 - **升级预览不完整** — 已显示跨越 patch 数；镜像数与预计包大小需后端统计
 - **`pull_save.sh:84`** 硬编码凭据（内网环境，暂不修复）
 - **无 OSS 版本缓存** — 每次 API 调用都执行 `ossutil ls`
-- **SSE 长连接占用 gunicorn 线程** — 每个构建页面会长期占用一个线程，用户较多时需提高 workers/threads
+- **SSE 长连接占用 gunicorn 线程** — 按当前 1~2 个用户的规模可接受（2 workers × 4 threads 足够），暂不改造
 - **`upgrade_packages/` 无自动清理**
 - **PVC 名拼写错误**: `auto-pancking-pvc`
 
