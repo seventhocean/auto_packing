@@ -236,6 +236,18 @@ class AppLogicTest(unittest.TestCase):
         self.assertIn('attachment', resp.headers.get('Content-Disposition', ''))
         resp.close()
 
+    def test_sse_stream_reads_since_outside_request_context(self):
+        ap.initialize_task_status('sse-task', 'queued')
+        ap.update_task_status('sse-task', {
+            'status': 'complete', 'complete': True, 'percent': 100
+        })
+        client = ap.app.test_client()
+        resp = client.get('/build?task_id=sse-task&since=0')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.get_data(as_text=True)
+        self.assertIn('sse-task', body)
+        resp.close()
+
     def test_run_and_stream_times_out(self):
         log_path = os.path.join(self.tmpdir, 'timeout.log')
         started = time.time()

@@ -1126,10 +1126,12 @@ def api_cancel_build(task_id):
 def api_build():
     """构建入口：V6 用 GET 参数入队；通过 task_id 参数可仅观察已有任务。返回 SSE 流。"""
     task_id = request.args.get('task_id')
+    # 必须在视图函数内解析（请求上下文有效）；生成器开始迭代时上下文可能已释放
+    initial_since_seq = _parse_since_seq()
     # 仅观察已有任务（不创建新任务）
     if task_id:
         def watch_sse():
-            since_seq = _parse_since_seq()
+            since_seq = initial_since_seq
             try:
                 while True:
                     task_status = get_task_status(task_id, since_seq=since_seq)
@@ -1218,7 +1220,7 @@ def api_build():
 
     # 建立SSE连接，实时推送进度和日志
     def generate_sse():
-        since_seq = _parse_since_seq()
+        since_seq = initial_since_seq
         try:
             # 初始状态推送
             initial_status = get_task_status(task_id, since_seq=since_seq) or {

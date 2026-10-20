@@ -125,3 +125,4 @@
 | 18 | P1 | 构建失败时前端 `handleBuildStatus` 引用未定义的 `bl`，错误处理直接抛异常 | 修正为直接操作日志面板并同步展开状态 |
 | 19 | P2 | 已选版本对与已有升级包无关联提示 | 表单下方提示跨越 patch 数；命中同名包时给出直接下载链接 |
 | 20 | P1 | Python 3.6 EOL，Dockerfile 混用 Debian 源 | 升级到 python:3.12-slim-bookworm；Flask 3.1 / gunicorn 23 / redis 5.2 / PyYAML 6.0.2；`send_file` 改用 `download_name` |
+| 21 | P0 | SSE 生成器内部读取 `request.args`，脱离请求上下文后返回 500 | 在视图函数内解析 `since` 后传入生成器，并增加 SSE 回归测试 |
