@@ -6,6 +6,8 @@ import glob
 import re
 import json
 import shutil
+import signal
+import threading
 import uuid
 from flask import Flask, request, Response, jsonify, send_file, abort, render_template # type: ignore
 import traceback
@@ -31,6 +33,15 @@ OSS_VERSIONS_TMP_FILE = os.path.join(TRASH_DIR, 'oss_patch_version.txt')
 PATCH_LIST_SCRIPT_PATH = os.path.join(BIN_DIR, 'get_patch_image_tag_list.sh') # 生成patch_list.txt的脚本路径
 UPGRADE_SCRIPT_PATH = os.path.join(BIN_DIR, "deepflow_patch_upgrade.sh")
 APP_CONFIG_PATH = os.environ.get('APP_CONFIG_PATH', os.path.join(BASE_DIR, 'config.yaml'))
+
+# 构建超时配置（秒）。拉镜像是最容易卡住的步骤，必须有上限，否则任务会永久占用槽位。
+PULL_TIMEOUT_SECONDS = int(os.environ.get('PULL_TIMEOUT_SECONDS', 2 * 3600))
+ARCHIVE_TIMEOUT_SECONDS = int(os.environ.get('ARCHIVE_TIMEOUT_SECONDS', 1800))
+OSS_QUERY_TIMEOUT_SECONDS = int(os.environ.get('OSS_QUERY_TIMEOUT_SECONDS', 120))
+# 槽位锁的兜底 TTL：即使 worker 异常退出也不会永久占住并发额度
+SLOT_TTL_SECONDS = int(os.environ.get('SLOT_TTL_SECONDS', 6 * 3600))
+# 版本号会参与目录名/包名拼接，必须限制字符集，防止路径穿越
+_VERSION_VALUE_RE = re.compile(r'^[0-9A-Za-z][0-9A-Za-z._-]*$')
 
 DEFAULT_CONFIG = {
     "redis": {
@@ -185,31 +196,45 @@ def schedule_task_cleanup(task_id, delay_seconds):
     redis_client.expire(task_logs_key(task_id), delay_seconds)
 
 
+def _count_active_slots():
+    """统计当前真实持有的构建槽位数量。以 slot key 为准，避免计数漂移。"""
+    slot_pattern = f"{REDIS_CONFIG['key_prefix']}:task:*:slot"
+    return sum(1 for _ in redis_client.scan_iter(match=slot_pattern))
+
+
 def try_acquire_build_slot(task_id):
-    current_builds = redis_client.incr(active_builds_key())
-    if current_builds > REDIS_CONFIG['max_concurrent_tasks']:
-        redis_client.decr(active_builds_key())
+    """抢占构建槽位。
+
+    采用「先写 task slot，再统计 slot 总数」的方式，slot key 本身就是锁：
+    - 同一任务重复获取（如失活回收后重跑）直接视为已持有，避免重复计数；
+    - 不再依赖独立的 builds:active 做准入判断，异常退出不会造成永久泄漏；
+    - slot 带 TTL 兜底，极端情况下也能自动释放。
+    """
+    slot_key = task_slot_key(task_id)
+    if not redis_client.set(slot_key, "1", nx=True, ex=SLOT_TTL_SECONDS):
+        return True
+
+    active_count = _count_active_slots()
+    if active_count > REDIS_CONFIG['max_concurrent_tasks']:
+        redis_client.delete(slot_key)
         return False
 
-    redis_client.set(task_slot_key(task_id), "1")
+    # 仅用于观测/展示，不再作为准入依据
+    redis_client.set(active_builds_key(), active_count)
     return True
 
 
 def release_build_slot(task_id):
     if redis_client.delete(task_slot_key(task_id)):
-        current_value = redis_client.decr(active_builds_key())
-        if current_value < 0:
-            redis_client.set(active_builds_key(), 0)
+        redis_client.set(active_builds_key(), _count_active_slots())
 
 
 def reconcile_build_counter():
-    """修复因 worker 崩溃导致的 builds:active 计数泄漏。
-    扫描所有现有的 task slot key，用实际数量同步计数器。
+    """用实际存在的 slot key 同步 builds:active 观测值。
+
+    准入已经改为基于 slot key，本函数只负责让 builds:active 尽量准确。
     """
-    slot_pattern = f"{REDIS_CONFIG['key_prefix']}:task:*:slot"
-    actual_count = 0
-    for _ in redis_client.scan_iter(match=slot_pattern):
-        actual_count += 1
+    actual_count = _count_active_slots()
     redis_client.set(active_builds_key(), actual_count)
     write_log(f"builds:active 计数器已同步为 {actual_count}", level="INFO")
 
@@ -232,50 +257,83 @@ def _clean_shell_line(line):
     line = _strip_ansi(line).strip()
     return _SHELL_TS_RE.sub('', line)
 
-def _run_and_stream(task_id, cmd, task_log_path, log_prefix=""):
+def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIMEOUT_SECONDS):
     """用 Popen 逐行读取子脚本输出，过滤 ANSI 码，实时写入 Redis 日志。
 
     策略：
     1. 关键事件（登录、开始/完成、错误）立即写入 Redis
     2. 所有输出完整写入本地文件（排查问题时查看）
+    3. 超时后强杀子进程，避免镜像拉取卡死导致任务永久占用槽位
     """
-    import time as _time
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         universal_newlines=True,
-        bufsize=1  # 行缓冲
+        bufsize=1,  # 行缓冲
+        start_new_session=True  # 独立进程组，超时可连同子进程一起终止
     )
     last_logged = ""
+    timed_out = threading.Event()
+    finished = threading.Event()
 
-    for line in iter(proc.stdout.readline, ''):
-        # 完整清理：去 ANSI 码 + 去脚本自带时间戳
-        clean = _clean_shell_line(line)
-        if not clean:
-            continue
+    def _kill_on_timeout():
+        if finished.is_set():
+            return
+        # 只有主进程仍在运行时才判定超时，避免竞态误报
+        if proc.poll() is None:
+            timed_out.set()
+        # 杀掉整个进程组：只杀 bash 的话，nerdctl 等子进程可能继续持有 stdout，
+        # 导致 readline 永远等不到 EOF，超时逻辑失效。
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
 
-        # 所有输出完整写入本地文件
-        with open(task_log_path, 'a', encoding='utf-8') as f:
-            f.write(clean + '\n')
+    timer = threading.Timer(timeout, _kill_on_timeout)
+    timer.daemon = True
+    timer.start()
 
-        lower = clean.lower()
+    try:
+        for line in iter(proc.stdout.readline, ''):
+            # 完整清理：去 ANSI 码 + 去脚本自带时间戳
+            clean = _clean_shell_line(line)
+            if not clean:
+                continue
 
-        # 判断是否为关键事件（立即推送）
-        is_key = any(kw in lower for kw in [
-            '开始登录', '登录成功', 'login',
-            '开始拉取镜像：', '镜像拉取成功：',
-            '开始保存镜像', '镜像保存成功', '保存成功',
-            '错误：', 'error:', 'warning:', '警告：',
-            '所有镜像处理完成', '===== 所有镜像处理完成',
-            'failed', 'fatal'
-        ])
+            # 所有输出完整写入本地文件
+            with open(task_log_path, 'a', encoding='utf-8') as f:
+                f.write(clean + '\n')
 
-        if is_key and clean != last_logged:
-            write_log(clean, task_id=task_id)
-            last_logged = clean
+            lower = clean.lower()
 
-    proc.wait()
+            # 判断是否为关键事件（立即推送）
+            is_key = any(kw in lower for kw in [
+                '开始登录', '登录成功', 'login',
+                '开始拉取镜像：', '镜像拉取成功：',
+                '开始保存镜像', '镜像保存成功', '保存成功',
+                '错误：', 'error:', 'warning:', '警告：',
+                '所有镜像处理完成', '===== 所有镜像处理完成',
+                'failed', 'fatal'
+            ])
+
+            if is_key and clean != last_logged:
+                write_log(clean, task_id=task_id)
+                last_logged = clean
+    finally:
+        finished.set()
+        timer.cancel()
+        try:
+            proc.stdout.close()
+        except OSError:
+            pass
+        proc.wait()
+
+    if timed_out.is_set():
+        error_msg = f"命令执行超时（{timeout}秒），已强制终止：{' '.join(cmd)}"
+        write_log(error_msg, level="ERROR", task_id=task_id)
+        raise TimeoutError(error_msg)
+
     return proc.returncode
 
 
@@ -316,7 +374,8 @@ def get_oss_versions():
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            check=True
+            check=True,
+            timeout=OSS_QUERY_TIMEOUT_SECONDS
         )
         
         versions = []
@@ -349,14 +408,21 @@ def get_oss_versions():
         versions.sort(key=lambda x: x['seq_num'])
         write_log(f"OSS版本按序号排序完成，共{len(versions)}个版本")
         
-        # 保留 OSS 获取的 PATCH 版本到临时文本，方便其他脚本使用
-        with open(OSS_VERSIONS_TMP_FILE, 'w', encoding='utf-8') as f:
+        # 保留 OSS 获取的 PATCH 版本到临时文本，方便其他脚本使用。
+        # 先写临时文件再原子替换，避免脚本读到写了一半的版本列表。
+        tmp_versions_file = f"{OSS_VERSIONS_TMP_FILE}.{uuid.uuid4().hex[:8]}.tmp"
+        with open(tmp_versions_file, 'w', encoding='utf-8') as f:
             for ver in versions:
                 f.write(f"{ver['value']}\n")
+        os.replace(tmp_versions_file, OSS_VERSIONS_TMP_FILE)
         
         write_log(f"OSS 获取的 PATCH 版本已经成功保存到临时文本：{OSS_VERSIONS_TMP_FILE}", level="INFO")
         return versions
     
+    except subprocess.TimeoutExpired:
+        error_msg = f"OSS版本获取超时（{OSS_QUERY_TIMEOUT_SECONDS}秒）"
+        write_log(error_msg, level="ERROR")
+        return []
     except Exception as e:
         error_msg = f"OSS版本获取失败：{str(e)}"
         write_log(error_msg, level="ERROR")
@@ -398,6 +464,13 @@ def get_existing_packages():
         return []
 
 
+def _is_safe_version_value(value):
+    """版本号会参与目录名/包名拼接，拒绝路径分隔符和 .. 等危险字符。"""
+    if not value or '..' in value:
+        return False
+    return _VERSION_VALUE_RE.match(value) is not None
+
+
 def validate_package_filename(filename):
     """新增：校验文件名合法性（防止目录遍历攻击）
     规则：1. 仅允许.tar.gz后缀；2. 不包含../等路径字符；3. 文件必须在UPGRADE_PACKAGE_DIR目录内
@@ -414,10 +487,10 @@ def validate_package_filename(filename):
     if "/" in filename or "\\" in filename:
         return False, "文件名不允许包含路径分隔符"
     
-    # 计算绝对路径，确保在安全目录内
+    # 计算绝对路径，确保文件确实位于安全目录内
     safe_dir_abs = os.path.abspath(UPGRADE_PACKAGE_DIR)
     file_path_abs = os.path.abspath(os.path.join(UPGRADE_PACKAGE_DIR, filename))
-    if not file_path_abs.startswith(safe_dir_abs):
+    if os.path.dirname(file_path_abs) != safe_dir_abs:
         return False, "文件不在允许的下载目录内"
     
     # 确认文件存在且是普通文件
@@ -427,13 +500,46 @@ def validate_package_filename(filename):
     return True, file_path_abs
 
 
+def _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path):
+    """先打包到临时文件，再原子替换为目标包。
+
+    这样下载方永远不会读到写了一半的包，也能避免上一次同名包在写入过程中被破坏。
+    """
+    tmp_path = f"{upgrade_path}.{uuid.uuid4().hex[:8]}.tmp"
+    try:
+        with open(task_log_path, 'a', encoding='utf-8') as f:
+            subprocess.run(
+                [
+                    "tar", "-czf", tmp_path,
+                    "--transform", r"s|.*/||",             # 第一步：去掉文件路径前缀
+                    "--transform", f"s|.*|{os.path.basename(upgrade_path).rsplit('.tar.gz', 1)[0]}/&|",  # 第二步：加上目录前缀
+                    *files_to_pack
+                ],
+                check=True,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                timeout=ARCHIVE_TIMEOUT_SECONDS
+            )
+
+        if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+            raise Exception(f"打包失败：升级包{upgrade_path}不存在或为空文件")
+
+        os.replace(tmp_path, upgrade_path)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+
 def run_build_task(task_id, current_version, target_version):
     """核心构建任务：执行构建list脚本→拉取镜像→打包TAR.GZ格式升级包"""
     try:
         # 创建任务专属目录（用版本+任务ID命名，确保唯一性，避免文件冲突）
         task_dir_name = f"{current_version}_to_{target_version}_{task_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
-        task_patch_list_path = os.path.join(task_image_dir, "patch_image_tag_list.txt")
         # 确保任务目录存在（不存在则创建，存在则清空历史残留）
         if os.path.exists(task_image_dir):
             shutil.rmtree(task_image_dir)
@@ -479,11 +585,9 @@ def run_build_task(task_id, current_version, target_version):
             write_log(f"开始生成镜像列表，当前版本: {current_version}, 目标版本: {target_version}", task_id=task_id)
             
             # 调用Shell脚本，传递当前版本和目标版本参数
-            # 通过环境变量传入任务专属的输出路径，避免并发竞争
-            script_env = os.environ.copy()
-            script_env["PATCH_IMAGE_TAG_LIST_FILE"] = task_patch_list_path
+            # 任务专属输出路径通过第3个参数传入，避免并发竞争
             with open(task_log_path, 'a', encoding='utf-8') as f:
-                script_result = subprocess.run(
+                subprocess.run(
                     ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version, task_patch_list_path],
                     check=True,
                     stdout=f,  # 捕获标准输出
@@ -498,9 +602,7 @@ def run_build_task(task_id, current_version, target_version):
                 raise Exception(f"镜像列表脚本执行失败：未生成任务镜像列表文件 {task_patch_list_path}")
             
             # 读取并记录脚本输出日志
-            with open(task_log_path, 'r', encoding='utf-8') as f:
-                script_log = f.read()
-            write_log(f"镜像列表生成成功，脚本输出已记录", task_id=task_id)
+            write_log("镜像列表生成成功，脚本输出已记录", task_id=task_id)
             
             update_progress(task_id, 30, "镜像拉取清单生成完成，准备拉取镜像文件")
             # 读取镜像列表文件，获取要拉取的镜像数量
@@ -549,27 +651,8 @@ def run_build_task(task_id, current_version, target_version):
             upgrade_package = f"deepflow_patch_v669_{current_patch_version}_{target_patch_version}.tar.gz"
             upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
 
-            # 包名去掉 .tar.gz 后缀作为解包后的目录名
-            extract_dir = upgrade_package.rsplit('.tar.gz', 1)[0]
-
-            # 执行TAR.GZ打包（两步 transform：先去路径前缀，再加目录前缀）
-            with open(task_log_path, 'a', encoding='utf-8') as f:
-                tar_result = subprocess.run(
-                    [
-                        "tar", "-czf", upgrade_path,
-                        "--transform", r"s|.*/||",             # 第一步：去掉文件路径前缀
-                        "--transform", f"s|.*|{extract_dir}/&|",  # 第二步：加上目录前缀
-                        *files_to_pack
-                    ],
-                    check=True,
-                    stdout=f,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=True,
-                    timeout=1800  # tar 大文件压缩，30 分钟上限
-                )
-
-            if not os.path.exists(upgrade_path) or os.path.getsize(upgrade_path) == 0:
-                raise Exception(f"打包失败：升级包{upgrade_path}不存在或为空文件")
+            # 打包TAR.GZ升级包（两步 transform：先去路径前缀，再加目录前缀）
+            _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path)
             
             update_progress(task_id, 90, "验证升级包完整性")
             # 验证包大小
@@ -704,25 +787,7 @@ def run_build_task_v7(task_id, images):
             upgrade_package = f"deepflow_patch_v7_{task_id}.tar.gz"
             upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
 
-            extract_dir = upgrade_package.rsplit('.tar.gz', 1)[0]
-
-            with open(task_log_path, 'a', encoding='utf-8') as f:
-                subprocess.run(
-                    [
-                        "tar", "-czf", upgrade_path,
-                        "--transform", r"s|.*/||",
-                        "--transform", f"s|.*|{extract_dir}/&|",
-                        *files_to_pack
-                    ],
-                    check=True,
-                    stdout=f,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=True,
-                    timeout=1800  # tar 大文件压缩，30 分钟上限
-                )
-
-            if not os.path.exists(upgrade_path) or os.path.getsize(upgrade_path) == 0:
-                raise Exception(f"打包失败：升级包{upgrade_path}不存在或为空文件")
+            _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path)
 
             update_progress(task_id, 90, "验证升级包完整性")
             package_size = os.path.getsize(upgrade_path)
@@ -787,6 +852,16 @@ def run_build_task_v7(task_id, images):
 def index():
     """前端页面入口"""
     return render_template('index.html')
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    """轻量健康检查，供 K8s 探针使用（不渲染页面、不访问 OSS）。"""
+    try:
+        redis_client.ping()
+        return jsonify({"status": "ok", "redis": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "redis": str(e)}), 503
 
 # -------------------------- 获取已有升级包列表 --------------------------
 @app.route('/existing-packages', methods=['GET'])
@@ -984,11 +1059,13 @@ def api_build():
                 "complete": True,
                 "error": True
             }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
-            raise
+            return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
     else:
-        # 参数校验
+        # 参数校验：版本号会参与目录/包名拼接，必须限制字符集（防路径穿越）
         if not current_version or not target_version:
             return jsonify({"success": False, "message": "缺少必要参数：current或target版本不能为空"}), 400
+        if not _is_safe_version_value(current_version) or not _is_safe_version_value(target_version):
+            return jsonify({"success": False, "message": "版本参数包含非法字符"}), 400
         if current_version == target_version:
             return jsonify({"success": False, "message": "当前版本与目标版本不能相同"}), 400
 
@@ -1012,7 +1089,7 @@ def api_build():
                 "complete": True,
                 "error": True
             }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
-            raise
+            return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
 
     # 建立SSE连接，实时推送进度和日志
     def generate_sse():
@@ -1117,4 +1194,4 @@ if __name__ == '__main__':
     write_log(
         f"服务配置：升级包存储目录={UPGRADE_PACKAGE_DIR}，日志目录={LOG_DIR}，Redis={REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}/{REDIS_CONFIG['db']}"
     )
-    app.run(host='0.0.0.0', port=8000, threaded=True, debug=True)
+    app.run(host='0.0.0.0', port=8000, threaded=True, debug=os.environ.get('FLASK_DEBUG') == '1')

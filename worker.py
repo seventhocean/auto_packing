@@ -29,7 +29,11 @@ HEARTBEAT_KEY = worker_heartbeat_key(WORKER_ID)
 
 def heartbeat_loop():
     while True:
-        redis_client.set(HEARTBEAT_KEY, str(int(time.time())), ex=15)
+        try:
+            redis_client.set(HEARTBEAT_KEY, str(int(time.time())), ex=15)
+        except Exception as exc:
+            # 心跳线程不能因为一次 Redis 抖动就退出，否则本 worker 的任务会被误回收
+            write_log("写入 worker 心跳失败：{}".format(str(exc)), level="WARNING")
         time.sleep(5)
 
 
@@ -59,7 +63,10 @@ def reclaim_stale_tasks():
 
 def reclaim_loop():
     while True:
-        reclaim_stale_tasks()
+        try:
+            reclaim_stale_tasks()
+        except Exception as exc:
+            write_log("回收失活任务失败：{}".format(str(exc)), level="WARNING")
         time.sleep(30)
 
 
@@ -103,16 +110,33 @@ def process_task(payload):
 
 def main():
     write_log("构建 worker 启动成功，worker_id={}".format(WORKER_ID))
-    reclaim_stale_tasks()
+    try:
+        reclaim_stale_tasks()
+    except Exception as exc:
+        write_log("启动时回收失活任务失败：{}".format(str(exc)), level="WARNING")
     threading.Thread(target=heartbeat_loop, daemon=True).start()
     threading.Thread(target=reclaim_loop, daemon=True).start()
 
     while True:
-        raw_payload = redis_client.brpoplpush(build_queue_key(), PROCESSING_QUEUE_KEY, timeout=5)
+        try:
+            raw_payload = redis_client.brpoplpush(build_queue_key(), PROCESSING_QUEUE_KEY, timeout=5)
+        except Exception as exc:
+            # Redis 短暂不可用时继续重试，避免 worker 进程直接退出
+            write_log("读取构建队列失败：{}".format(str(exc)), level="WARNING")
+            time.sleep(5)
+            continue
         if not raw_payload:
             continue
 
-        payload = json.loads(raw_payload)
+        try:
+            payload = json.loads(raw_payload)
+        except (TypeError, ValueError):
+            payload = None
+        if not isinstance(payload, dict):
+            write_log("跳过无法解析的队列消息：{}".format(str(raw_payload)[:200]), level="WARNING")
+            redis_client.lrem(PROCESSING_QUEUE_KEY, 1, raw_payload)
+            continue
+
         task_id = payload.get("task_id", "unknown")
 
         try:

@@ -218,7 +218,7 @@ spec:
           readOnly: true
         readinessProbe:
           httpGet:
-            path: /
+            path: /health
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
@@ -226,14 +226,14 @@ spec:
           failureThreshold: 6
         startupProbe:
           httpGet:
-            path: /
+            path: /health
             port: 8000
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 60
         livenessProbe:
           httpGet:
-            path: /
+            path: /health
             port: 8000
           initialDelaySeconds: 20
           periodSeconds: 20

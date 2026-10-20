@@ -58,7 +58,10 @@ docker run -p 8000:8000 \
 ### 并发控制
 
 - `max_concurrent_tasks: 3`（config.yaml）控制全局最大并发构建数
-- `worker.py:process_task()` 中 `try_acquire_build_slot()` 用 `INCR builds:active` 做原子计数
+- `worker.py:process_task()` 中 `try_acquire_build_slot()` 以 Redis 中的 `task:<id>:slot` 作为锁：
+  先 `SET NX` 抢占 slot，再统计现存 slot 数量，超过上限则释放并重试
+- slot 带 6 小时 TTL 兜底，worker 异常退出不会永久占用并发额度
+- `builds:active` 仅作为观测值，由 slot 数量同步，不再作为准入依据
 - 超限时任务保持 `queued` 状态，worker 循环重试
 - 构建结束（成功/失败）后 `release_build_slot()` 在 finally 中调用
 - Worker 心跳 TTL 15s，失活后 `reclaim_loop` 将其 processing 队列任务回收到 build queue
@@ -70,7 +73,7 @@ docker run -p 8000:8000 \
 | `auto_packing:task:<id>:meta` | string (JSON) | 任务状态、进度、包路径 | success: 7200s, failure: 3600s |
 | `auto_packing:task:<id>:logs` | list (JSON strings) | 前端日志条目，最多100条 | 同 meta |
 | `auto_packing:task:<id>:slot` | string | 构建槽位标记 | 任务结束后删除 |
-| `auto_packing:builds:active` | string (int) | 当前活跃构建数 | 永久 |
+| `auto_packing:builds:active` | string (int) | 活跃构建数观测值（由 slot 数量同步） | 永久 |
 | `auto_packing:build:queue` | list | 待消费的构建任务 | 永久 |
 | `auto_packing:build:processing:<worker>` | list | worker 正在处理的任务 | 跟随 worker |
 | `auto_packing:worker:<worker>:heartbeat` | string (int) | worker 最后心跳时间戳 | 15s |
@@ -101,9 +104,12 @@ docker run -p 8000:8000 \
 | Route | Method | Purpose |
 |---|---|---|
 | `/` | GET | 前端工作台页面 |
+| `/health` | GET | 轻量健康检查（Redis ping，供 K8s 探针） |
 | `/versions?series=v6` | GET | OSS 补丁版本列表（v7 返回 501） |
 | `/build?series=v6&current=&target=` | GET | V6 入队 + SSE 流 |
-| `/build?series=v7&images=` | GET | V7 入队 + SSE 流 |
+| `/build` | POST | V7 入队（JSON `{series, images}`），返回 task_id |
+| `/build?task_id=` | GET | 观察已有任务的 SSE 流 |
+| `/build?series=v7&images=` | GET | V7 入队 + SSE 流（兼容旧调用） |
 | `/task-status/<task_id>` | GET | 查询任务状态（含日志） |
 | `/download/<task_id>` | GET | 下载构建产物（检查过期） |
 | `/existing-packages` | GET | 列出 upgrade_packages/ 下所有 .tar.gz |
@@ -160,6 +166,11 @@ redis:
 | `OSS_ACCESS_KEY_ID/SECRET/ENDPOINT` | entrypoint.sh | 生成 ossutil 配置 |
 | `OSS_REGION` | entrypoint.sh | OSS 区域，默认 cn-beijing |
 | `GUNICORN_WORKERS/GUNICORN_THREADS` | Dockerfile CMD | gunicorn 配置 |
+| `PULL_TIMEOUT_SECONDS` | app.py | 镜像拉取超时，默认 7200s |
+| `ARCHIVE_TIMEOUT_SECONDS` | app.py | 打包超时，默认 1800s |
+| `OSS_QUERY_TIMEOUT_SECONDS` | app.py | `ossutil ls` 超时，默认 120s |
+| `SLOT_TTL_SECONDS` | app.py | 构建槽位兜底 TTL，默认 21600s |
+| `FLASK_DEBUG` | app.py `__main__` | 设为 `1` 才启用 debug |
 | `REGISTRY_USERNAME/PASSWORD` | ❌ **已移除** | `pull_save.sh` 现在硬编码凭据 |
 
 ## Known issues
@@ -195,17 +206,24 @@ redis:
 - ✅ 前端搜索无 debounce → `debounce(fn, 200)`
 - ✅ 前端 `prefers-reduced-motion` → 添加媒体查询
 - ✅ 前端 beforeunload 警告 → 构建中拦截关闭
+- ✅ `_run_and_stream` 无超时 → 拉取超时后强杀子进程（默认 2h，`PULL_TIMEOUT_SECONDS` 可调）
+- ✅ V6 版本参数未校验 → 拒绝路径穿越字符（`_is_safe_version_value`）
+- ✅ 升级包直接写入目标文件 → 先写临时文件再 `os.replace` 原子替换
+- ✅ OSS 版本缓存非原子写入 → 临时文件 + 原子替换；`ossutil ls` 增加 120s 超时
+- ✅ 并发计数漂移 → 以 slot key 为准准入，slot 带 TTL
+- ✅ worker 收到非法队列消息会崩溃 → 跳过并告警
+- ✅ `debug=True` 硬编码 → 由 `FLASK_DEBUG=1` 控制
+- ✅ 缺少 `/health` → 新增轻量健康检查，K8s 探针已切换
 
 ### 仍存在的问题
 
 - **V6 版本选择器**仍用原生 `<select>`，100+ 版本时无法搜索
 - **无升级预览面板** — 选版本后不显示中间版本数/镜像数/预计大小
 - **已有包无智能匹配** — 不提示"该路径已有现成包"
-- **无取消构建按钮** — 任务提交后无法中止
-- **`pull_save.sh:83`** 硬编码凭据（内网环境，暂不修复）
-- **`debug=True`** 在生产代码中 (`app.py:954`)
+- **无取消构建按钮** — 任务提交后无法中止（现有超时兜底）
+- **`pull_save.sh:84`** 硬编码凭据（内网环境，暂不修复）
 - **无 OSS 版本缓存** — 每次 API 调用都执行 `ossutil ls`
-- **无 `/health` 端点** — K8s 探针用 `/` 渲染完整 HTML
+- **SSE 长连接占用 gunicorn 线程** — 且每秒全量读取日志，建议改增量推送
 - **`upgrade_packages/` 无自动清理**
 - **PVC 名拼写错误**: `auto-pancking-pvc`
 

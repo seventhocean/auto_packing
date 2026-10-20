@@ -66,7 +66,7 @@ function usage() {
 # 检查传参数量
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
     usage
-    exit 0
+    exit 1
 fi
 
 # 获取传参传入的当前补丁版本和目标补丁版本
@@ -84,8 +84,13 @@ trap cleanup EXIT
 
 # 拉取最新项目内容
 function pull_nuwa_project() {
+    local nuwa_dir="${CURRENT_DIRECTORY}/../nuwa"
+    if [ ! -d "${nuwa_dir}/.git" ]; then
+        errorlog "nuwa 仓库不存在或不是 git 仓库：${nuwa_dir}，请检查挂载/克隆是否成功"
+        return 1
+    fi
     infolog "开始 git pull "
-    cd ${CURRENT_DIRECTORY}/../nuwa/ && git pull --ff-only>> $LOG_FILE
+    cd "${nuwa_dir}" && git pull --ff-only >> "${LOG_FILE}"
     if [ $? -eq 0 ];then
        infolog "https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成"
        return 0

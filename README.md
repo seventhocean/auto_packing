@@ -155,7 +155,9 @@ redis:
 ### 3.3 并发控制与回收
 
 - 每个 worker 真正开始执行前，会调用 `try_acquire_build_slot()`。
-- 若当前活跃任务数大于 `max_concurrent_tasks`，任务会继续停留在排队态。
+- 槽位以 `task:<id>:slot` 为准：先 `SET NX` 抢占，再统计现有 slot 数量；超过 `max_concurrent_tasks` 时释放并继续排队。
+- slot 带 6 小时 TTL 兜底，worker 异常退出后不会永久占用并发额度。
+- `builds:active` 仅作为观测值，由实际 slot 数量同步。
 - worker 通过 `heartbeat_loop()` 每 5 秒写一次心跳，TTL 为 15 秒。
 - 另一个 `reclaim_loop()` 每 30 秒扫描一次 processing 队列：
   - 若某个 worker 的心跳不存在，则把其 processing 队列中的任务重新放回 build queue。
@@ -423,10 +425,10 @@ deepflow_patch_v7_<task_id>.tar.gz
 打包时使用了：
 
 ```bash
-tar -czf ... --transform 's/.*\///'
+tar -czf ... --transform 's|.*/||' --transform 's|.*|<包名>/&|'
 ```
 
-因此解压后是平铺文件，不保留原始目录层级。
+因此解压后会得到一个与包名同名的目录，所有文件位于该目录内（不再散落在当前目录）。打包先写入临时文件，完成后原子替换目标包，避免下载到半成品。
 
 ## 9. 生命周期与清理策略
 

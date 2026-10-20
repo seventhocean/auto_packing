@@ -378,6 +378,7 @@ let existingFilesData=[],logExpanded=false,renderedLogCount=0;
    ================================================================ */
 function beforeUnloadHandler(e){e.preventDefault();e.returnValue='构建任务正在进行中，离开页面将丢失进度。';return e.returnValue}
 function debounce(fn,d){let t=null;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),d)}}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 /* ================================================================
    INIT
@@ -546,8 +547,9 @@ function addLog(msg,type){
     const el=document.getElementById('buildLog'),d=document.createElement('div');d.className='log-entry';
     const ts=new Date().toTimeString().slice(0,8);
     const cls=type==='error'?'log-error':type==='success'?'log-success':'log-info';
-    d.innerHTML=`<span class="log-time">[${ts}]</span> <span class="${cls}">${c}</span>`;
-    el.appendChild(d);el.scrollTop=el.scrollHeight;
+    const time=document.createElement('span');time.className='log-time';time.textContent=`[${ts}]`;
+    const text=document.createElement('span');text.className=cls;text.textContent=c;
+    d.append(time,' ',text);el.appendChild(d);el.scrollTop=el.scrollHeight;
 }
 function mapStatusToLogType(s){return s==='complete'?'success':s==='error'?'error':'info'}
 function mapLogLevel(l){return l==='ERROR'?'error':l==='WARNING'?'info':'info'}
@@ -560,8 +562,8 @@ async function fetchExistingFiles(){
     fl.style.display='flex';nf.style.display='none';fs.innerHTML='';
     try{
         const r=await fetch('/existing-packages'),d=await r.json();fl.style.display='none';
-        if(d.success&&d.files&&d.files.length>0){existingFilesData=d.files;renderExistingFiles(d.files);updateFilesSummary(d.files.length)}
-        else{existingFilesData=[];nf.style.display='flex';updateFilesSummary(0)}
+        if(d.success&&d.files&&d.files.length>0){existingFilesData=d.files;renderExistingFiles(d.files);updateFilesSummary(d.files.length);newPackageName=''}
+        else{existingFilesData=[];nf.style.display='flex';updateFilesSummary(0);newPackageName=''}
     }catch(e){fl.style.display='none';existingFilesData=[];nf.style.display='flex';updateFilesSummary(0)}
 }
 function renderExistingFiles(files){
@@ -573,7 +575,7 @@ function renderExistingFiles(files){
         const d=m?m[2]+' → '+m[3].replace(/_/g,'-'):f.name.replace('deepflow_patch_','').replace('.tar.gz','');
         const mb=(f.size/1048576).toFixed(1);
         const badge=(i===0&&newPackageName)?'<span class="pkg-new">NEW</span>':'';
-        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${f.name}">${d}${badge}</div><div class="pkg-meta">${mb} MB</div></div><a class="pkg-download" href="/download-existing/${encodeURIComponent(f.name)}" data-filename="${f.name}" onclick="return checkExistingFileDownload(event,this)"><i class="fas fa-download"></i> 下载</a></div>`;
+        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${escapeHtml(f.name)}">${escapeHtml(d)}${badge}</div><div class="pkg-meta">${mb} MB</div></div><a class="pkg-download" href="/download-existing/${encodeURIComponent(f.name)}" data-filename="${escapeHtml(f.name)}" onclick="return checkExistingFileDownload(event,this)"><i class="fas fa-download"></i> 下载</a></div>`;
     }).join('');
 }
 function updateFilesSummary(n){document.getElementById('filesSummary').textContent=n+' 个包'}

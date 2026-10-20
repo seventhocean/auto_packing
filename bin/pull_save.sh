@@ -67,7 +67,6 @@ show_help() {
     
     echo -e "  ${BOLD}5. 拉取完整镜像地址（不自动添加前缀）:${NC}"
     echo -e "     ${CYAN}$0 -d ./my_dir hub.deepflow.yunshan.net/dev/deepflow-server:feature-scp-66${NC}\n"
-    exit 0
 }
 
 ##镜像仓库登录（使用预设账号密码）
@@ -181,6 +180,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help)
             show_help
+            exit 0
             ;;
         -c|--cmd)
             # 指定容器工具（docker/nerdctl）
