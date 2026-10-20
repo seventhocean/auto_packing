@@ -222,6 +222,20 @@ class AppLogicTest(unittest.TestCase):
             )
         self.assertLess(time.time() - started, 5)
 
+    def test_download_existing_package(self):
+        name = 'download-test.tar.gz'
+        path = os.path.join(ap.UPGRADE_PACKAGE_DIR, name)
+        with open(path, 'wb') as f:
+            f.write(b'package-bytes')
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+
+        client = ap.app.test_client()
+        resp = client.get('/download-existing/' + name)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, b'package-bytes')
+        self.assertIn('attachment', resp.headers.get('Content-Disposition', ''))
+        resp.close()
+
     def test_run_and_stream_times_out(self):
         log_path = os.path.join(self.tmpdir, 'timeout.log')
         started = time.time()
