@@ -108,6 +108,7 @@ docker run -p 8000:8000 \
 | `/versions?series=v6` | GET | OSS 补丁版本列表（v7 返回 501） |
 | `/build?series=v6&current=&target=` | GET | V6 入队 + SSE 流 |
 | `/build` | POST | V7 入队（JSON `{series, images}`），返回 task_id |
+| `/build/<task_id>/cancel` | POST | 取消排队中/执行中的任务 |
 | `/build?task_id=` | GET | 观察已有任务的 SSE 流 |
 | `/build?series=v7&images=` | GET | V7 入队 + SSE 流（兼容旧调用） |
 | `/task-status/<task_id>` | GET | 查询任务状态（含日志） |
@@ -216,13 +217,14 @@ redis:
 - ✅ 缺少 `/health` → 新增轻量健康检查，K8s 探针已切换
 - ✅ SSE 全量推送日志 → 日志带 `seq`，支持 `?since=<seq>` 增量推送，前端按游标重连
 - ✅ V6 原生 `<select>` 不可搜索 → 改为自定义可搜索下拉，支持键盘操作
+- ✅ 无取消构建按钮 → 任务执行中可在前端取消，worker 1s 内终止进程组
+- ✅ 前端构建失败时引用未定义变量 `bl` 导致报错 → 修正为直接操作日志面板
 
 ### 仍存在的问题
 
 - **V6 版本选择器**仍用原生 `<select>`，100+ 版本时无法搜索
 - **无升级预览面板** — 选版本后不显示中间版本数/镜像数/预计大小
 - **已有包无智能匹配** — 不提示"该路径已有现成包"
-- **无取消构建按钮** — 任务提交后无法中止（现有超时兜底）
 - **`pull_save.sh:84`** 硬编码凭据（内网环境，暂不修复）
 - **无 OSS 版本缓存** — 每次 API 调用都执行 `ossutil ls`
 - **SSE 长连接占用 gunicorn 线程** — 每个构建页面会长期占用一个线程，用户较多时需提高 workers/threads

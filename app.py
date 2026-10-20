@@ -43,6 +43,10 @@ SLOT_TTL_SECONDS = int(os.environ.get('SLOT_TTL_SECONDS', 6 * 3600))
 # 版本号会参与目录名/包名拼接，必须限制字符集，防止路径穿越
 _VERSION_VALUE_RE = re.compile(r'^[0-9A-Za-z][0-9A-Za-z._-]*$')
 
+
+class BuildCancelled(Exception):
+    """用户主动取消构建。"""
+
 DEFAULT_CONFIG = {
     "redis": {
         "host": "redis.deepflow.svc.cluster.local",
@@ -119,6 +123,10 @@ def task_slot_key(task_id):
     return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:slot"
 
 
+def task_cancel_key(task_id):
+    return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:cancel"
+
+
 def active_builds_key():
     return f"{REDIS_CONFIG['key_prefix']}:builds:active"
 
@@ -169,6 +177,19 @@ def _advance_log_cursor(cursor, task_status):
         return cursor
 
 
+def is_build_cancelled(task_id):
+    """取消标记是尽力而为的：Redis 抖动时不应让构建流程崩溃。"""
+    try:
+        return bool(redis_client.exists(task_cancel_key(task_id)))
+    except Exception:
+        return False
+
+
+def _raise_if_cancelled(task_id):
+    if is_build_cancelled(task_id):
+        raise BuildCancelled("构建已被用户取消")
+
+
 def set_task_status(task_id, status, ttl_seconds=None):
     status_to_store = dict(status)
     status_to_store.pop('logs', None)
@@ -190,6 +211,16 @@ def update_task_status(task_id, updates, ttl_seconds=None):
     return current_status
 
 
+def mark_task_cancelled(task_id):
+    return update_task_status(task_id, {
+        "status": "error",
+        "message": "构建已取消",
+        "complete": True,
+        "error": True,
+        "cancelled": True
+    }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
+
+
 def append_task_log(task_id, timestamp, level, content):
     if not redis_client.exists(task_meta_key(task_id)):
         return
@@ -209,6 +240,7 @@ def append_task_log(task_id, timestamp, level, content):
 def initialize_task_status(task_id, message):
     now = int(time.time())
     set_task_status(task_id, {
+        "task_id": task_id,
         "status": "queued",
         "percent": 0,
         "message": message,
@@ -220,6 +252,7 @@ def initialize_task_status(task_id, message):
     })
     redis_client.delete(task_logs_key(task_id))
     redis_client.delete(task_log_seq_key(task_id))
+    redis_client.delete(task_cancel_key(task_id))
 
 
 def schedule_task_cleanup(task_id, delay_seconds):
@@ -296,7 +329,9 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
     1. 关键事件（登录、开始/完成、错误）立即写入 Redis
     2. 所有输出完整写入本地文件（排查问题时查看）
     3. 超时后强杀子进程，避免镜像拉取卡死导致任务永久占用槽位
+    4. 每秒检查取消标记，用户取消后终止整个进程组
     """
+    _raise_if_cancelled(task_id)
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -307,7 +342,15 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
     )
     last_logged = ""
     timed_out = threading.Event()
+    cancelled = threading.Event()
     finished = threading.Event()
+    cancel_stop = threading.Event()
+
+    def _kill_group():
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            pass
 
     def _kill_on_timeout():
         if finished.is_set():
@@ -317,14 +360,19 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
             timed_out.set()
         # 杀掉整个进程组：只杀 bash 的话，nerdctl 等子进程可能继续持有 stdout，
         # 导致 readline 永远等不到 EOF，超时逻辑失效。
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except OSError:
-            pass
+        _kill_group()
+
+    def _watch_cancel():
+        while not cancel_stop.wait(1):
+            if is_build_cancelled(task_id):
+                cancelled.set()
+                _kill_group()
+                return
 
     timer = threading.Timer(timeout, _kill_on_timeout)
     timer.daemon = True
     timer.start()
+    threading.Thread(target=_watch_cancel, daemon=True).start()
 
     try:
         for line in iter(proc.stdout.readline, ''):
@@ -354,12 +402,18 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
                 last_logged = clean
     finally:
         finished.set()
+        cancel_stop.set()
         timer.cancel()
         try:
             proc.stdout.close()
         except OSError:
             pass
         proc.wait()
+
+    if cancelled.is_set():
+        error_msg = "构建已被用户取消"
+        write_log(error_msg, level="WARNING", task_id=task_id)
+        raise BuildCancelled(error_msg)
 
     if timed_out.is_set():
         error_msg = f"命令执行超时（{timeout}秒），已强制终止：{' '.join(cmd)}"
@@ -586,6 +640,7 @@ def run_build_task(task_id, current_version, target_version):
         try:
             write_log(f"任务[{task_id}]启动：版本升级 {current_version} → {target_version}", task_id=task_id)
             time.sleep(1)  # 预留SSE状态推送时间，避免前端接收延迟
+            _raise_if_cancelled(task_id)
 
             # 检查核心依赖脚本（缺失则直接终止任务）
             dependencies = [
@@ -611,6 +666,7 @@ def run_build_task(task_id, current_version, target_version):
             if not oss_versions:
                 raise Exception("OSS版本缓存刷新失败，无法生成镜像列表")
             write_log(f"OSS版本缓存刷新完成，共{len(oss_versions)}个版本", task_id=task_id)
+            _raise_if_cancelled(task_id)
 
             # 执行get_patch_image_tag_list.sh，生成镜像拉取清单
             update_progress(task_id, 15, f"执行镜像列表生成脚本，参数：{current_version} {target_version}")
@@ -665,6 +721,7 @@ def run_build_task(task_id, current_version, target_version):
 
             # 准备打包
             update_progress(task_id, 70, "准备打包升级包")
+            _raise_if_cancelled(task_id)
 
             if not os.path.exists(UPGRADE_SCRIPT_PATH) or not os.path.isfile(UPGRADE_SCRIPT_PATH):
                 raise Exception(f"升级脚本不存在：{UPGRADE_SCRIPT_PATH}")
@@ -713,6 +770,11 @@ def run_build_task(task_id, current_version, target_version):
             write_log(f"任务[{task_id}]完全结束：{current_version}→{target_version}升级包构建完成，请在90秒内下载升级包", task_id=task_id)
             schedule_task_cleanup(task_id, REDIS_CONFIG['success_ttl_seconds'])
 
+        except BuildCancelled:
+            mark_task_cancelled(task_id)
+            write_log(f"任务[{task_id}]已取消", level="WARNING", task_id=task_id)
+            schedule_task_cleanup(task_id, REDIS_CONFIG['failure_ttl_seconds'])
+
         except Exception as e:
             # 任务失败：捕获异常并更新状态
             error_msg = str(e)
@@ -755,6 +817,7 @@ def run_build_task(task_id, current_version, target_version):
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
     finally:
+        redis_client.delete(task_cancel_key(task_id))
         release_build_slot(task_id)
 
 def run_build_task_v7(task_id, images):
@@ -772,6 +835,7 @@ def run_build_task_v7(task_id, images):
         try:
             write_log(f"任务[{task_id}]启动：V7镜像构建，数量={len(images)}", task_id=task_id)
             time.sleep(1)
+            _raise_if_cancelled(task_id)
 
             dependencies = [
                 (PULL_SCRIPT_PATH, "镜像拉取的Shell脚本")
@@ -810,6 +874,7 @@ def run_build_task_v7(task_id, images):
             write_log(f"镜像拉取成功！共拉取{len(tar_files)}个镜像", task_id=task_id)
 
             update_progress(task_id, 70, "准备打包升级包")
+            _raise_if_cancelled(task_id)
 
             if not os.path.exists(UPGRADE_SCRIPT_PATH) or not os.path.isfile(UPGRADE_SCRIPT_PATH):
                 raise Exception(f"升级脚本不存在：{UPGRADE_SCRIPT_PATH}")
@@ -846,6 +911,11 @@ def run_build_task_v7(task_id, images):
 
             schedule_task_cleanup(task_id, REDIS_CONFIG['success_ttl_seconds'])
 
+        except BuildCancelled:
+            mark_task_cancelled(task_id)
+            write_log(f"任务[{task_id}]已取消", level="WARNING", task_id=task_id)
+            schedule_task_cleanup(task_id, REDIS_CONFIG['failure_ttl_seconds'])
+
         except Exception as e:
             error_msg = str(e)
             update_task_status(task_id, {
@@ -876,6 +946,7 @@ def run_build_task_v7(task_id, images):
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
     finally:
+        redis_client.delete(task_cancel_key(task_id))
         release_build_slot(task_id)
 
 
@@ -1030,6 +1101,25 @@ def api_build_post():
         return jsonify({"success": True, "task_id": task_id})
     else:
         return jsonify({"success": False, "message": f"不支持的 series: {series}"}), 400
+
+
+@app.route('/build/<task_id>/cancel', methods=['POST'])
+def api_cancel_build(task_id):
+    """请求取消一个排队中/执行中的构建任务。"""
+    task_status = get_task_status(task_id, include_logs=False)
+    if not task_status:
+        return jsonify({"success": False, "message": "任务不存在或已过期"}), 404
+    if task_status.get('complete'):
+        return jsonify({"success": False, "message": "任务已结束，无法取消"}), 409
+
+    redis_client.set(task_cancel_key(task_id), "1", ex=REDIS_CONFIG['failure_ttl_seconds'])
+    write_log(f"收到任务[{task_id}]的取消请求", level="WARNING", task_id=task_id)
+
+    # 排队中的任务不必等 worker 取到再取消；执行中的任务由 worker 的取消监听终止
+    if task_status.get('status') == 'queued':
+        mark_task_cancelled(task_id)
+
+    return jsonify({"success": True, "message": "取消请求已提交"})
 
 
 @app.route('/build', methods=['GET'])

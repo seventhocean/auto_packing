@@ -10,6 +10,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -176,6 +177,50 @@ class AppLogicTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         logs = resp.get_json()['status']['logs']
         self.assertEqual([l['content'] for l in logs], ['b', 'c'])
+
+    def test_cancel_queued_task(self):
+        client = ap.app.test_client()
+        ap.initialize_task_status('cancel-route', 'queued')
+
+        resp = client.post('/build/cancel-route/cancel')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()['success'])
+        status = ap.get_task_status('cancel-route')
+        self.assertTrue(status['complete'])
+        self.assertTrue(status['cancelled'])
+        self.assertEqual(status['message'], '构建已取消')
+
+        # 已结束的任务不允许再次取消
+        resp = client.post('/build/cancel-route/cancel')
+        self.assertEqual(resp.status_code, 409)
+
+        resp = client.post('/build/not-exist/cancel')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_worker_skips_cancelled_task(self):
+        import worker
+
+        ap.initialize_task_status('cancel-worker', 'queued')
+        ap.redis_client.set(ap.task_cancel_key('cancel-worker'), '1')
+        worker.process_task({'task_id': 'cancel-worker', 'task_type': 'v7', 'images': []})
+
+        status = ap.get_task_status('cancel-worker')
+        self.assertTrue(status['cancelled'])
+        # 没有占用构建槽位
+        self.assertEqual(ap._count_active_slots(), 0)
+
+    def test_run_and_stream_can_be_cancelled(self):
+        log_path = os.path.join(self.tmpdir, 'cancel.log')
+        threading.Timer(0.5, lambda: ap.redis_client.set(ap.task_cancel_key('cancel-stream'), '1')).start()
+        started = time.time()
+        with self.assertRaises(ap.BuildCancelled):
+            ap._run_and_stream(
+                'cancel-stream',
+                ['/bin/bash', '-c', 'sh -c "sleep 30"'],
+                log_path,
+                timeout=20
+            )
+        self.assertLess(time.time() - started, 5)
 
     def test_run_and_stream_times_out(self):
         log_path = os.path.join(self.tmpdir, 'timeout.log')

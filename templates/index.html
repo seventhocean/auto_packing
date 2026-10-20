@@ -214,6 +214,8 @@
             transition:background var(--transition),border-color var(--transition);
         }
         .btn-sm:hover{background:var(--surface-hover);border-color:var(--text-muted)}
+        .btn-sm.danger{color:var(--danger);border-color:var(--danger)}
+        .btn-sm.danger:hover{background:rgba(229,32,32,0.12);border-color:var(--danger)}
 
         /* Log area */
         .build-log{
@@ -377,6 +379,7 @@
                             <span id="taskMessageText"></span>
                         </span>
                         <div class="build-actions">
+                            <button class="btn-sm danger" id="btnCancelBuild" style="display:none;" disabled>取消构建</button>
                             <button class="btn-sm" id="btnToggleLog">展开日志</button>
                         </div>
                     </div>
@@ -404,7 +407,7 @@
    STATE
    ================================================================ */
 let versionData=[],eventSource=null,currentSeries='v6',isBuilding=false;
-let existingFilesData=[],logExpanded=false,lastLogSeq=0;
+let existingFilesData=[],logExpanded=false,lastLogSeq=0,currentTaskId='';
 
 /* ================================================================
    UTILS
@@ -585,6 +588,26 @@ function checkBuildBtnStatus(){
 /* ================================================================
    BUILD PROCESS
    ================================================================ */
+function showCancelButton(show,enabled){
+    const btn=document.getElementById('btnCancelBuild');
+    btn.style.display=show?'inline-block':'none';
+    btn.disabled=!enabled;
+    if(!show)btn.textContent='取消构建';
+}
+function handleCancelBuild(){
+    if(!isBuilding||!currentTaskId)return;
+    const btn=document.getElementById('btnCancelBuild');
+    btn.disabled=true;btn.textContent='取消中...';
+    fetch(`/build/${encodeURIComponent(currentTaskId)}/cancel`,{method:'POST'})
+        .then(r=>r.json())
+        .then(d=>{
+            if(!d.success){
+                addLog(d.message||'取消请求失败','error');
+                btn.disabled=false;btn.textContent='取消构建';
+            }
+        })
+        .catch(()=>{addLog('取消请求失败，请检查网络','error');btn.disabled=false;btn.textContent='取消构建'});
+}
 function startBuildProcess(e){
     if(e)e.preventDefault();if(isBuilding)return;
     const cv=currentPicker?currentPicker.getValue():'',tv=targetPicker?targetPicker.getValue():'';
@@ -595,6 +618,7 @@ function startBuildProcess(e){
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
 
     isBuilding=true;window.addEventListener('beforeunload',beforeUnloadHandler);
+    currentTaskId='';showCancelButton(true,false);
     ab.disabled=true;
     ab.innerHTML='<span class="spinner"></span> 构建中...';
     bc.classList.add('active');bl.classList.remove('expanded');bl.innerHTML='';
@@ -609,7 +633,7 @@ function startBuildProcess(e){
     if(currentSeries==='v7'){
         const im=normalizeV7Images(vi);if(im.length===0){resetBuildState();return}
         fetch('/build',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({series:'v7',images:im})})
-            .then(r=>r.json()).then(d=>{if(d.success&&d.task_id){sseUrl=`/build?task_id=${encodeURIComponent(d.task_id)}`;connectSSE()}else resetBuildState()})
+            .then(r=>r.json()).then(d=>{if(d.success&&d.task_id){currentTaskId=d.task_id;showCancelButton(true,true);sseUrl=`/build?task_id=${encodeURIComponent(d.task_id)}`;connectSSE()}else resetBuildState()})
             .catch(()=>resetBuildState());
         return;
     }else{sseUrl=`/build?series=v6&current=${encodeURIComponent(cv)}&target=${encodeURIComponent(tv)}`}
@@ -629,13 +653,17 @@ function resetBuildState(){
     const b6=document.getElementById('v6BuildBtn'),b7=document.getElementById('v7BuildBtn'),bc=document.getElementById('buildCard');
     b6.innerHTML='<i class="fas fa-play"></i> 开始构建';b7.innerHTML='<i class="fas fa-play"></i> 开始构建';
     isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
-    lastLogSeq=0;if(eventSource){eventSource.close();eventSource=null}
+    lastLogSeq=0;currentTaskId='';showCancelButton(false);if(eventSource){eventSource.close();eventSource=null}
     bc.classList.remove('active');checkBuildBtnStatus();
 }
 let newPackageName='';
 function handleBuildStatus(d){
     const st=document.getElementById('taskStateText');
     const mt=document.getElementById('taskMessageText'),logs=Array.isArray(d.logs)?d.logs:[];
+    if(d.task_id){
+        currentTaskId=d.task_id;
+        if(isBuilding&&d.status!=='complete'&&d.status!=='error')showCancelButton(true,true);
+    }
     // 服务端只推送游标之后的新日志，直接追加即可
     logs.forEach(l=>{
         if(l&&l.content)addLog(l.content,mapLogLevel(l.level));
@@ -648,6 +676,7 @@ function handleBuildStatus(d){
         case'complete':
             st.textContent='已完成';updateProgressBar(100,'success');mt.textContent='升级包已加入右侧列表';
             newPackageName=d.package_name||'';
+            showCancelButton(false);
             isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
             if(eventSource){eventSource.close();eventSource=null}
             {let b6=document.getElementById('v6BuildBtn');let b7=document.getElementById('v7BuildBtn');
@@ -655,15 +684,17 @@ function handleBuildStatus(d){
             fetchExistingFiles();checkBuildBtnStatus();
             break;
         case'error':
-            st.textContent='失败';
+            st.textContent=d.cancelled?'已取消':'失败';
             updateProgressBar(0,'error');
             mt.textContent=d.message||'';
             addLog(d.message,'error');
+            showCancelButton(false);
             isBuilding=false;
             window.removeEventListener('beforeunload',beforeUnloadHandler);
             if(eventSource){eventSource.close();eventSource=null}
             document.getElementById('btnToggleLog').textContent='收起日志';
-            bl.classList.add('expanded');
+            document.getElementById('buildLog').classList.add('expanded');
+            logExpanded=true;
             checkBuildBtnStatus();
             break;
     }
@@ -735,6 +766,7 @@ function initEventListeners(){
         document.getElementById('buildLog').classList.toggle('expanded',logExpanded);
         this.textContent=logExpanded?'收起日志':'展开日志';
     });
+    document.getElementById('btnCancelBuild').addEventListener('click',handleCancelBuild);
 }
 </script>
 </body>

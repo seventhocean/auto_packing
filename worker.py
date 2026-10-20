@@ -11,6 +11,8 @@ from app import (
     build_processing_key,
     build_queue_key,
     get_task_status,
+    is_build_cancelled,
+    mark_task_cancelled,
     reconcile_build_counter,
     release_build_slot,
     redis_client,
@@ -77,7 +79,16 @@ def process_task(payload):
     wait_start = time.time()
     max_wait_seconds = 600  # 等待槽位最长 10 分钟
 
+    if is_build_cancelled(task_id):
+        mark_task_cancelled(task_id)
+        write_log("任务[{}]在开始前已被取消".format(task_id), level="WARNING")
+        return
+
     while not try_acquire_build_slot(task_id):
+        if is_build_cancelled(task_id):
+            mark_task_cancelled(task_id)
+            write_log("任务[{}]在排队期间被取消".format(task_id), level="WARNING")
+            return
         if time.time() - wait_start > max_wait_seconds:
             update_task_status(task_id, {
                 "status": "error",
@@ -94,6 +105,10 @@ def process_task(payload):
         time.sleep(2)
 
     try:
+        if is_build_cancelled(task_id):
+            mark_task_cancelled(task_id)
+            write_log("任务[{}]获得槽位前已被取消".format(task_id), level="WARNING")
+            return
         update_task_status(task_id, {
             "status": "queued",
             "message": "任务已分配给 worker，准备开始执行"
@@ -143,6 +158,10 @@ def main():
             task_status = get_task_status(task_id, include_logs=False)
             if not task_status:
                 write_log(f"跳过未知任务：{task_id}", level="WARNING")
+                redis_client.lrem(PROCESSING_QUEUE_KEY, 1, raw_payload)
+                continue
+            if task_status.get('complete'):
+                write_log(f"跳过已结束任务：{task_id}", level="WARNING")
                 redis_client.lrem(PROCESSING_QUEUE_KEY, 1, raw_payload)
                 continue
             process_task(payload)
