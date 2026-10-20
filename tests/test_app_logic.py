@@ -248,6 +248,24 @@ class AppLogicTest(unittest.TestCase):
         self.assertIn('sse-task', body)
         resp.close()
 
+    def test_run_and_stream_pushes_all_output_to_redis(self):
+        ap.initialize_task_status('log-stream', 'queued')
+        log_path = os.path.join(self.tmpdir, 'stream.log')
+        rc = ap._run_and_stream(
+            'log-stream',
+            ['/bin/bash', '-c', 'echo hello-from-script; echo error: boom'],
+            log_path,
+            timeout=10
+        )
+        self.assertEqual(rc, 0)
+
+        status = ap.get_task_status('log-stream')
+        contents = [entry['content'] for entry in status['logs']]
+        self.assertIn('hello-from-script', contents)
+        error_entries = [entry for entry in status['logs'] if entry['content'].startswith('error:')]
+        self.assertTrue(error_entries)
+        self.assertEqual(error_entries[0]['level'], 'ERROR')
+
     def test_run_and_stream_times_out(self):
         log_path = os.path.join(self.tmpdir, 'timeout.log')
         started = time.time()

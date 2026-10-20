@@ -28,15 +28,20 @@ WORKER_ID = "{}-{}-{}".format(socket.gethostname(), os.getpid(), uuid.uuid4().he
 PROCESSING_QUEUE_KEY = build_processing_key(WORKER_ID)
 HEARTBEAT_KEY = worker_heartbeat_key(WORKER_ID)
 
+# 心跳 TTL 过短时，Redis 短暂抖动就可能导致运行中的任务被其他 worker 误回收并重复构建。
+HEARTBEAT_INTERVAL_SECONDS = int(os.environ.get("WORKER_HEARTBEAT_INTERVAL_SECONDS", 10))
+HEARTBEAT_TTL_SECONDS = int(os.environ.get("WORKER_HEARTBEAT_TTL_SECONDS", 60))
+RECLAIM_INTERVAL_SECONDS = int(os.environ.get("WORKER_RECLAIM_INTERVAL_SECONDS", 30))
+
 
 def heartbeat_loop():
     while True:
         try:
-            redis_client.set(HEARTBEAT_KEY, str(int(time.time())), ex=15)
+            redis_client.set(HEARTBEAT_KEY, str(int(time.time())), ex=HEARTBEAT_TTL_SECONDS)
         except Exception as exc:
             # 心跳线程不能因为一次 Redis 抖动就退出，否则本 worker 的任务会被误回收
             write_log("写入 worker 心跳失败：{}".format(str(exc)), level="WARNING")
-        time.sleep(5)
+        time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
 
 def reclaim_stale_tasks():
@@ -69,7 +74,7 @@ def reclaim_loop():
             reclaim_stale_tasks()
         except Exception as exc:
             write_log("回收失活任务失败：{}".format(str(exc)), level="WARNING")
-        time.sleep(30)
+        time.sleep(RECLAIM_INTERVAL_SECONDS)
 
 
 def process_task(payload):

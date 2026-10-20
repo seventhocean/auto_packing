@@ -89,9 +89,21 @@ function pull_nuwa_project() {
         errorlog "nuwa 仓库不存在或不是 git 仓库：${nuwa_dir}，请检查挂载/克隆是否成功"
         return 1
     fi
+    if ! cd "${nuwa_dir}"; then
+        errorlog "无法进入 nuwa 目录：${nuwa_dir}"
+        return 1
+    fi
     infolog "开始 git pull "
-    cd "${nuwa_dir}" && git pull --ff-only >> "${LOG_FILE}"
-    if [ $? -eq 0 ];then
+    local pull_ok=0
+    for attempt in 1 2 3; do
+        if git pull --ff-only >> "${LOG_FILE}" 2>&1; then
+            pull_ok=1
+            break
+        fi
+        infolog "git pull 第 ${attempt}/3 次失败，3 秒后重试"
+        sleep 3
+    done
+    if [ "${pull_ok}" -eq 1 ]; then
        infolog "https://gitlab.yunshan.net/yunshan/deepflow-group/nuwa.git 拉取完成"
        return 0
     else

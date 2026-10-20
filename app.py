@@ -43,6 +43,10 @@ SLOT_TTL_SECONDS = int(os.environ.get('SLOT_TTL_SECONDS', 6 * 3600))
 # 版本号会参与目录名/包名拼接，必须限制字符集，防止路径穿越
 _VERSION_VALUE_RE = re.compile(r'^[0-9A-Za-z][0-9A-Za-z._-]*$')
 
+# /versions 页面加载允许使用短 TTL 缓存；构建任务仍强制刷新，保证镜像清单最新
+OSS_VERSIONS_CACHE_TTL_SECONDS = int(os.environ.get('OSS_VERSIONS_CACHE_TTL_SECONDS', 300))
+_OSS_VERSIONS_CACHE = {"versions": [], "expires_at": 0.0}
+
 
 class BuildCancelled(Exception):
     """用户主动取消构建。"""
@@ -57,7 +61,7 @@ DEFAULT_CONFIG = {
         "success_ttl_seconds": 7200,
         "failure_ttl_seconds": 3600,
         "download_ttl_seconds": 90,
-        "max_logs": 100,
+        "max_logs": 500,
         "max_concurrent_tasks": 3
     }
 }
@@ -326,7 +330,7 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
     """用 Popen 逐行读取子脚本输出，过滤 ANSI 码，实时写入 Redis 日志。
 
     策略：
-    1. 关键事件（登录、开始/完成、错误）立即写入 Redis
+    1. 所有输出写入 Redis 日志（按 max_logs 截断），前端可看到完整拉取过程
     2. 所有输出完整写入本地文件（排查问题时查看）
     3. 超时后强杀子进程，避免镜像拉取卡死导致任务永久占用槽位
     4. 每秒检查取消标记，用户取消后终止整个进程组
@@ -340,7 +344,6 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
         bufsize=1,  # 行缓冲
         start_new_session=True  # 独立进程组，超时可连同子进程一起终止
     )
-    last_logged = ""
     timed_out = threading.Event()
     cancelled = threading.Event()
     finished = threading.Event()
@@ -387,19 +390,14 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
 
             lower = clean.lower()
 
-            # 判断是否为关键事件（立即推送）
-            is_key = any(kw in lower for kw in [
-                '开始登录', '登录成功', 'login',
-                '开始拉取镜像：', '镜像拉取成功：',
-                '开始保存镜像', '镜像保存成功', '保存成功',
-                '错误：', 'error:', 'warning:', '警告：',
-                '所有镜像处理完成', '===== 所有镜像处理完成',
-                'failed', 'fatal'
-            ])
-
-            if is_key and clean != last_logged:
-                write_log(clean, task_id=task_id)
-                last_logged = clean
+            # 全部输出都写入 Redis 日志（最多保留 max_logs 条），便于前端排查问题
+            level = "ERROR" if ('error' in lower or 'failed' in lower or '错误' in lower) else "INFO"
+            append_task_log(
+                task_id,
+                time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()),
+                level,
+                clean
+            )
     finally:
         finished.set()
         cancel_stop.set()
@@ -450,19 +448,43 @@ def update_progress(task_id, new_percent, message, level="INFO"):
         })
         set_task_status(task_id, task_status)
 
-def get_oss_versions():
+def _run_oss_ls():
+    """执行 ossutil ls，网络抖动时重试 3 次。"""
+    last_error = None
+    for attempt in range(3):
+        try:
+            return subprocess.run(
+                [OSS_FILE, "-c", OSS_CONFIG, "ls", "-d", "oss://df-patch-no-delete/patch/6.6/6.6.9/"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+                check=True,
+                timeout=OSS_QUERY_TIMEOUT_SECONDS
+            )
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
+            last_error = exc
+            write_log(
+                f"OSS版本获取失败（第{attempt + 1}/3次）：{str(exc)}",
+                level="WARNING"
+            )
+            if attempt < 2:
+                time.sleep(2)
+    raise last_error
+
+
+def get_oss_versions(use_cache=False):
     """从OSS获取x86_64架构的补丁版本列表（供前端下拉框用）
     按文件名前缀序号（01~16）排序，前端直接沿用此顺序
+
+    use_cache=True 时使用 5 分钟进程内缓存（页面加载）；
+    构建流程使用默认的 False，确保拿到最新版本列表。
     """
+    now = time.time()
+    if use_cache and _OSS_VERSIONS_CACHE["versions"] and now < _OSS_VERSIONS_CACHE["expires_at"]:
+        return list(_OSS_VERSIONS_CACHE["versions"])
+
     try:
-        result = subprocess.run(
-            [OSS_FILE,"-c", OSS_CONFIG, "ls", "-d", "oss://df-patch-no-delete/patch/6.6/6.6.9/"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
-            check=True,
-            timeout=OSS_QUERY_TIMEOUT_SECONDS
-        )
+        result = _run_oss_ls()
         
         versions = []
         seen_versions = set()
@@ -501,18 +523,28 @@ def get_oss_versions():
             for ver in versions:
                 f.write(f"{ver['value']}\n")
         os.replace(tmp_versions_file, OSS_VERSIONS_TMP_FILE)
+        _OSS_VERSIONS_CACHE["versions"] = list(versions)
+        _OSS_VERSIONS_CACHE["expires_at"] = time.time() + OSS_VERSIONS_CACHE_TTL_SECONDS
         
         write_log(f"OSS 获取的 PATCH 版本已经成功保存到临时文本：{OSS_VERSIONS_TMP_FILE}", level="INFO")
         return versions
     
     except subprocess.TimeoutExpired:
-        error_msg = f"OSS版本获取超时（{OSS_QUERY_TIMEOUT_SECONDS}秒）"
-        write_log(error_msg, level="ERROR")
-        return []
+        return _oss_versions_fallback(
+            f"OSS版本获取超时（{OSS_QUERY_TIMEOUT_SECONDS}秒）",
+            use_cache
+        )
     except Exception as e:
-        error_msg = f"OSS版本获取失败：{str(e)}"
-        write_log(error_msg, level="ERROR")
-        return []
+        return _oss_versions_fallback(f"OSS版本获取失败：{str(e)}", use_cache)
+
+
+def _oss_versions_fallback(error_msg, use_cache):
+    # 页面加载场景下，OSS 短暂不可用时继续使用上次成功获取的列表
+    if use_cache and _OSS_VERSIONS_CACHE["versions"]:
+        write_log(error_msg + "，返回上次缓存版本", level="WARNING")
+        return list(_OSS_VERSIONS_CACHE["versions"])
+    write_log(error_msg, level="ERROR")
+    return []
 
 def get_existing_packages():
     """新增：获取UPGRADE_PACKAGE_DIR目录下的所有tar.gz升级包列表
@@ -1041,7 +1073,7 @@ def api_get_versions():
             "message": f"{series} 版本列表尚未接入（占位逻辑）"
         }), 501
 
-    versions = get_oss_versions()
+    versions = get_oss_versions(use_cache=True)
     if versions:
         return jsonify({
             "success": True,

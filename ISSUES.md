@@ -126,3 +126,8 @@
 | 19 | P2 | 已选版本对与已有升级包无关联提示 | 表单下方提示跨越 patch 数；命中同名包时给出直接下载链接 |
 | 20 | P1 | Python 3.6 EOL，Dockerfile 混用 Debian 源 | 升级到 python:3.12-slim-bookworm；Flask 3.1 / gunicorn 23 / redis 5.2 / PyYAML 6.0.2；`send_file` 改用 `download_name` |
 | 21 | P0 | SSE 生成器内部读取 `request.args`，脱离请求上下文后返回 500 | 在视图函数内解析 `since` 后传入生成器，并增加 SSE 回归测试 |
+| 22 | P0 | `pull_save.sh` 用字符串保存 `nerdctl -n k8s.io`，引号展开后被当成单个可执行文件名，默认拉取直接失败 | 改为 bash 数组 `container_cmd=(nerdctl -n k8s.io)`，所有调用使用 `"${container_cmd[@]}"` |
+| 23 | P1 | 心跳 TTL 15s，Redis 抖动超过 15s 会导致运行中任务被误回收、重复构建 | 心跳改为 10s/60s，并支持环境变量调整 |
+| 24 | P1 | Redis 使用 emptyDir + 关闭 AOF，Pod 重建后队列/状态/日志全部丢失 | Redis 挂载独立 PVC 并开启 AOF（everysec） |
+| 25 | P1 | 前端只能看到少量关键日志，排查拉取失败困难 | 所有子进程输出写入 Redis 日志（上限 500 条），前端增量展示 |
+| 26 | P2 | OSS/GitLab 短暂抖动会直接导致版本列表或构建失败 | `ossutil ls` 与 `git pull/clone` 增加 3 次重试；`/versions` 增加 5 分钟缓存与旧缓存回退 |

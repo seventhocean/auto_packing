@@ -65,7 +65,7 @@ docker run -p 8000:8000 \
 - 超限时任务保持 `queued` 状态，worker 循环重试
 - 构建结束（成功/失败）后 `release_build_slot()` 在 finally 中调用
 - 每个 worker 进程串行处理任务，实际并发上限 = `min(max_concurrent_tasks, worker 副本数)`；当前 2 个副本，适合 1~2 个用户同时构建
-- Worker 心跳 TTL 15s，失活后 `reclaim_loop` 将其 processing 队列任务回收到 build queue
+- Worker 心跳 TTL 60s（每 10s 写一次），失活后 `reclaim_loop` 将其 processing 队列任务回收到 build queue
 
 ### Redis key 设计
 
@@ -77,7 +77,7 @@ docker run -p 8000:8000 \
 | `auto_packing:builds:active` | string (int) | 活跃构建数观测值（由 slot 数量同步） | 永久 |
 | `auto_packing:build:queue` | list | 待消费的构建任务 | 永久 |
 | `auto_packing:build:processing:<worker>` | list | worker 正在处理的任务 | 跟随 worker |
-| `auto_packing:worker:<worker>:heartbeat` | string (int) | worker 最后心跳时间戳 | 15s |
+| `auto_packing:worker:<worker>:heartbeat` | string (int) | worker 最后心跳时间戳 | 60s |
 
 ### Build pipeline
 
@@ -155,7 +155,7 @@ redis:
   success_ttl_seconds: 7200
   failure_ttl_seconds: 3600
   download_ttl_seconds: 90
-  max_logs: 100
+  max_logs: 500
   max_concurrent_tasks: 3
 ```
 
@@ -172,6 +172,10 @@ redis:
 | `ARCHIVE_TIMEOUT_SECONDS` | app.py | 打包超时，默认 1800s |
 | `OSS_QUERY_TIMEOUT_SECONDS` | app.py | `ossutil ls` 超时，默认 120s |
 | `SLOT_TTL_SECONDS` | app.py | 构建槽位兜底 TTL，默认 21600s |
+| `OSS_VERSIONS_CACHE_TTL_SECONDS` | app.py | `/versions` 进程内缓存，默认 300s |
+| `WORKER_HEARTBEAT_INTERVAL_SECONDS` | worker.py | 心跳间隔，默认 10s |
+| `WORKER_HEARTBEAT_TTL_SECONDS` | worker.py | 心跳 TTL，默认 60s |
+| `WORKER_RECLAIM_INTERVAL_SECONDS` | worker.py | 失活任务回收扫描间隔，默认 30s |
 | `FLASK_DEBUG` | app.py `__main__` | 设为 `1` 才启用 debug |
 | `REGISTRY_USERNAME/PASSWORD` | ❌ **已移除** | `pull_save.sh` 现在硬编码凭据 |
 
@@ -266,7 +270,7 @@ redis:
 ## K8s deployment (from apply/maintenance-app-deployment.yaml)
 
 Namespace `getpatch` 内包含：
-- **maintenance-redis**: Redis 7.2-alpine, 密码认证, emptyDir 存储
+- **maintenance-redis**: Redis 7.2-alpine, 密码认证, AOF 持久化 PVC
 - **maintenance-app**: Web API (maintenance-app:v1.7.3), gunicorn 2 workers, NodePort 30090
 - **maintenance-worker**: 2 replicas, 同镜像但启动 `python worker.py`
 - **maintenance-app-config**: ConfigMap 挂载 `/app/config/config.yaml`

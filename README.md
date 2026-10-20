@@ -132,7 +132,7 @@ redis:
   success_ttl_seconds: 7200
   failure_ttl_seconds: 3600
   download_ttl_seconds: 90
-  max_logs: 100
+  max_logs: 500
   max_concurrent_tasks: 3
 ```
 
@@ -160,7 +160,7 @@ redis:
 - slot 带 6 小时 TTL 兜底，worker 异常退出后不会永久占用并发额度。
 - `builds:active` 仅作为观测值，由实际 slot 数量同步。
 - 每个 worker 进程串行处理任务，实际并发上限为 `min(max_concurrent_tasks, worker 副本数)`；当前 2 个副本，面向 1~2 个用户同时构建。
-- worker 通过 `heartbeat_loop()` 每 5 秒写一次心跳，TTL 为 15 秒。
+- worker 通过 `heartbeat_loop()` 每 10 秒写一次心跳，TTL 为 60 秒（避免 Redis 短暂抖动导致任务被误回收）。
 - 另一个 `reclaim_loop()` 每 30 秒扫描一次 processing 队列：
   - 若某个 worker 的心跳不存在，则把其 processing 队列中的任务重新放回 build queue。
 
@@ -565,7 +565,7 @@ docker run \
 
 ### 11.1 关键点
 
-- app 与 worker 使用同一个镜像：`maintenance-app:v2.0.0`
+- app 与 worker 使用同一个镜像：`auto_packing:latest`
 - worker 通过 `args: ["python", "worker.py"]` 启动
 - Redis 密码通过 Secret 注入
 - app / worker 都依赖：
@@ -575,16 +575,19 @@ docker run \
   - `APP_CONFIG_PATH`
 - 通过 `hostPath` 挂载 `/run/containerd/containerd.sock`，供 `nerdctl` 使用
 - 通过 PVC 挂载 `/app/upgrade_packages`
+- Redis 使用独立 PVC + AOF（`appendonly yes`），Pod 重建后任务队列和状态不会丢失
 
 ### 11.2 当前清单里的实际持久化情况
 
-当前 K8s 清单只显式持久化了：
+当前 K8s 清单显式持久化了：
 
-- `/app/upgrade_packages`
+- `/app/upgrade_packages`（升级包）
+- `/data`（Redis AOF 数据）
 
 这意味着：
 
 - 已生成升级包会保留在 PVC 上。
+- Redis 重启/Pod 重建后，任务状态、队列和日志仍可恢复。
 - `images/`、`logs/`、`latest_image_list/` 默认仍在容器文件系统内。
 - Pod 重建后，运行中的临时文件和本地日志不会保留。
 

@@ -21,8 +21,9 @@ DEFAULT_IMAGE_LIST="$BASE_DIR/../latest_image_list/patch_image_tag_list.txt"
 LOG_FILE="$BASE_DIR/../logs/app.log"
 
 # 容器工具（默认nerdctl，支持通过--cmd切换为docker）
-#container_cmd="docker"
-container_cmd="nerdctl -n k8s.io"
+# 用数组保存，避免 "nerdctl -n k8s.io" 被当成一个可执行文件名
+#container_cmd=(docker)
+container_cmd=(nerdctl -n k8s.io)
 # 镜像仓库前缀（默认DeepFlow仓库）
 repo="hub.deepflow.yunshan.net/dev/"
 # 镜像保存目录（默认空，需通过--dir指定）
@@ -72,15 +73,24 @@ show_help() {
 ##镜像仓库登录（使用预设账号密码）
 repo_login() {
     log "${YELLOW}开始登录镜像仓库：hub.deepflow.yunshan.net${NC}"
-    # 检查容器工具是否存在（只取第一个词作为命令名）
-    local _cmd_bin=$(echo "$container_cmd" | awk '{print $1}')
+    # 检查容器工具是否存在（只取命令名）
+    local _cmd_bin="${container_cmd[0]}"
     if ! command -v "$_cmd_bin" &> /dev/null; then
         log "${RED}错误：容器工具 $_cmd_bin 未安装或未配置到环境变量${NC}"
         exit 1
     fi
 
-    # 执行登录（密码通过管道传递，避免明文暴露）
-    if ! echo "35lRrgBcLhF" | "$container_cmd" login --username=acrpush@yunshan --password-stdin hub.deepflow.yunshan.net; then
+    # 执行登录（密码通过管道传递，避免明文暴露），网络抖动时重试 3 次
+    local login_ok=0
+    for attempt in 1 2 3; do
+        if echo "35lRrgBcLhF" | "${container_cmd[@]}" login --username=acrpush@yunshan --password-stdin hub.deepflow.yunshan.net; then
+            login_ok=1
+            break
+        fi
+        log "${YELLOW}仓库登录失败（第 ${attempt}/3 次），3 秒后重试${NC}"
+        sleep 3
+    done
+    if [ "$login_ok" -ne 1 ]; then
         log "${RED}错误：仓库登录失败！请检查账号密码或网络连接${NC}"
         exit 1
     fi
@@ -91,9 +101,18 @@ repo_login() {
 pull_and_save_single() {
     local full_image_name="$1"
     
-    # 1. 拉取镜像
+    # 1. 拉取镜像（网络抖动时重试 3 次）
     log "${GREEN}开始拉取镜像：$full_image_name${NC}"
-    if ! "$container_cmd" pull "$full_image_name"; then
+    local pull_ok=0
+    for attempt in 1 2 3; do
+        if "${container_cmd[@]}" pull "$full_image_name"; then
+            pull_ok=1
+            break
+        fi
+        log "${YELLOW}拉取失败（第 ${attempt}/3 次），5 秒后重试${NC}"
+        sleep 5
+    done
+    if [ "$pull_ok" -ne 1 ]; then
         log "${RED}错误：拉取镜像失败：$full_image_name${NC}"
         exit 1
     fi
@@ -111,7 +130,17 @@ pull_and_save_single() {
         return 0
     fi
     log "${GREEN}开始保存镜像到：$save_file${NC}"
-    if ! "$container_cmd" save -o "$save_file" "$full_image_name"; then
+    local save_ok=0
+    for attempt in 1 2 3; do
+        if "${container_cmd[@]}" save -o "$save_file" "$full_image_name"; then
+            save_ok=1
+            break
+        fi
+        log "${YELLOW}保存失败（第 ${attempt}/3 次），清理后重试${NC}"
+        [ -f "$save_file" ] && rm -f "$save_file"
+        sleep 3
+    done
+    if [ "$save_ok" -ne 1 ]; then
         log "${RED}错误：保存镜像失败：$full_image_name${NC}"
         # 清理失败的空文件
         if [ -f "$save_file" ]; then
@@ -183,9 +212,9 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         -c|--cmd)
-            # 指定容器工具（docker/nerdctl）
-            container_cmd="$2"
-            log "${YELLOW}已指定容器工具：$container_cmd${NC}"
+            # 指定容器工具（docker/nerdctl），允许带参数，例如 "nerdctl -n k8s.io"
+            IFS=' ' read -r -a container_cmd <<< "$2"
+            log "${YELLOW}已指定容器工具：${container_cmd[*]}${NC}"
             shift 2
             ;;
         -d|--dir)

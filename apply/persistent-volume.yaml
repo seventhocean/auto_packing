@@ -24,3 +24,34 @@ spec:
     requests:
       storage: 20Gi
   storageClassName: manual-local-storage
+
+---
+# Redis 持久化：避免 Pod 重建后任务队列、状态和日志全部丢失。
+# 使用 AOF（appendonly yes），单副本 Redis 足够当前 1~2 个用户的规模。
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: auto-packing-redis-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual-local-storage
+  hostPath:
+    path: /mnt/auto_packing_redis/
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auto-packing-redis-pvc
+  namespace: getpatch
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: manual-local-storage
