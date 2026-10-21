@@ -21,7 +21,7 @@ data:
       success_ttl_seconds: 7200
       failure_ttl_seconds: 3600
       download_ttl_seconds: 90
-      max_logs: 500
+      max_logs: 2000
       max_concurrent_tasks: 3
 ---
 apiVersion: v1
@@ -163,6 +163,8 @@ spec:
       - ip: "10.1.0.14"
         hostnames:
         - "gitlab.yunshan.net"
+      # 发布时推荐使用 bin/redeploy.sh：它会用唯一 tag 更新镜像，
+      # 避免 :latest + IfNotPresent 复用节点旧缓存。
       containers:
       # 真正的 maintenance-app 业务容器。
       - name: maintenance-app
@@ -304,6 +306,7 @@ spec:
       - ip: "10.1.0.14"
         hostnames:
         - "gitlab.yunshan.net"
+      # 发布时推荐使用 bin/redeploy.sh（与 app 使用同一镜像）。
       containers:
       # 真正的 worker 业务容器。
       - name: maintenance-worker

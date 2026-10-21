@@ -155,7 +155,7 @@ redis:
   success_ttl_seconds: 7200
   failure_ttl_seconds: 3600
   download_ttl_seconds: 90
-  max_logs: 500
+  max_logs: 2000
   max_concurrent_tasks: 3
 ```
 
@@ -244,16 +244,17 @@ redis:
 ├── config.yaml         # Redis 配置
 ├── dockerfile          # 容器镜像 (python:3.12-slim-bookworm, gunicorn)
 ├── entrypoint.sh       # 容器启动：克隆 nuwa + 生成 ossutilconfig
-├── requirements.txt    # Flask + gunicorn + redis + PyYAML + dataclasses
+├── requirements.txt    # Flask + gunicorn + redis + PyYAML
 ├── .gitignore
 ├── bin/
 │   ├── get_patch_image_tag_list.sh  # V6: 版本差异→镜像清单
 │   ├── pull_save.sh                 # 拉取镜像→保存 tar
 │   ├── deepflow_patch_upgrade.sh    # 部署端升级（打进包里）
+│   ├── redeploy.sh                  # 构建唯一 tag 镜像并滚动更新 K8s
 │   ├── ossutil                      # 二进制
 │   └── nerdctl                      # 二进制
 ├── templates/
-│   └── index.html       # 单页工作台（1828行）
+│   └── index.html       # 单页工作台
 ├── static/              # Bootstrap 5 + FontAwesome
 ├── apply/
 │   ├── maintenance-app-deployment.yaml  # K8s: app + worker + redis + config

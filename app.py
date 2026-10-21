@@ -61,7 +61,7 @@ DEFAULT_CONFIG = {
         "success_ttl_seconds": 7200,
         "failure_ttl_seconds": 3600,
         "download_ttl_seconds": 90,
-        "max_logs": 500,
+        "max_logs": 2000,
         "max_concurrent_tasks": 3
     }
 }

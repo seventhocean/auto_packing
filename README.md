@@ -132,7 +132,7 @@ redis:
   success_ttl_seconds: 7200
   failure_ttl_seconds: 3600
   download_ttl_seconds: 90
-  max_logs: 500
+  max_logs: 2000
   max_concurrent_tasks: 3
 ```
 
@@ -549,6 +549,22 @@ docker run \
 2. 若 `/app/nuwa` 不存在，则从 GitLab 克隆
 3. 若提供 OSS 环境变量，则生成 `/app/bin/.ossutilconfig`
 4. 最后执行传入命令
+
+### 10.4 发布/更新镜像
+
+推荐使用 `bin/redeploy.sh`。它会为每次发布生成唯一 tag（时间戳 + git 短 hash），构建后更新 `maintenance-app` / `maintenance-worker` 两个 Deployment，避免 `:latest` + `IfNotPresent` 命中节点旧镜像。
+
+```bash
+# 镜像直接导入本机 k8s.io containerd
+NERDCTL_IMPORT=1 ./bin/redeploy.sh
+
+# 或者推送到镜像仓库
+REGISTRY=registry.example.com ./bin/redeploy.sh
+```
+
+脚本依赖 `docker` 和 `kubectl`，默认命名空间 `getpatch`。如果镜像已通过其他方式分发到节点，也可以直接运行 `./bin/redeploy.sh`，脚本会提示确认镜像存在。
+
+注意：如果之后再直接 `kubectl apply -f apply/maintenance-app-deployment.yaml`，镜像会被重置为清单里的 `auto_packing:latest`。日常发布请继续使用 `bin/redeploy.sh`，或同步修改清单中的 tag。
 
 ## 11. Kubernetes 部署说明
 
