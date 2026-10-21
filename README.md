@@ -564,6 +564,8 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
 
 脚本依赖 `docker` 和 `kubectl`，默认命名空间 `getpatch`。如果镜像已通过其他方式分发到节点，也可以直接运行 `./bin/redeploy.sh`，脚本会提示确认镜像存在。
 
+脚本默认还会用仓库里的 `config.yaml` 同步更新 `maintenance-app-config` ConfigMap（不会重置 Deployment 的镜像 tag）。如果不需要同步配置，可以设置 `SYNC_CONFIG=0`。
+
 注意：如果之后再直接 `kubectl apply -f apply/maintenance-app-deployment.yaml`，镜像会被重置为清单里的 `auto_packing:latest`。日常发布请继续使用 `bin/redeploy.sh`，或同步修改清单中的 tag。
 
 ## 11. Kubernetes 部署说明
