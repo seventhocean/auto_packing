@@ -15,6 +15,7 @@
 #   REGISTRY        镜像仓库地址（为空则不推送）
 #   NERDCTL_IMPORT  设为 1 时用 nerdctl 导入本机 containerd
 #   SYNC_CONFIG     设为 0 跳过 ConfigMap 同步（默认 1）
+#   UPDATE_MANIFEST 设为 0 跳过 YAML 镜像 tag 同步（默认 1）
 #   NAMESPACE       K8s 命名空间，默认 getpatch
 #   KUBECTL         kubectl 路径，默认 kubectl
 set -euo pipefail
@@ -77,6 +78,13 @@ if [ "${SYNC_CONFIG:-1}" = "1" ] && [ -f "${BASE_DIR}/config.yaml" ]; then
     "$KUBECTL" -n "$NAMESPACE" create configmap maintenance-app-config \
         --from-file=config.yaml="${BASE_DIR}/config.yaml" \
         --dry-run=client -o yaml | "$KUBECTL" apply -f -
+fi
+
+if [ "${UPDATE_MANIFEST:-1}" = "1" ]; then
+    echo "==> 更新 apply/maintenance-app-deployment.yaml 中的镜像 tag"
+    sed -i -E "s|^([[:space:]]*image:[[:space:]]*)auto_packing:.*$|\1${DEPLOY_IMAGE}|" \
+        "${BASE_DIR}/apply/maintenance-app-deployment.yaml"
+    echo "提示：YAML 已更新为 ${DEPLOY_IMAGE}，请记得提交并推送。"
 fi
 
 echo "==> 更新 Deployment 到 ${DEPLOY_IMAGE}"

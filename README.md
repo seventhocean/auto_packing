@@ -564,9 +564,14 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
 
 脚本依赖 `docker` 和 `kubectl`，默认命名空间 `getpatch`。如果镜像已通过其他方式分发到节点，也可以直接运行 `./bin/redeploy.sh`，脚本会提示确认镜像存在。
 
-脚本默认还会用仓库里的 `config.yaml` 同步更新 `maintenance-app-config` ConfigMap（不会重置 Deployment 的镜像 tag）。如果不需要同步配置，可以设置 `SYNC_CONFIG=0`。
+脚本默认还会：
 
-注意：如果之后再直接 `kubectl apply -f apply/maintenance-app-deployment.yaml`，镜像会被重置为清单里的 `auto_packing:latest`。日常发布请继续使用 `bin/redeploy.sh`，或同步修改清单中的 tag。
+- 用仓库里的 `config.yaml` 同步更新 `maintenance-app-config` ConfigMap（不会重置 Deployment 的镜像 tag）。
+- 把 `apply/maintenance-app-deployment.yaml` 中两个 `auto_packing:` 镜像 tag 更新为本次发布 tag。**发布后请提交这个 YAML 变更**，否则下次用旧 YAML `kubectl apply` 会回退镜像。
+
+不需要同步配置或 YAML 时，可以设置 `SYNC_CONFIG=0` / `UPDATE_MANIFEST=0`。
+
+镜像 tag 现在固化在清单中，日常发布建议继续使用 `bin/redeploy.sh`；直接 `kubectl apply -f apply/maintenance-app-deployment.yaml` 也会使用清单里固定的 tag。
 
 ## 11. Kubernetes 部署说明
 
@@ -583,7 +588,7 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
 
 ### 11.1 关键点
 
-- app 与 worker 使用同一个镜像：`auto_packing:latest`
+- app 与 worker 使用同一个镜像，tag 固化在清单中（当前 `auto_packing:20261022-aded290`，由 `bin/redeploy.sh` 自动更新）
 - worker 通过 `args: ["python", "worker.py"]` 启动
 - Redis 密码通过 Secret 注入
 - app / worker 都依赖：
