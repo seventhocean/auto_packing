@@ -63,6 +63,9 @@ class FakeRedis:
     def ltrim(self, name, start, end):
         return True
 
+    def llen(self, name):
+        return len(self.store.get(name, []))
+
     def lrem(self, name, count, value):
         return 0
 
@@ -222,6 +225,59 @@ class AppLogicTest(unittest.TestCase):
 
         resp = client.post('/build', json={'series': 'v6', 'current': '01-20250101-1'})
         self.assertEqual(resp.status_code, 400)
+
+    def test_tasks_overview_empty(self):
+        client = ap.app.test_client()
+        resp = client.get('/tasks/overview')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(data['active'], [])
+        self.assertEqual(data['recent'], [])
+        self.assertFalse(data['system']['worker_online'])
+        self.assertEqual(data['system']['queue_length'], 0)
+        self.assertEqual(data['system']['active_slots'], 0)
+
+    def test_tasks_overview(self):
+        client = ap.app.test_client()
+        ap.initialize_task_status(
+            'ov-active', '任务已创建', task_type='v6',
+            extra={'current_version': 'v6.6.1-a', 'target_version': 'v6.6.2-b'}
+        )
+        ap.initialize_task_status(
+            'ov-done', '构建完成', task_type='v7', extra={'image_count': 3}
+        )
+        ap.update_task_status('ov-done', {
+            'status': 'complete', 'complete': True, 'percent': 100,
+            'package_name': 'deepflow_patch_v7_demo.tar.gz'
+        })
+
+        ap.enqueue_build_task({'task_id': 'queued-1'})
+        ap.enqueue_build_task({'task_id': 'queued-2'})
+        ap.redis_client.set(ap.worker_heartbeat_key('w1'), str(int(time.time())))
+        ap.try_acquire_build_slot('ov-active')
+        self.addCleanup(lambda: ap.release_build_slot('ov-active'))
+
+        resp = client.get('/tasks/overview')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.headers.get('Cache-Control'), 'no-store')
+        data = resp.get_json()
+        self.assertTrue(data['success'])
+
+        self.assertEqual([t['task_id'] for t in data['active']], ['ov-active'])
+        self.assertEqual(data['active'][0]['current_version'], 'v6.6.1-a')
+        self.assertEqual(data['active'][0]['target_version'], 'v6.6.2-b')
+
+        self.assertEqual([t['task_id'] for t in data['recent']], ['ov-done'])
+        self.assertEqual(data['recent'][0]['image_count'], 3)
+        self.assertEqual(data['recent'][0]['package_name'], 'deepflow_patch_v7_demo.tar.gz')
+
+        system = data['system']
+        self.assertTrue(system['worker_online'])
+        self.assertEqual(system['queue_length'], 2)
+        self.assertEqual(system['active_slots'], 1)
+        self.assertEqual(system['max_concurrent_tasks'], ap.REDIS_CONFIG['max_concurrent_tasks'])
+        self.assertGreater(system['disk_total'], 0)
+        self.assertIn('server_time', system)
 
     def test_incremental_logs_by_seq(self):
         ap.initialize_task_status('log-task', 'queued')

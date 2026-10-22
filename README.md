@@ -133,7 +133,7 @@ redis:
   failure_ttl_seconds: 3600
   download_ttl_seconds: 90
   max_logs: 2000
-  max_concurrent_tasks: 3
+  max_concurrent_tasks: 1
 ```
 
 ### 3.2 Redis 中存的是什么
@@ -159,7 +159,7 @@ redis:
 - 槽位以 `task:<id>:slot` 为准：先 `SET NX` 抢占，再统计现有 slot 数量；超过 `max_concurrent_tasks` 时释放并继续排队。
 - slot 带 6 小时 TTL 兜底，worker 异常退出后不会永久占用并发额度。
 - `builds:active` 仅作为观测值，由实际 slot 数量同步。
-- 每个 worker 进程串行处理任务，实际并发上限为 `min(max_concurrent_tasks, worker 副本数)`；当前 2 个副本，面向 1~2 个用户同时构建。
+- 每个 worker 进程串行处理任务，实际并发上限为 `min(max_concurrent_tasks, worker 副本数)`；单节点部署下配置为 1，同一时刻只执行一个构建；其余任务保持排队，避免并行拉镜像把本机磁盘和网络打满。
 - worker 通过 `heartbeat_loop()` 每 10 秒写一次心跳，TTL 为 60 秒（避免 Redis 短暂抖动导致任务被误回收）。
 - 另一个 `reclaim_loop()` 每 30 秒扫描一次 processing 队列：
   - 若某个 worker 的心跳不存在，则把其 processing 队列中的任务重新放回 build queue。
@@ -279,6 +279,9 @@ redis:
 - `GET /download/<task_id>`
   - 下载本次刚生成的包。
   - 会检查任务状态和 `download_expire_at`。
+- `GET /tasks/overview`
+  - 任务中心数据：进行中任务、最近完成任务，以及 Worker 在线、队列长度、并发槽位和磁盘余量。
+  - 响应带 `Cache-Control: no-store`，前端每 5 秒轮询。
 - `GET /existing-packages`
   - 列出 `upgrade_packages/` 中已有包，按修改时间倒序。
 - `GET /download-existing/<filename>`
@@ -298,6 +301,8 @@ redis:
   - V6：当前版本 → 目标版本双列选择。
   - V7：镜像清单输入与实时校验。
   - 构建卡：实时进度条、状态、可折叠日志、取消按钮。
+  - 任务中心：进行中/最近完成任务、Worker 状态、队列、并发与磁盘余量。
+  - 完成后可直接下载升级包，或返回任务中心。
   - 刷新页面后通过 URL 中的 `task_id` 自动恢复任务。
 - 右侧资源区
   - 已有升级包列表。

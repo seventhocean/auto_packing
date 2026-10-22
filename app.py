@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
         "failure_ttl_seconds": 3600,
         "download_ttl_seconds": 90,
         "max_logs": 2000,
-        "max_concurrent_tasks": 3
+        "max_concurrent_tasks": 1
     }
 }
 
@@ -243,7 +243,7 @@ def append_task_log(task_id, timestamp, level, content):
     redis_client.ltrim(task_logs_key(task_id), -REDIS_CONFIG['max_logs'], -1)
 
 
-def initialize_task_status(task_id, message, task_type=None):
+def initialize_task_status(task_id, message, task_type=None, extra=None):
     now = int(time.time())
     status = {
         "task_id": task_id,
@@ -258,6 +258,8 @@ def initialize_task_status(task_id, message, task_type=None):
     }
     if task_type:
         status["task_type"] = task_type
+    if isinstance(extra, dict):
+        status.update(extra)
     set_task_status(task_id, status)
     redis_client.delete(task_logs_key(task_id))
     redis_client.delete(task_log_seq_key(task_id))
@@ -329,9 +331,9 @@ def _validate_v6_versions(current_version, target_version):
     return None
 
 
-def _create_build_task(task_id, task_type, payload):
+def _create_build_task(task_id, task_type, payload, extra=None):
     """初始化任务元数据并入队；入队失败时尽力标记任务错误。"""
-    initialize_task_status(task_id, "任务已创建，等待 worker 调度", task_type=task_type)
+    initialize_task_status(task_id, "任务已创建，等待 worker 调度", task_type=task_type, extra=extra)
     try:
         enqueue_build_task(payload)
     except Exception as e:
@@ -355,6 +357,9 @@ def _create_v6_build_task(current_version, target_version):
         "task_type": "v6",
         "current_version": current_version,
         "target_version": target_version
+    }, extra={
+        "current_version": current_version,
+        "target_version": target_version
     })
 
 
@@ -365,7 +370,96 @@ def _create_v7_build_task(images):
         "task_id": task_id,
         "task_type": "v7",
         "images": images
+    }, extra={
+        "image_count": len(images)
     })
+
+
+def _is_worker_online(max_age_seconds=30):
+    """通过 worker 心跳判断是否有可用的构建进程。"""
+    now = int(time.time())
+    try:
+        for key in redis_client.scan_iter(match=worker_heartbeat_key('*')):
+            raw = redis_client.get(key)
+            try:
+                last_seen = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if now - last_seen <= max_age_seconds:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def get_tasks_overview(recent_limit=5):
+    """汇总进行中/最近完成的任务，供任务中心展示。只读取元数据，不读日志。"""
+    active, recent = [], []
+    prefix = f"{REDIS_CONFIG['key_prefix']}:task:"
+    try:
+        keys = list(redis_client.scan_iter(match=f"{prefix}*:meta"))
+    except Exception:
+        keys = []
+
+    for key in keys:
+        raw = redis_client.get(key)
+        if not raw:
+            continue
+        try:
+            status = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        task_id = status.get("task_id")
+        if not task_id:
+            continue
+        item = {
+            "task_id": task_id,
+            "task_type": status.get("task_type"),
+            "current_version": status.get("current_version"),
+            "target_version": status.get("target_version"),
+            "image_count": status.get("image_count"),
+            "status": status.get("status"),
+            "percent": status.get("percent", 0),
+            "message": status.get("message", ""),
+            "created_at": status.get("created_at"),
+            "updated_at": status.get("updated_at"),
+            "complete": bool(status.get("complete")),
+            "error": bool(status.get("error")),
+            "cancelled": bool(status.get("cancelled")),
+            "package_name": status.get("package_name"),
+            "download_url": status.get("download_url"),
+        }
+        if item["complete"]:
+            recent.append(item)
+        else:
+            active.append(item)
+
+    active.sort(key=lambda x: x.get("created_at") or 0)
+    recent.sort(key=lambda x: x.get("updated_at") or 0, reverse=True)
+    return active, recent[:recent_limit]
+
+
+def get_system_status():
+    """单节点运行状态：worker 心跳、队列、槽位和升级包磁盘余量。"""
+    try:
+        queue_length = redis_client.llen(build_queue_key())
+    except Exception:
+        queue_length = 0
+    try:
+        disk_free, disk_total = 0, 0
+        usage = shutil.disk_usage(UPGRADE_PACKAGE_DIR)
+        disk_free, disk_total = usage.free, usage.total
+    except Exception:
+        disk_free, disk_total = 0, 0
+    return {
+        "worker_online": _is_worker_online(),
+        "queue_length": queue_length,
+        "active_slots": _count_active_slots(),
+        "max_concurrent_tasks": REDIS_CONFIG['max_concurrent_tasks'],
+        "disk_free": disk_free,
+        "disk_total": disk_total,
+        "server_time": int(time.time()),
+    }
 
 
 # -------------------------- 工具函数（文件列表处理） --------------------------
@@ -1076,6 +1170,32 @@ def api_existing_packages():
         return jsonify({
             "success": False,
             "files": [],
+            "message": error_msg
+        }), 500
+
+
+# -------------------------- 任务中心总览 --------------------------
+@app.route('/tasks/overview', methods=['GET'])
+def api_tasks_overview():
+    """任务中心：进行中/最近完成任务 + 单节点运行状态（worker、队列、磁盘）。"""
+    try:
+        active, recent = get_tasks_overview()
+        response = jsonify({
+            "success": True,
+            "active": active,
+            "recent": recent,
+            "system": get_system_status()
+        })
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    except Exception as e:
+        error_msg = f"获取任务总览失败：{str(e)}"
+        write_log(error_msg, level="ERROR")
+        return jsonify({
+            "success": False,
+            "active": [],
+            "recent": [],
+            "system": {},
             "message": error_msg
         }), 500
 

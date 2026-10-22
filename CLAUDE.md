@@ -57,14 +57,14 @@ docker run -p 8000:8000 \
 
 ### 并发控制
 
-- `max_concurrent_tasks: 3`（config.yaml）控制全局最大并发构建数
+- `max_concurrent_tasks: 1`（config.yaml）控制全局最大并发构建数
 - `worker.py:process_task()` 中 `try_acquire_build_slot()` 以 Redis 中的 `task:<id>:slot` 作为锁：
   先 `SET NX` 抢占 slot，再统计现存 slot 数量，超过上限则释放并重试
 - slot 带 6 小时 TTL 兜底，worker 异常退出不会永久占用并发额度
 - `builds:active` 仅作为观测值，由 slot 数量同步，不再作为准入依据
 - 超限时任务保持 `queued` 状态，worker 循环重试
 - 构建结束（成功/失败）后 `release_build_slot()` 在 finally 中调用
-- 每个 worker 进程串行处理任务，实际并发上限 = `min(max_concurrent_tasks, worker 副本数)`；当前 2 个副本，适合 1~2 个用户同时构建
+- 每个 worker 进程串行处理任务，实际并发上限 = `min(max_concurrent_tasks, worker 副本数)`；单节点部署下上限设为 1，构建串行执行，其余任务排队
 - Worker 心跳 TTL 60s（每 10s 写一次），失活后 `reclaim_loop` 将其 processing 队列任务回收到 build queue
 
 ### Redis key 设计
@@ -114,6 +114,7 @@ docker run -p 8000:8000 \
 | `/build?series=v7&images=` | GET | V7 入队 + SSE 流（兼容旧调用） |
 | `/task-status/<task_id>?since=` | GET | 查询任务状态（支持增量日志） |
 | `/download/<task_id>` | GET | 下载构建产物（检查过期） |
+| `/tasks/overview` | GET | 任务中心：进行中/最近完成 + Worker/队列/磁盘状态 |
 | `/existing-packages` | GET | 列出 upgrade_packages/ 下所有 .tar.gz |
 | `/download-existing/<filename>` | GET | 下载历史包（路径穿越校验） |
 
@@ -125,7 +126,8 @@ docker run -p 8000:8000 \
 - 工作区（`main.workspace`）：
   - V6 Panel：两个可搜索版本选择器（自定义 combobox + `fetchVersions()`），左右双列布局
   - V7 Panel：`<textarea>` 输入镜像列表，实时校验 `name:tag`、去重并提示非法行
-  - 构建卡：进度条 + 状态行 + 可折叠日志；空闲态紧凑显示
+  - 构建卡：进度条 + 状态行 + 可折叠日志；空闲态显示任务中心
+  - 任务中心：进行中/最近完成任务、Worker 在线、队列、并发槽位、磁盘余量，5 秒轮询 `/tasks/overview`
 - 右侧资源区（`aside.packages`）：已有升级包列表 + 搜索
 
 关键前端逻辑：
@@ -134,6 +136,7 @@ docker run -p 8000:8000 \
 - `task_id` 写入 URL，刷新页面自动恢复任务
 - 日志按 `lastLogSeq` 增量渲染，使用服务端时间戳；仅在接近底部时自动跟随
 - 包名匹配使用 `/versions` 返回的 `package_name_template`，不在前端硬编码 `v669`
+- 任务中心可“查看”已有任务（写回 URL 并订阅 SSE）或直接取消；完成后显示下载与返回按钮
 
 ### Shell scripts
 
@@ -158,7 +161,7 @@ redis:
   failure_ttl_seconds: 3600
   download_ttl_seconds: 90
   max_logs: 2000
-  max_concurrent_tasks: 3
+  max_concurrent_tasks: 1
 ```
 
 ## Key environment variables

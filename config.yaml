@@ -8,4 +8,4 @@ redis:
   failure_ttl_seconds: 3600
   download_ttl_seconds: 90
   max_logs: 2000
-  max_concurrent_tasks: 3
+  max_concurrent_tasks: 1

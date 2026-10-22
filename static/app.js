@@ -4,6 +4,8 @@
    ================================================================ */
 let versionData=[],packageNameTemplate='',eventSource=null,currentSeries='v6',isBuilding=false;
 let existingFilesData=[],logExpanded=false,lastLogSeq=0,currentTaskId='',sseRetries=0;
+let overviewTimer=null,overviewLoading=false;
+const OVERVIEW_POLL_MS=5000;
 const TASK_QUERY_KEY='task_id';
 const ICON_DOWNLOAD='<svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M7.25 1h1.5v7.1l2.6-2.6 1.05 1.05L8 11.5 3.6 7.1 4.65 6.05l2.6 2.6V1ZM2 13h12v2H2v-2Z"/></svg>';
 const BUILD_BTN_IDLE='<svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建';
@@ -38,7 +40,7 @@ function showToast(message,type){
    ================================================================ */
 document.addEventListener('DOMContentLoaded',()=>{
     initVersionPickers();initEventListeners();setMode(currentSeries);
-    fetchVersions(currentSeries);fetchExistingFiles();
+    fetchVersions(currentSeries);fetchExistingFiles();startTaskOverviewPolling();
     // 刷新后凭 URL 中的 task_id 恢复正在进行的构建
     const taskId=new URLSearchParams(location.search).get(TASK_QUERY_KEY);
     if(taskId)resumeBuildTask(taskId);
@@ -303,6 +305,7 @@ function finishBuild(){
     setTaskInUrl('');
     currentTaskId='';
     checkBuildBtnStatus();
+    refreshTaskOverview();
 }
 
 function startBuildProcess(e){
@@ -326,7 +329,7 @@ function startBuildProcess(e){
     }
 
     isBuilding=true;sseRetries=0;window.addEventListener('beforeunload',beforeUnloadHandler);
-    currentTaskId='';showCancelButton(true,false);setBuildButtonsBusy();
+    currentTaskId='';showCancelButton(true,false);setBuildButtonsBusy();hideCompletionActions();
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
     bc.classList.add('active');bl.innerHTML='';setLogExpanded(true);lastLogSeq=0;
     document.getElementById('taskStateText').textContent='排队中';
@@ -362,7 +365,7 @@ function startBuildProcess(e){
 function resumeBuildTask(taskId){
     currentTaskId=taskId;isBuilding=true;sseRetries=0;
     window.addEventListener('beforeunload',beforeUnloadHandler);
-    setBuildButtonsBusy();showCancelButton(true,false);
+    setBuildButtonsBusy();showCancelButton(true,false);hideCompletionActions();
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
     bc.classList.add('active');bl.innerHTML='';setLogExpanded(true);lastLogSeq=0;
     document.getElementById('taskStateText').textContent='恢复任务中';
@@ -396,7 +399,8 @@ function handleStreamLost(){
     window.removeEventListener('beforeunload',beforeUnloadHandler);
     resetBuildButtons();checkBuildBtnStatus();
     document.getElementById('taskStateText').textContent='连接中断';
-    document.getElementById('taskMessageText').textContent='任务可能仍在运行，刷新页面可恢复查看';
+    document.getElementById('taskMessageText').textContent='任务可能仍在运行，可返回任务中心查看或刷新页面恢复';
+    setCompletionActions('');
     showToast('与构建服务的连接中断，刷新页面可恢复任务状态','error');
 }
 
@@ -408,7 +412,9 @@ function resetBuildState(){
     document.getElementById('buildCard').classList.remove('active');
     setLogExpanded(false);
     setTaskInUrl('');
+    hideCompletionActions();
     checkBuildBtnStatus();
+    refreshTaskOverview();
 }
 
 let newPackageName='';
@@ -434,10 +440,11 @@ function handleBuildStatus(d){
         case'queued':st.textContent='排队中';updateProgressBar(d.percent||0,'');mt.textContent=d.message||'';break;
         case'progress':st.textContent='构建中';updateProgressBar(d.percent,'');mt.textContent=d.message||'';break;
         case'complete':
-            st.textContent='已完成';updateProgressBar(100,'success');mt.textContent='升级包已加入右侧列表';
+            st.textContent='已完成';updateProgressBar(100,'success');mt.textContent='构建完成，升级包已生成';
             newPackageName=d.package_name||'';
             showCancelButton(false);
             finishBuild();
+            setCompletionActions(d.package_name||'');
             fetchExistingFiles();
             break;
         case'error':{
@@ -449,6 +456,7 @@ function handleBuildStatus(d){
             if(d.message&&(!last||!last.textContent.includes(d.message)))addLog(d.message,'error');
             showCancelButton(false);
             finishBuild();
+            setCompletionActions('');
             if(logEl.childElementCount>0)setLogExpanded(true);
             showToast(d.cancelled?'构建已取消':(d.message||'构建失败'),'error');
             break;
@@ -479,6 +487,195 @@ function addLog(msg,type,timestamp){
     if(nearBottom)el.scrollTop=el.scrollHeight;
 }
 function mapLogLevel(l){return l==='ERROR'?'error':(l==='WARNING'||l==='WARN')?'warning':'info'}
+
+/* ================================================================
+   TASK CENTER
+   ================================================================ */
+function startTaskOverviewPolling(){
+    refreshTaskOverview();
+    if(overviewTimer)clearInterval(overviewTimer);
+    overviewTimer=setInterval(()=>{if(!document.hidden)refreshTaskOverview()},OVERVIEW_POLL_MS);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshTaskOverview()});
+}
+
+async function refreshTaskOverview(){
+    if(overviewLoading)return;
+    overviewLoading=true;
+    try{
+        const r=await fetch('/tasks/overview',{cache:'no-store'});
+        let d={};
+        try{d=await r.json()}catch(e){}
+        if(!r.ok||!d.success)throw new Error(d.message||'获取任务状态失败');
+        renderTaskOverview(d);
+    }catch(e){
+        document.getElementById('taskOverviewError').hidden=false;
+    }finally{
+        overviewLoading=false;
+    }
+}
+
+function renderTaskOverview(d){
+    const active=Array.isArray(d.active)?d.active:[];
+    const recent=Array.isArray(d.recent)?d.recent:[];
+    const sys=d.system||{};
+    const serverTime=Number(sys.server_time)||Math.floor(Date.now()/1000);
+
+    document.getElementById('taskOverviewError').hidden=true;
+    document.getElementById('activeTaskCount').textContent=active.length;
+    document.getElementById('activeTaskEmpty').hidden=active.length>0;
+    document.getElementById('activeTaskList').innerHTML=active.map(t=>taskRowHtml(t,true,serverTime)).join('');
+    document.getElementById('recentTaskEmpty').hidden=recent.length>0;
+    document.getElementById('recentTaskList').innerHTML=recent.map(t=>taskRowHtml(t,false,serverTime)).join('');
+
+    const online=!!sys.worker_online;
+    const dot=document.getElementById('workerDot');
+    dot.classList.toggle('online',online);
+    dot.classList.toggle('offline',!online);
+    document.getElementById('workerText').textContent=online?'Worker 在线':'Worker 离线';
+
+    const queue=Number(sys.queue_length);
+    document.getElementById('queueLength').textContent=Number.isFinite(queue)?queue:'-';
+    const slots=Number(sys.active_slots);
+    document.getElementById('activeSlots').textContent=Number.isFinite(slots)?slots:'-';
+    const maxSlots=Number(sys.max_concurrent_tasks);
+    document.getElementById('maxSlots').textContent=Number.isFinite(maxSlots)?maxSlots:'-';
+
+    const free=Number(sys.disk_free);
+    const total=Number(sys.disk_total);
+    const diskEl=document.getElementById('diskFree');
+    diskEl.textContent=free>0?formatGB(free):'-';
+    diskEl.parentElement.title=free>0&&total>0?`剩余 ${formatGB(free)} / 共 ${formatGB(total)}`:'';
+}
+
+function taskRowHtml(t,isActive,serverTime){
+    const id=escapeHtml(t.task_id||'');
+    const label=escapeHtml(taskLabel(t));
+    const status=taskStatusInfo(t);
+    const percent=Math.max(0,Math.min(100,Number(t.percent)||0));
+    const created=Number(t.created_at)||0;
+    const updated=Number(t.updated_at)||0;
+    const duration=created?formatDuration((isActive?serverTime:updated)-created):'';
+    const plainMeta=isActive
+        ?`${duration?duration+' · ':''}${percent}%${t.message?' · '+t.message:''}`
+        :`${formatClock(updated)}${duration?' · '+duration:''}${t.message?' · '+t.message:''}`;
+    const meta=escapeHtml(plainMeta);
+    const actions=isActive
+        ?`<button type="button" class="btn-sm" data-action="view" data-task-id="${id}">查看</button>`
+         +`<button type="button" class="btn-sm danger" data-action="cancel" data-task-id="${id}">取消</button>`
+        :(t.package_name
+            ?`<a class="btn-sm" href="/download-existing/${encodeURIComponent(t.package_name)}" data-download="1">下载</a>`
+            :'');
+    return `<div class="task-item">`
+        +`<div class="task-main">`
+        +`<div class="task-line"><span class="task-label" title="${label}">${label}</span>`
+        +`<span class="task-status ${status.cls}">${status.text}</span></div>`
+        +`<div class="task-message" title="${meta}">${meta}</div>`
+        +`</div><div class="task-actions">${actions}</div></div>`;
+}
+
+function taskLabel(t){
+    if(t.task_type==='v6'){
+        const current=t.current_version?String(t.current_version).split('-')[0]:'';
+        const target=t.target_version?String(t.target_version).split('-')[0]:'';
+        if(current||target)return `${current||'?'} → ${target||'?'}`;
+    }
+    if(t.task_type==='v7')return `${Number(t.image_count)||0} 个镜像`;
+    return t.task_id||'构建任务';
+}
+
+function taskStatusInfo(t){
+    if(t.status==='queued')return{text:'排队中',cls:''};
+    if(t.status==='progress')return{text:'构建中',cls:'progress'};
+    if(t.cancelled)return{text:'已取消',cls:'error'};
+    if(t.error)return{text:'失败',cls:'error'};
+    if(t.complete)return{text:'已完成',cls:'complete'};
+    return{text:t.status||'未知',cls:''};
+}
+
+function formatDuration(seconds){
+    let sec=Math.max(0,Math.floor(Number(seconds)||0));
+    const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=Math.floor(sec%60);
+    if(h)return `${h}h ${String(m).padStart(2,'0')}m`;
+    return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function formatClock(ts){
+    const n=Number(ts);
+    if(!n)return '-';
+    const d=new Date(n*1000),pad=x=>String(x).padStart(2,'0');
+    return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatGB(bytes){
+    const value=Number(bytes);
+    if(!Number.isFinite(value)||value<=0)return '-';
+    const gb=value/1073741824;
+    return gb>=10?`${gb.toFixed(1)} GB`:`${gb.toFixed(2)} GB`;
+}
+
+function handleActiveTaskClick(e){
+    const btn=e.target.closest('[data-action]');
+    if(!btn)return;
+    if(btn.dataset.action==='view')viewTaskFromOverview(btn.dataset.taskId);
+    else if(btn.dataset.action==='cancel')cancelTaskFromOverview(btn.dataset.taskId,btn);
+}
+
+function handleRecentTaskClick(e){
+    const link=e.target.closest('[data-download]');
+    if(link)checkExistingFileDownload(e,link);
+}
+
+function viewTaskFromOverview(taskId){
+    if(!taskId)return;
+    setTaskInUrl(taskId);
+    resumeBuildTask(taskId);
+}
+
+async function cancelTaskFromOverview(taskId,btn){
+    if(!taskId)return;
+    const original=btn.textContent;
+    btn.disabled=true;btn.textContent='取消中...';
+    try{
+        const r=await fetch(`/build/${encodeURIComponent(taskId)}/cancel`,{method:'POST'});
+        let d={};
+        try{d=await r.json()}catch(e){}
+        if(!r.ok||!d.success)throw new Error(d.message||'取消请求失败');
+        showToast('取消请求已提交');
+        refreshTaskOverview();
+    }catch(err){
+        showToast(err.message||'取消请求失败','error');
+        btn.disabled=false;btn.textContent=original;
+    }
+}
+
+function setCompletionActions(packageName){
+    const download=document.getElementById('btnDownloadPackage');
+    const back=document.getElementById('btnBackToTasks');
+    if(packageName){
+        download.href=`/download-existing/${encodeURIComponent(packageName)}`;
+        download.style.display='inline-block';
+    }else{
+        download.style.display='none';
+        download.removeAttribute('href');
+    }
+    back.style.display='inline-block';
+}
+
+function hideCompletionActions(){
+    const download=document.getElementById('btnDownloadPackage');
+    const back=document.getElementById('btnBackToTasks');
+    download.style.display='none';
+    download.removeAttribute('href');
+    back.style.display='none';
+}
+
+function showTaskCenter(){
+    if(isBuilding)return;
+    document.getElementById('buildCard').classList.remove('active');
+    setLogExpanded(false);
+    hideCompletionActions();
+    refreshTaskOverview();
+}
 
 /* ================================================================
    PACKAGES
@@ -559,4 +756,9 @@ function initEventListeners(){
     document.getElementById('fileSearchInput').addEventListener('input',debounce(filterExistingFiles,200));
     document.getElementById('btnToggleLog').addEventListener('click',()=>setLogExpanded(!logExpanded));
     document.getElementById('btnCancelBuild').addEventListener('click',handleCancelBuild);
+    document.getElementById('btnRefreshOverview').addEventListener('click',refreshTaskOverview);
+    document.getElementById('activeTaskList').addEventListener('click',handleActiveTaskClick);
+    document.getElementById('recentTaskList').addEventListener('click',handleRecentTaskClick);
+    document.getElementById('btnBackToTasks').addEventListener('click',showTaskCenter);
+    document.getElementById('btnDownloadPackage').addEventListener('click',e=>checkExistingFileDownload(e,e.currentTarget));
 }
