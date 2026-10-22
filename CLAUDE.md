@@ -98,7 +98,7 @@ docker run -p 8000:8000 \
 - 直接将 images 数组写入 `patch_image_tag_list.txt`
 - `pull_save.sh` 支持两种格式：`name_tag: vX.Y.Z` 和 `name: vX.Y.Z`
 - 产物：`upgrade_packages/deepflow_patch_v7_<task_id>.tar.gz`
-- 前端通过 `GET /build?series=v7&images=img1,img2,...` 提交（逗号分隔）
+- 前端通过 `POST /build`（JSON）提交，拿 task_id 后订阅 SSE
 
 ### API routes
 
@@ -109,10 +109,10 @@ docker run -p 8000:8000 \
 | `/versions?series=v6` | GET | OSS 补丁版本列表（v7 返回 501） |
 | `/build` | POST | V6/V7 入队（JSON），返回 task_id；前端统一走此入口 |
 | `/build/<task_id>/cancel` | POST | 取消排队中/执行中的任务 |
-| `/build?task_id=` | GET | 观察已有任务的 SSE 流（重连不重复入队） |
+| `/build?task_id=&since=` | GET | 观察已有任务的 SSE 流（重连不重复入队） |
 | `/build?series=v6&current=&target=` | GET | V6 入队 + SSE 流（兼容旧调用） |
 | `/build?series=v7&images=` | GET | V7 入队 + SSE 流（兼容旧调用） |
-| `/task-status/<task_id>` | GET | 查询任务状态（含日志） |
+| `/task-status/<task_id>?since=` | GET | 查询任务状态（支持增量日志） |
 | `/download/<task_id>` | GET | 下载构建产物（检查过期） |
 | `/existing-packages` | GET | 列出 upgrade_packages/ 下所有 .tar.gz |
 | `/download-existing/<filename>` | GET | 下载历史包（路径穿越校验） |
@@ -139,9 +139,11 @@ docker run -p 8000:8000 \
 
 | Script | Role | Key changes from master |
 |---|---|---|
-| `bin/get_patch_image_tag_list.sh` | V6: 从 nuwa 仓库计算镜像差异 | 接受第3个参数指定输出路径；用 `mktemp` + `trap cleanup EXIT` 管理临时文件 |
-| `bin/pull_save.sh` | 登录仓库 → 拉取镜像 → 保存 tar | **⚠️ 硬编码凭据**（line 83），master 用 env vars |
+| `bin/get_patch_image_tag_list.sh` | V6: 从 nuwa 仓库计算镜像差异 | 接受第3个参数指定输出路径；`git pull` 重试 3 次 |
+| `bin/pull_save.sh` | 登录仓库 → 拉取镜像 → 保存 tar | 容器命令用 bash 数组保存；登录/pull/save 失败重试 3 次；**⚠️ 硬编码凭据** |
 | `bin/deepflow_patch_upgrade.sh` | 部署端升级脚本（打进包里） | 未变化 |
+| `bin/redeploy.sh` | 构建唯一 tag 镜像并滚动更新 K8s | 可选推 registry / 导入本机 containerd，同步 ConfigMap 与 YAML tag |
+| `bin/check_containerd.py` | 只读巡检 containerd | 检查 default 残留与镜像 layer 完整性，不修改任何数据 |
 
 ### Configuration
 
@@ -176,7 +178,6 @@ redis:
 | `WORKER_HEARTBEAT_INTERVAL_SECONDS` | worker.py | 心跳间隔，默认 10s |
 | `WORKER_HEARTBEAT_TTL_SECONDS` | worker.py | 心跳 TTL，默认 60s |
 | `WORKER_RECLAIM_INTERVAL_SECONDS` | worker.py | 失活任务回收扫描间隔，默认 30s |
-| `TARGET_PLATFORM` | pull_save.sh | 拉取/保存的目标平台，默认 `linux/amd64` |
 | `CONTAINERD_NAMESPACE` | nerdctl | 默认 containerd namespace，镜像内固定为 `k8s.io` |
 | `FLASK_DEBUG` | app.py `__main__` | 设为 `1` 才启用 debug |
 | `REGISTRY_USERNAME/PASSWORD` | ❌ **已移除** | `pull_save.sh` 现在硬编码凭据 |
@@ -235,7 +236,7 @@ redis:
 - **PVC 名拼写错误**: `auto-pancking-pvc`
 - **containerd 跨 namespace 历史残留** — 已设置 `CONTAINERD_NAMESPACE=k8s.io`，并提供只读巡检 `bin/check_containerd.py` 与 `docs/CONTAINERD_RUNBOOK.md`
 
-## Directory structure (deploy branch)
+## Directory structure (dev branch)
 
 ```
 .
@@ -266,14 +267,15 @@ redis:
 ├── logs/                # app.log + task 日志
 ├── .trash/              # OSS 版本缓存 + 脚本临时文件
 ├── nuwa/                # 运行时 git clone（不在仓库中）
-└── test/                # 旧版代码快照（非正式测试）
+├── tests/               # 后端单元测试
+└── docs/                # containerd 处理手册等
 ```
 
 ## K8s deployment (from apply/maintenance-app-deployment.yaml)
 
 Namespace `getpatch` 内包含：
 - **maintenance-redis**: Redis 7.2-alpine, 密码认证, AOF 持久化 PVC
-- **maintenance-app**: Web API (maintenance-app:v1.7.3), gunicorn 2 workers, NodePort 30090
+- **maintenance-app**: Web API (auto_packing:当前固定 tag), gunicorn 2 workers, NodePort 30090
 - **maintenance-worker**: 2 replicas, 同镜像但启动 `python worker.py`
 - **maintenance-app-config**: ConfigMap 挂载 `/app/config/config.yaml`
 - **maintenance-app-secrets**: Redis 密码

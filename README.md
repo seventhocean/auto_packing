@@ -214,8 +214,10 @@ redis:
   - 临时文件和 OSS 补丁版本缓存。
 - `apply/`
   - Kubernetes 部署清单。
-- `test/`
-  - 脚本和页面测试样例，不是完整自动化测试体系。
+- `tests/`
+  - 后端单元测试（`python -m unittest tests.test_app_logic`）。
+- `docs/`
+  - 运维与巡检手册（`CONTAINERD_RUNBOOK.md`）。
 
 ### 4.3 运行时依赖目录
 
@@ -229,6 +231,8 @@ redis:
 
 - `GET /`
   - 返回工作台页面。
+- `GET /health`
+  - 轻量健康检查，返回 Redis 连通状态；K8s 探针使用。
 
 ### 5.2 版本列表
 
@@ -356,7 +360,7 @@ pcap_tag: v6.6.220
 
 - 只支持 `6.6 / 6.6.9` 这条目录结构，属于强耦合实现。
 - 依赖 OSS 列表缓存文件先由后端刷新好。
-- 执行前会强制 `git pull --ff-only`。
+- 执行前会强制 `git pull --ff-only`，失败时重试 3 次。
 
 ### 7.2 `bin/pull_save.sh`
 
@@ -374,9 +378,11 @@ pcap_tag: v6.6.220
 
 当前实现要点：
 
-- 默认容器工具是 `nerdctl`。
+- 默认容器工具是 `nerdctl -n k8s.io`（用 bash 数组保存，支持 `-c "nerdctl -n k8s.io"` 这种带参数的写法）。
 - 也支持 `-c docker` 切换。
 - 仓库前缀默认是 `hub.deepflow.yunshan.net/dev/`。
+- 仓库登录、镜像拉取、保存失败时都会重试 3 次。
+- 镜像操作默认使用 `k8s.io` namespace；历史 namespace 残留问题见 [`docs/CONTAINERD_RUNBOOK.md`](./docs/CONTAINERD_RUNBOOK.md)。
 - 产出的 tar 文件名格式：
   - `<image_name>_<tag>.tar`
 
@@ -521,7 +527,7 @@ python worker.py
 构建：
 
 ```bash
-docker build -f dockerfile -t auto-packing .
+docker build -f dockerfile -t auto_packing:latest .
 ```
 
 运行 Web 容器示例：
@@ -532,7 +538,7 @@ docker run -p 8000:8000 \
   -e OSS_ACCESS_KEY_SECRET=... \
   -e OSS_ENDPOINT=... \
   -e REDIS_PASSWORD=... \
-  auto-packing
+  auto_packing:latest
 ```
 
 如果需要独立跑 worker，可基于同一镜像执行：
@@ -543,7 +549,7 @@ docker run \
   -e OSS_ACCESS_KEY_SECRET=... \
   -e OSS_ENDPOINT=... \
   -e REDIS_PASSWORD=... \
-  auto-packing python worker.py
+  auto_packing:latest python worker.py
 ```
 
 ### 10.3 `entrypoint.sh` 做了什么
@@ -602,6 +608,7 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
   - `OSS_ENDPOINT`
   - `APP_CONFIG_PATH`
 - 通过 `hostPath` 挂载 `/run/containerd/containerd.sock`，供 `nerdctl` 使用
+- app / worker 默认 `CONTAINERD_NAMESPACE=k8s.io`，避免镜像操作误用 `default` namespace
 - 通过 PVC 挂载 `/app/upgrade_packages`
 - Redis 使用独立 PVC + AOF（`appendonly yes`），Pod 重建后任务队列和状态不会丢失
 
@@ -713,10 +720,8 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
 8. `CLAUDE.md`
    - AI 助手的代码库指南，包含架构速览、命令、环境变量、已知问题。
 9. `ISSUES.md`
-   - 当前已知的代码问题清单（按 P0/P1/P2/P3 分级）。
-10. `docs/FRONTEND_REVIEW.md`
-    - 前端审查报告与改进建议。
-11. `docs/CONTAINERD_RUNBOOK.md`
+   - 当前已知问题与已完成优化摘要。
+10. `docs/CONTAINERD_RUNBOOK.md`
     - containerd 跨 namespace 问题的巡检、应急修复与清理规范。
 
 ## 15. 一句话总结当前项目逻辑
