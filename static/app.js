@@ -393,7 +393,7 @@ function startBuildProcess(e){
     if(termTitle)termTitle.textContent='console · worker-output [queued]';
     document.getElementById('taskStateText').textContent='排队中';
     document.getElementById('taskMessageText').textContent='';
-    updateProgressBar(0,'');checkBuildBtnStatus();
+    updateProgressBar(0,'');updatePipelineStepper('queued',0,'排队中，等待 Worker 分配');checkBuildBtnStatus();
     if(eventSource){eventSource.close();eventSource=null}
 
     // V6/V7 统一：先 POST 建任务拿 task_id，再用 GET 订阅 SSE。
@@ -433,7 +433,7 @@ function resumeBuildTask(taskId){
     if(termTitle)termTitle.textContent=`console · build-task-${taskId}`;
     document.getElementById('taskStateText').textContent='恢复任务中';
     document.getElementById('taskMessageText').textContent='';
-    updateProgressBar(0,'');checkBuildBtnStatus();
+    updateProgressBar(0,'');updatePipelineStepper('queued',0,'正在恢复任务状态...');checkBuildBtnStatus();
     connectBuildStream(`/build?task_id=${encodeURIComponent(taskId)}`);
 }
 
@@ -499,6 +499,7 @@ function handleBuildStatus(d){
         if(l&&Number.isInteger(l.seq)&&l.seq>lastLogSeq)lastLogSeq=l.seq;
     });
     if(Number.isInteger(d.log_seq)&&d.log_seq>lastLogSeq)lastLogSeq=d.log_seq;
+    updatePipelineStepper(d.status, d.percent, d.message);
     switch(d.status){
         case'queued':st.textContent='排队中';updateProgressBar(d.percent||0,'');mt.textContent=d.message||'';break;
         case'progress':st.textContent='构建中';updateProgressBar(d.percent,'');mt.textContent=d.message||'';break;
@@ -532,6 +533,66 @@ function handleBuildStatus(d){
 /* ================================================================
    PROGRESS & LOG
    ================================================================ */
+function updatePipelineStepper(status, percent, message){
+    const stepper = document.getElementById('pipelineStepper');
+    if(!stepper) return;
+    const p = Number(percent) || 0;
+
+    // 映射阶段：1(准备与差集计算 0~29%), 2(镜像拉取与保存 30~69%), 3(组装打包 70~99%), 4(交付就绪 100%)
+    let activeStep = 1;
+    if(status === 'complete' || p >= 100){
+        activeStep = 4;
+    } else if(p >= 70){
+        activeStep = 3;
+    } else if(p >= 30){
+        activeStep = 2;
+    } else {
+        activeStep = 1;
+    }
+
+    const isComplete = (status === 'complete' || p >= 100);
+    const isError = (status === 'error');
+
+    for(let i = 1; i <= 4; i++){
+        const item = stepper.querySelector(`[data-step="${i}"]`);
+        if(!item) continue;
+        const sub = item.querySelector('.step-sub');
+        const defaultText = sub ? sub.dataset.default : '';
+
+        item.classList.remove('waiting', 'active', 'completed', 'error');
+
+        if(isComplete){
+            item.classList.add('completed');
+            if(sub) sub.textContent = (i === 4 && message) ? message : (defaultText || '');
+        } else if(i < activeStep){
+            item.classList.add('completed');
+            if(sub && defaultText) sub.textContent = defaultText;
+        } else if(i === activeStep){
+            if(isError){
+                item.classList.add('error');
+                if(sub) sub.textContent = message || '执行失败';
+            } else {
+                item.classList.add('active');
+                if(sub) sub.textContent = message || defaultText || '进行中...';
+            }
+        } else {
+            item.classList.add('waiting');
+            if(sub && defaultText) sub.textContent = defaultText;
+        }
+    }
+
+    const connectors = stepper.querySelectorAll('.step-connector');
+    connectors.forEach((conn, idx) => {
+        const fromStep = idx + 1;
+        conn.classList.remove('active', 'completed', 'error');
+        if(isComplete || activeStep > fromStep){
+            conn.classList.add('completed');
+        } else if(activeStep === fromStep){
+            conn.classList.add(isError ? 'error' : 'active');
+        }
+    });
+}
+
 function updateProgressBar(pct,modifier){
     const b=document.getElementById('progressBar');const p=Math.max(0,Math.min(100,pct||0));
     b.style.width=p+'%';b.classList.remove('error','success');

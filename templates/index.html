@@ -118,6 +118,57 @@
                     </div>
                 </div>
                 <div class="build-running">
+                    <!-- PIPELINE STEPPER -->
+                    <div class="pipeline-stepper" id="pipelineStepper">
+                        <div class="step-item active" data-step="1">
+                            <div class="step-indicator">
+                                <span class="step-num">1</span>
+                                <span class="step-icon step-check">✓</span>
+                                <span class="step-icon step-cross">✕</span>
+                            </div>
+                            <div class="step-content">
+                                <div class="step-title">1. 差集与清单</div>
+                                <div class="step-sub" data-default="依赖检查与版本分析">依赖检查与版本分析</div>
+                            </div>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="step-item waiting" data-step="2">
+                            <div class="step-indicator">
+                                <span class="step-num">2</span>
+                                <span class="step-icon step-check">✓</span>
+                                <span class="step-icon step-cross">✕</span>
+                            </div>
+                            <div class="step-content">
+                                <div class="step-title">2. 镜像拉取与保存</div>
+                                <div class="step-sub" data-default="逐条拉取并存为 TAR">逐条拉取并存为 TAR</div>
+                            </div>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="step-item waiting" data-step="3">
+                            <div class="step-indicator">
+                                <span class="step-num">3</span>
+                                <span class="step-icon step-check">✓</span>
+                                <span class="step-icon step-cross">✕</span>
+                            </div>
+                            <div class="step-content">
+                                <div class="step-title">3. 组装打包</div>
+                                <div class="step-sub" data-default="压缩 TAR.GZ 并校验">压缩 TAR.GZ 并校验</div>
+                            </div>
+                        </div>
+                        <div class="step-connector"></div>
+                        <div class="step-item waiting" data-step="4">
+                            <div class="step-indicator">
+                                <span class="step-num">4</span>
+                                <span class="step-icon step-check">✓</span>
+                                <span class="step-icon step-cross">✕</span>
+                            </div>
+                            <div class="step-content">
+                                <div class="step-title">4. 交付就绪</div>
+                                <div class="step-sub" data-default="归档就绪可供下载">归档就绪可供下载</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="progress-wrap">
                         <div class="progress-fill" id="progressBar" style="width:0%;"></div>
                     </div>
