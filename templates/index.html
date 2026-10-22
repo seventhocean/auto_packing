@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeepFlow 升级包构建</title>
     <link rel="icon" href="static/favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="static/app.css?v=20261022">
-    <script src="static/app.js?v=20261022" defer></script>
+    <link rel="stylesheet" href="static/app.css?v=20261023">
+    <script src="static/app.js?v=20261023" defer></script>
 </head>
 <body data-mode="v6">
 <div class="app-shell">
@@ -134,7 +134,27 @@
                             <button class="btn-sm" id="btnToggleLog">展开日志</button>
                         </div>
                     </div>
-                    <div class="build-log" id="buildLog"></div>
+                    <div class="terminal-container" id="terminalContainer">
+                        <div class="terminal-header">
+                            <div class="terminal-dots">
+                                <span class="dot dot-close"></span>
+                                <span class="dot dot-minimize"></span>
+                                <span class="dot dot-maximize"></span>
+                            </div>
+                            <div class="terminal-title" id="terminalTitle">console &nbsp;·&nbsp; worker-output</div>
+                            <div class="terminal-tools">
+                                <button type="button" class="btn-icon" id="btnCopyLog" title="复制完整日志">
+                                    <svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v2H4V2zm10 4v9H2V6h3V4h6v2h3zm-2 2H4v5h8V8z"/></svg>
+                                    <span>复制日志</span>
+                                </button>
+                                <button type="button" class="btn-icon" id="btnClearLog" title="清屏">
+                                    <svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h10v2H3V3zm1 3h8v8H4V6zm2 2v4h1V8H6zm3 0v4h1V8H9z"/></svg>
+                                    <span>清屏</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="build-log" id="buildLog"></div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -144,7 +164,11 @@
             <h2 class="packages-title">已有升级包 <span class="packages-count" id="filesSummary">加载中...</span></h2>
             <input type="text" class="packages-search" id="fileSearchInput" placeholder="搜索..." aria-label="搜索已有升级包">
             <div class="packages-list" id="existingFilesContainer">
-                <div class="pkg-empty" id="filesLoading"><span class="spinner"></span>&nbsp;加载中...</div>
+                <div class="pkg-skeleton-list" id="filesLoading">
+                    <div class="pkg-skeleton"></div>
+                    <div class="pkg-skeleton"></div>
+                    <div class="pkg-skeleton"></div>
+                </div>
                 <div class="pkg-empty" id="noFilesMessage" style="display:none;">暂无已生成的升级包</div>
                 <div id="filesList"></div>
             </div>

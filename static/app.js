@@ -8,6 +8,7 @@ let overviewTimer=null,overviewLoading=false;
 const OVERVIEW_POLL_MS=5000;
 const TASK_QUERY_KEY='task_id';
 const ICON_DOWNLOAD='<svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M7.25 1h1.5v7.1l2.6-2.6 1.05 1.05L8 11.5 3.6 7.1 4.65 6.05l2.6 2.6V1ZM2 13h12v2H2v-2Z"/></svg>';
+const ICON_COPY='<svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v2H4V2zm10 4v9H2V6h3V4h6v2h3zm-2 2H4v5h8V8z"/></svg>';
 const BUILD_BTN_IDLE='<svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建';
 
 /* ================================================================
@@ -289,9 +290,64 @@ function resetBuildButtons(){
 function setLogExpanded(v){
     logExpanded=!!v;
     const el=document.getElementById('buildLog');
-    el.classList.toggle('expanded',logExpanded);
+    const container=document.getElementById('terminalContainer');
+    if(container)container.classList.toggle('expanded',logExpanded);
+    if(el)el.classList.toggle('expanded',logExpanded);
     document.getElementById('btnToggleLog').textContent=logExpanded?'收起日志':'展开日志';
-    if(logExpanded)requestAnimationFrame(()=>{el.scrollTop=el.scrollHeight});
+    if(logExpanded&&el)requestAnimationFrame(()=>{el.scrollTop=el.scrollHeight});
+}
+
+function copyLogsToClipboard(){
+    const el=document.getElementById('buildLog');
+    if(!el||!el.textContent.trim()){
+        showToast('暂无日志可复制','error');
+        return;
+    }
+    const entries=Array.from(el.querySelectorAll('.log-entry')).map(e=>e.textContent).join('\n');
+    const text=entries||el.textContent;
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(()=>{
+            showToast('控制台日志已复制到剪贴板');
+        }).catch(()=>{
+            showToast('复制失败，请手动选择日志','error');
+        });
+    }else{
+        showToast('浏览器不支持剪贴板API','error');
+    }
+}
+
+function clearLogScreen(){
+    const el=document.getElementById('buildLog');
+    if(el)el.innerHTML='';
+    showToast('控制台日志已清屏');
+}
+
+function notifyBuildComplete(title,body){
+    if(!('Notification' in window))return;
+    if(Notification.permission==='granted'){
+        try{new Notification(title,{body,icon:'static/favicon.ico'})}catch(e){}
+    }
+}
+
+function requestNotificationPermission(){
+    if(!('Notification' in window))return;
+    if(Notification.permission==='default'){
+        Notification.requestPermission();
+    }
+}
+
+function copyCurlCommand(fileName){
+    const url=`${window.location.origin}/download-existing/${encodeURIComponent(fileName)}`;
+    const cmd=`curl -O "${url}"`;
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(cmd).then(()=>{
+            showToast('已复制 curl 下载命令');
+        }).catch(()=>{
+            showToast('复制命令失败','error');
+        });
+    }else{
+        showToast(cmd);
+    }
 }
 function currentProgressPercent(){
     const w=parseFloat(document.getElementById('progressBar').style.width);
@@ -329,9 +385,12 @@ function startBuildProcess(e){
     }
 
     isBuilding=true;sseRetries=0;window.addEventListener('beforeunload',beforeUnloadHandler);
+    requestNotificationPermission();
     currentTaskId='';showCancelButton(true,false);setBuildButtonsBusy();hideCompletionActions();
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
     bc.classList.add('active');bl.innerHTML='';setLogExpanded(true);lastLogSeq=0;
+    const termTitle=document.getElementById('terminalTitle');
+    if(termTitle)termTitle.textContent='console · worker-output [queued]';
     document.getElementById('taskStateText').textContent='排队中';
     document.getElementById('taskMessageText').textContent='';
     updateProgressBar(0,'');checkBuildBtnStatus();
@@ -352,6 +411,7 @@ function startBuildProcess(e){
             if(!isBuilding)return;
             currentTaskId=d.task_id;
             setTaskInUrl(d.task_id);
+            if(termTitle)termTitle.textContent=`console · build-task-${d.task_id}`;
             showCancelButton(true,true);
             connectBuildStream(`/build?task_id=${encodeURIComponent(d.task_id)}`);
         })
@@ -365,9 +425,12 @@ function startBuildProcess(e){
 function resumeBuildTask(taskId){
     currentTaskId=taskId;isBuilding=true;sseRetries=0;
     window.addEventListener('beforeunload',beforeUnloadHandler);
+    requestNotificationPermission();
     setBuildButtonsBusy();showCancelButton(true,false);hideCompletionActions();
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
     bc.classList.add('active');bl.innerHTML='';setLogExpanded(true);lastLogSeq=0;
+    const termTitle=document.getElementById('terminalTitle');
+    if(termTitle)termTitle.textContent=`console · build-task-${taskId}`;
     document.getElementById('taskStateText').textContent='恢复任务中';
     document.getElementById('taskMessageText').textContent='';
     updateProgressBar(0,'');checkBuildBtnStatus();
@@ -446,6 +509,7 @@ function handleBuildStatus(d){
             finishBuild();
             setCompletionActions(d.package_name||'');
             fetchExistingFiles();
+            notifyBuildComplete('🎉 DeepFlow 升级包构建完成', d.package_name ? `升级包 ${d.package_name} 已就绪` : '升级包构建成功，已可下载');
             break;
         case'error':{
             st.textContent=d.cancelled?'已取消':'失败';
@@ -459,6 +523,7 @@ function handleBuildStatus(d){
             setCompletionActions('');
             if(logEl.childElementCount>0)setLogExpanded(true);
             showToast(d.cancelled?'构建已取消':(d.message||'构建失败'),'error');
+            notifyBuildComplete('⚠️ DeepFlow 升级包构建失败', d.cancelled ? '构建任务已取消' : (d.message || '构建失败'));
             break;
         }
     }
@@ -699,7 +764,7 @@ function renderExistingFiles(files){
         const d=m?m[2]+' → '+m[3].replace(/_/g,'-'):f.name.replace('deepflow_patch_','').replace('.tar.gz','');
         const mb=(f.size/1048576).toFixed(1);
         const badge=(f.name===newPackageName)?'<span class="pkg-new">NEW</span>':'';
-        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${escapeHtml(f.name)}">${escapeHtml(d)}${badge}</div><div class="pkg-meta">${mb} MB</div></div><a class="pkg-download" href="/download-existing/${encodeURIComponent(f.name)}" onclick="return checkExistingFileDownload(event,this)">${ICON_DOWNLOAD} 下载</a></div>`;
+        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${escapeHtml(f.name)}">${escapeHtml(d)}${badge}</div><div class="pkg-meta">${mb} MB</div></div><div class="pkg-actions"><button type="button" class="pkg-action-btn secondary" title="复制跳板机 curl 下载命令" data-copy-cmd="${escapeHtml(f.name)}">${ICON_COPY}</button><a class="pkg-action-btn" href="/download-existing/${encodeURIComponent(f.name)}" onclick="return checkExistingFileDownload(event,this)">${ICON_DOWNLOAD} 下载</a></div></div>`;
     }).join('');
 }
 function updateFilesSummary(n){document.getElementById('filesSummary').textContent=n+' 个包'}
@@ -761,4 +826,18 @@ function initEventListeners(){
     document.getElementById('recentTaskList').addEventListener('click',handleRecentTaskClick);
     document.getElementById('btnBackToTasks').addEventListener('click',showTaskCenter);
     document.getElementById('btnDownloadPackage').addEventListener('click',e=>checkExistingFileDownload(e,e.currentTarget));
+    const copyLogBtn=document.getElementById('btnCopyLog');
+    if(copyLogBtn)copyLogBtn.addEventListener('click',copyLogsToClipboard);
+    const clearLogBtn=document.getElementById('btnClearLog');
+    if(clearLogBtn)clearLogBtn.addEventListener('click',clearLogScreen);
+    const filesList=document.getElementById('filesList');
+    if(filesList){
+        filesList.addEventListener('click',e=>{
+            const btn=e.target.closest('[data-copy-cmd]');
+            if(btn){
+                e.preventDefault();
+                copyCurlCommand(btn.dataset.copyCmd);
+            }
+        });
+    }
 }
