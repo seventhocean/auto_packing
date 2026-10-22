@@ -35,3 +35,6 @@ test/
 # 本地导出的部署镜像
 auto_packing_*.tar
 auto_packing_*.tar.sha256
+
+# 本地独立预览服务
+preview_server.py
