@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeepFlow 升级包构建</title>
     <link rel="icon" href="static/favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="static/app.css?v=20261023">
-    <script src="static/app.js?v=20261023" defer></script>
+    <link rel="stylesheet" href="static/app.css?v=20261023b">
+    <script src="static/app.js?v=20261023b" defer></script>
 </head>
 <body data-mode="v6">
 <div class="app-shell">
@@ -14,15 +14,22 @@
     <!-- HEADER -->
     <header class="app-header">
         <h1 class="header-title"><span>DeepFlow</span> <span class="header-subtitle">升级包构建</span></h1>
-        <div class="mode-toggle" id="modeToggle" role="radiogroup" aria-label="构建模式">
-            <label class="mode-option">
-                <input type="radio" name="buildMode" value="v6" aria-controls="v6Workspace" checked>
-                <span>V6 Patch</span>
-            </label>
-            <label class="mode-option">
-                <input type="radio" name="buildMode" value="v7" aria-controls="v7Workspace">
-                <span>V7 Image</span>
-            </label>
+        <div class="header-right">
+            <button type="button" class="btn-drawer-toggle" id="btnToggleDrawer" title="查看已有升级包">
+                <svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5V5h12V3.5a.5.5 0 0 0-.5-.5h-11zm12 3H2v6.5a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5V6z"/></svg>
+                <span>已有升级包</span>
+                <span class="header-badge" id="headerPackagesCount">-</span>
+            </button>
+            <div class="mode-toggle" id="modeToggle" role="radiogroup" aria-label="构建模式">
+                <label class="mode-option">
+                    <input type="radio" name="buildMode" value="v6" aria-controls="v6Workspace" checked>
+                    <span>V6 Patch</span>
+                </label>
+                <label class="mode-option">
+                    <input type="radio" name="buildMode" value="v7" aria-controls="v7Workspace">
+                    <span>V7 Image</span>
+                </label>
+            </div>
         </div>
     </header>
 
@@ -32,15 +39,15 @@
 
             <!-- V6 Panel -->
             <div id="v6Workspace" class="workspace-panel active">
-                <div>
-                    <h2 class="workspace-title">Patch 升级</h2>
-                    <div class="workspace-desc">选择当前版本与目标版本，自动计算差异镜像并打包。</div>
-                </div>
                 <form id="buildForm" class="form-card">
-                    <div class="form-body">
+                    <div class="form-head">
+                        <h2 class="form-card-title">V6 Patch 升级</h2>
+                        <div class="form-hint" id="v6Preview" aria-live="polite"></div>
+                    </div>
+                    <div class="form-row-wrap">
                         <div class="version-grid">
                             <div class="form-row">
-                                <label class="form-label" for="currentVersionInput">当前 Patch 版本</label>
+                                <label class="form-label" for="currentVersionInput">当前版本</label>
                                 <div class="combo" id="currentVersionCombo">
                                     <input class="form-control combo-input" id="currentVersionInput" type="text"
                                         role="combobox" aria-expanded="false" aria-controls="currentVersionList"
@@ -51,7 +58,7 @@
                             </div>
                             <div class="version-arrow" aria-hidden="true"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.3 2.3 14 7l-4.7 4.7-1.1-1.1L11.2 8H2V6.5h9.2L8.2 3.4l1.1-1.1Z"/></svg></div>
                             <div class="form-row">
-                                <label class="form-label" for="targetVersionInput">目标 Patch 版本</label>
+                                <label class="form-label" for="targetVersionInput">目标版本</label>
                                 <div class="combo disabled" id="targetVersionCombo">
                                     <input class="form-control combo-input" id="targetVersionInput" type="text"
                                         role="combobox" aria-expanded="false" aria-controls="targetVersionList"
@@ -61,32 +68,34 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-hint" id="v6Preview" aria-live="polite"></div>
+                        <div class="form-action-btn-wrap">
+                            <button type="submit" class="btn-build" id="v6BuildBtn" disabled>
+                                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建
+                            </button>
+                        </div>
                     </div>
-                    <button type="submit" class="btn-build" id="v6BuildBtn" disabled>
-                        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建
-                    </button>
                 </form>
             </div>
 
             <!-- V7 Panel -->
             <div id="v7Workspace" class="workspace-panel">
-                <div>
-                    <h2 class="workspace-title">镜像清单</h2>
-                    <div class="workspace-desc">手动输入镜像名称与标签，每行一条或逗号分隔。</div>
-                </div>
                 <div class="form-card">
+                    <div class="form-head">
+                        <h2 class="form-card-title">V7 镜像清单构建</h2>
+                        <div class="form-hint" id="v7Preview" aria-live="polite"></div>
+                    </div>
                     <div class="form-body">
                         <div class="form-row">
                             <label class="form-label" for="v7ImageList">镜像列表</label>
                             <textarea class="form-control" id="v7ImageList" aria-required="true"
                                 placeholder="deepflow-server:v6.6.5550&#10;deepflow-agent:v6.6.5617&#10;pcap:v6.6.220"></textarea>
                         </div>
-                        <div class="form-hint" id="v7Preview" aria-live="polite"></div>
                     </div>
-                    <button type="button" class="btn-build" id="v7BuildBtn" disabled>
-                        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建
-                    </button>
+                    <div class="form-action-btn-wrap" style="align-self:flex-end;">
+                        <button type="button" class="btn-build" id="v7BuildBtn" disabled>
+                            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -118,7 +127,7 @@
                     </div>
                 </div>
                 <div class="build-running">
-                    <!-- PIPELINE STEPPER -->
+                    <!-- PIPELINE STEPPER (CHIP STYLE) -->
                     <div class="pipeline-stepper" id="pipelineStepper">
                         <div class="step-item active" data-step="1">
                             <div class="step-indicator">
@@ -126,10 +135,7 @@
                                 <span class="step-icon step-check">✓</span>
                                 <span class="step-icon step-cross">✕</span>
                             </div>
-                            <div class="step-content">
-                                <div class="step-title">1. 差集与清单</div>
-                                <div class="step-sub" data-default="依赖检查与版本分析">依赖检查与版本分析</div>
-                            </div>
+                            <span class="step-title">1. 差集计算</span>
                         </div>
                         <div class="step-connector"></div>
                         <div class="step-item waiting" data-step="2">
@@ -138,10 +144,7 @@
                                 <span class="step-icon step-check">✓</span>
                                 <span class="step-icon step-cross">✕</span>
                             </div>
-                            <div class="step-content">
-                                <div class="step-title">2. 镜像拉取与保存</div>
-                                <div class="step-sub" data-default="逐条拉取并存为 TAR">逐条拉取并存为 TAR</div>
-                            </div>
+                            <span class="step-title">2. 镜像拉取与保存</span>
                         </div>
                         <div class="step-connector"></div>
                         <div class="step-item waiting" data-step="3">
@@ -150,10 +153,7 @@
                                 <span class="step-icon step-check">✓</span>
                                 <span class="step-icon step-cross">✕</span>
                             </div>
-                            <div class="step-content">
-                                <div class="step-title">3. 组装打包</div>
-                                <div class="step-sub" data-default="压缩 TAR.GZ 并校验">压缩 TAR.GZ 并校验</div>
-                            </div>
+                            <span class="step-title">3. 组装打包</span>
                         </div>
                         <div class="step-connector"></div>
                         <div class="step-item waiting" data-step="4">
@@ -162,10 +162,7 @@
                                 <span class="step-icon step-check">✓</span>
                                 <span class="step-icon step-cross">✕</span>
                             </div>
-                            <div class="step-content">
-                                <div class="step-title">4. 交付就绪</div>
-                                <div class="step-sub" data-default="归档就绪可供下载">归档就绪可供下载</div>
-                            </div>
+                            <span class="step-title">4. 交付就绪</span>
                         </div>
                     </div>
 
@@ -209,21 +206,34 @@
                 </div>
             </div>
         </main>
+    </div>
+</div>
 
-        <!-- PACKAGES -->
-        <aside class="packages">
-            <h2 class="packages-title">已有升级包 <span class="packages-count" id="filesSummary">加载中...</span></h2>
-            <input type="text" class="packages-search" id="fileSearchInput" placeholder="搜索..." aria-label="搜索已有升级包">
-            <div class="packages-list" id="existingFilesContainer">
-                <div class="pkg-skeleton-list" id="filesLoading">
-                    <div class="pkg-skeleton"></div>
-                    <div class="pkg-skeleton"></div>
-                    <div class="pkg-skeleton"></div>
-                </div>
-                <div class="pkg-empty" id="noFilesMessage" style="display:none;">暂无已生成的升级包</div>
-                <div id="filesList"></div>
+<!-- PACKAGES DRAWER & OVERLAY (FROSTED GLASS) -->
+<div class="drawer-overlay" id="drawerOverlay"></div>
+<aside class="packages-drawer" id="packagesDrawer" aria-hidden="true">
+    <div class="drawer-header">
+        <div class="drawer-title-wrap">
+            <h2 class="drawer-title">已有升级包</h2>
+            <span class="packages-count" id="filesSummary">加载中...</span>
+        </div>
+        <button type="button" class="btn-close-drawer" id="btnCloseDrawer" aria-label="关闭抽屉" title="关闭 (Esc)">
+            <svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.7 3 3 3.7 7.3 8 3 12.3l.7.7L8 8.7l4.3 4.3.7-.7L8.7 8 13 3.7 12.3 3 8 7.3 3.7 3Z"/></svg>
+        </button>
+    </div>
+    <div class="drawer-body">
+        <input type="text" class="packages-search" id="fileSearchInput" placeholder="搜索升级包..." aria-label="搜索已有升级包">
+        <div class="packages-list" id="existingFilesContainer">
+            <div class="pkg-skeleton-list" id="filesLoading">
+                <div class="pkg-skeleton"></div>
+                <div class="pkg-skeleton"></div>
+                <div class="pkg-skeleton"></div>
             </div>
-        </aside>
+            <div class="pkg-empty" id="noFilesMessage" style="display:none;">暂无已生成的升级包</div>
+            <div id="filesList"></div>
+        </div>
+    </div>
+</aside>
     </div>
 </div>
 

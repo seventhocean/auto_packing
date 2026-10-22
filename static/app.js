@@ -828,7 +828,26 @@ function renderExistingFiles(files){
         return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${escapeHtml(f.name)}">${escapeHtml(d)}${badge}</div><div class="pkg-meta">${mb} MB</div></div><div class="pkg-actions"><button type="button" class="pkg-action-btn secondary" title="复制跳板机 curl 下载命令" data-copy-cmd="${escapeHtml(f.name)}">${ICON_COPY}</button><a class="pkg-action-btn" href="/download-existing/${encodeURIComponent(f.name)}" onclick="return checkExistingFileDownload(event,this)">${ICON_DOWNLOAD} 下载</a></div></div>`;
     }).join('');
 }
-function updateFilesSummary(n){document.getElementById('filesSummary').textContent=n+' 个包'}
+function updateFilesSummary(n){
+    const s=document.getElementById('filesSummary');
+    if(s)s.textContent=n+' 个包';
+    const hb=document.getElementById('headerPackagesCount');
+    if(hb)hb.textContent=n;
+}
+
+function openDrawer(){
+    const d=document.getElementById('packagesDrawer');
+    const o=document.getElementById('drawerOverlay');
+    if(d){d.classList.add('open');d.setAttribute('aria-hidden','false')}
+    if(o)o.classList.add('open');
+}
+
+function closeDrawer(){
+    const d=document.getElementById('packagesDrawer');
+    const o=document.getElementById('drawerOverlay');
+    if(d){d.classList.remove('open');d.setAttribute('aria-hidden','true')}
+    if(o)o.classList.remove('open');
+}
 function filterExistingFiles(){
     const q=document.getElementById('fileSearchInput').value.toLowerCase();
     renderExistingFiles(q?existingFilesData.filter(f=>f.name.toLowerCase().includes(q)):existingFilesData);
@@ -901,4 +920,13 @@ function initEventListeners(){
             }
         });
     }
+    const btnToggleDrawer=document.getElementById('btnToggleDrawer');
+    if(btnToggleDrawer)btnToggleDrawer.addEventListener('click',openDrawer);
+    const btnCloseDrawer=document.getElementById('btnCloseDrawer');
+    if(btnCloseDrawer)btnCloseDrawer.addEventListener('click',closeDrawer);
+    const drawerOverlay=document.getElementById('drawerOverlay');
+    if(drawerOverlay)drawerOverlay.addEventListener('click',closeDrawer);
+    document.addEventListener('keydown',e=>{
+        if(e.key==='Escape')closeDrawer();
+    });
 }
