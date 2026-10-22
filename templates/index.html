@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeepFlow 升级包构建</title>
     <link rel="icon" href="static/favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="static/app.css?v=20261023b">
-    <script src="static/app.js?v=20261023b" defer></script>
+    <link rel="stylesheet" href="static/app.css?v=20261023c">
+    <script src="static/app.js?v=20261023c" defer></script>
 </head>
 <body data-mode="v6">
 <div class="app-shell">
@@ -42,9 +42,8 @@
                 <form id="buildForm" class="form-card">
                     <div class="form-head">
                         <h2 class="form-card-title">V6 Patch 升级</h2>
-                        <div class="form-hint" id="v6Preview" aria-live="polite"></div>
                     </div>
-                    <div class="form-row-wrap">
+                    <div class="form-body">
                         <div class="version-grid">
                             <div class="form-row">
                                 <label class="form-label" for="currentVersionInput">当前版本</label>
@@ -68,11 +67,12 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-action-btn-wrap">
-                            <button type="submit" class="btn-build" id="v6BuildBtn" disabled>
-                                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建
-                            </button>
-                        </div>
+                        <div class="form-hint" id="v6Preview" aria-live="polite"></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-build" id="v6BuildBtn" disabled>
+                            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建
+                        </button>
                     </div>
                 </form>
             </div>
@@ -82,7 +82,6 @@
                 <div class="form-card">
                     <div class="form-head">
                         <h2 class="form-card-title">V7 镜像清单构建</h2>
-                        <div class="form-hint" id="v7Preview" aria-live="polite"></div>
                     </div>
                     <div class="form-body">
                         <div class="form-row">
@@ -90,8 +89,9 @@
                             <textarea class="form-control" id="v7ImageList" aria-required="true"
                                 placeholder="deepflow-server:v6.6.5550&#10;deepflow-agent:v6.6.5617&#10;pcap:v6.6.220"></textarea>
                         </div>
+                        <div class="form-hint" id="v7Preview" aria-live="polite"></div>
                     </div>
-                    <div class="form-action-btn-wrap" style="align-self:flex-end;">
+                    <div class="form-actions">
                         <button type="button" class="btn-build" id="v7BuildBtn" disabled>
                             <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L13 8 5 3.2Z"/></svg> 开始构建
                         </button>
