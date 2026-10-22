@@ -133,4 +133,3 @@
 | 26 | P2 | OSS/GitLab 短暂抖动会直接导致版本列表或构建失败 | `ossutil ls` 与 `git pull/clone` 增加 3 次重试；`/versions` 增加 5 分钟缓存与旧缓存回退 |
 | 27 | P2 | `:latest` + `IfNotPresent` 导致发布后可能继续使用节点旧镜像 | 新增 `bin/redeploy.sh`：唯一 tag 构建、可选推送/导入，并更新 Deployment 与等待滚动完成 |
 | 28 | P3 | 拉取日志上限 500 条，超大构建排障信息不足 | `max_logs` 调整为 2000，可按需继续调整 |
-| 29 | P0 | `nerdctl save` 报 `content digest not found`（pull 成功但 layer 被 containerd 丢弃或多架构 layer 缺失） | `pull` 加 `--unpack=false`，`pull/save` 固定 `--platform linux/amd64`，save 失败时重新拉取；文档提示检查 `discard_unpacked_layers` |

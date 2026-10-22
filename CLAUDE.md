@@ -176,7 +176,6 @@ redis:
 | `WORKER_HEARTBEAT_INTERVAL_SECONDS` | worker.py | 心跳间隔，默认 10s |
 | `WORKER_HEARTBEAT_TTL_SECONDS` | worker.py | 心跳 TTL，默认 60s |
 | `WORKER_RECLAIM_INTERVAL_SECONDS` | worker.py | 失活任务回收扫描间隔，默认 30s |
-| `TARGET_PLATFORM` | pull_save.sh | 拉取/保存的目标平台，默认 `linux/amd64` |
 | `FLASK_DEBUG` | app.py `__main__` | 设为 `1` 才启用 debug |
 | `REGISTRY_USERNAME/PASSWORD` | ❌ **已移除** | `pull_save.sh` 现在硬编码凭据 |
 
