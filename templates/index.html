@@ -81,15 +81,37 @@
             <div id="v7Workspace" class="workspace-panel">
                 <div class="form-card">
                     <div class="form-head">
-                        <h2 class="form-card-title">V7 镜像清单构建</h2>
+                        <div class="v7-head-left">
+                            <h2 class="form-card-title">V7 镜像清单构建</h2>
+                            <span class="v7-badge-count" id="v7TagCountBadge">0 个镜像</span>
+                        </div>
+                        <div class="v7-head-actions">
+                            <button type="button" class="btn-subtle" id="btnOpenBatchModal" title="批量多行粘贴或编辑">
+                                <svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 3v1h6V6H5zm0 2.5v1h6v-1H5zm0 2.5v1h4v-1H5z"/></svg>
+                                批量编辑 / 粘贴
+                            </button>
+                            <button type="button" class="btn-subtle btn-subtle-danger" id="btnClearAllTags" style="display:none;" title="清空全部镜像">
+                                清空
+                            </button>
+                        </div>
                     </div>
                     <div class="form-body">
                         <div class="form-row">
-                            <label class="form-label" for="v7ImageList">镜像列表</label>
-                            <textarea class="form-control" id="v7ImageList" aria-required="true"
-                                placeholder="deepflow-server:v6.6.5550&#10;deepflow-agent:v6.6.5617&#10;pcap:v6.6.220"></textarea>
+                            <textarea class="sr-only" id="v7ImageList" aria-required="true" tabindex="-1"></textarea>
+                            <div class="tag-box" id="v7TagContainer" role="group" aria-label="镜像胶囊列表">
+                                <div class="tag-list" id="v7TagList"></div>
+                                <input type="text" class="tag-inline-input" id="v7TagInlineInput"
+                                    placeholder="输入或粘贴镜像（如 deepflow-server:v6.6.5550），按回车或逗号添加..."
+                                    autocomplete="off" spellcheck="false" aria-label="添加镜像">
+                            </div>
                         </div>
-                        <div class="form-hint" id="v7Preview" aria-live="polite"></div>
+                        <div class="v7-status-bar">
+                            <div class="form-hint" id="v7Preview" aria-live="polite">格式：name:tag，支持直接粘贴多行或逗号文本</div>
+                            <div class="v7-quick-samples">
+                                <span class="v7-quick-label">常用样例：</span>
+                                <button type="button" class="btn-quick-sample" id="btnFillSampleV7">+ 填入3个样例镜像</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn-build" id="v7BuildBtn" disabled>
@@ -234,6 +256,39 @@
         </div>
     </div>
 </aside>
+
+<!-- BATCH IMPORT / EDIT MODAL (FROSTED GLASS) -->
+<div class="modal-overlay" id="batchModalOverlay" aria-hidden="true">
+    <div class="modal-dialog" role="dialog" aria-labelledby="batchModalTitle" aria-modal="true">
+        <div class="modal-header">
+            <div class="modal-title-wrap">
+                <svg class="icon modal-title-icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 3v1h6V6H5zm0 2.5v1h6v-1H5zm0 2.5v1h4v-1H5z"/>
+                </svg>
+                <h3 class="modal-title" id="batchModalTitle">批量导入 / 编辑镜像清单</h3>
+            </div>
+            <button type="button" class="btn-close-modal" id="btnCloseBatchModal" aria-label="关闭弹窗" title="关闭 (Esc)">
+                <svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.7 3 3 3.7 7.3 8 3 12.3l.7.7L8 8.7l4.3 4.3.7-.7L8.7 8 13 3.7 12.3 3 8 7.3 3.7 3Z"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p class="modal-description">
+                支持直接粘贴整段文本（换行、逗号、分号分隔）。系统会自动切词、去重、并校验格式。
+            </p>
+            <textarea class="modal-textarea" id="batchModalTextarea"
+                placeholder="deepflow-server:v6.6.5550&#10;deepflow-agent:v6.6.5617&#10;pcap:v6.6.220"
+                spellcheck="false"></textarea>
+            <div class="modal-body-meta">
+                <span class="modal-counter-text" id="batchModalCounter">共 0 个镜像</span>
+                <button type="button" class="btn-text-link" id="btnModalClear">清空内容</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-modal-cancel" id="btnCancelBatchModal">取消</button>
+            <button type="button" class="btn-modal-confirm" id="btnConfirmBatchModal">确认同步到胶囊</button>
+        </div>
+    </div>
+</div>
     </div>
 </div>
 

@@ -40,6 +40,8 @@ function showToast(message,type){
    INIT
    ================================================================ */
 document.addEventListener('DOMContentLoaded',()=>{
+    const seriesParam=new URLSearchParams(location.search).get('series');
+    if(seriesParam==='v7'||seriesParam==='v6')currentSeries=seriesParam;
     initVersionPickers();initEventListeners();setMode(currentSeries);
     fetchVersions(currentSeries);fetchExistingFiles();startTaskOverviewPolling();
     // 刷新后凭 URL 中的 task_id 恢复正在进行的构建
@@ -866,6 +868,122 @@ async function checkExistingFileDownload(e,el){
 }
 
 const V7_IMAGE_RE=/^[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/* ================================================================
+   V7 TAGS & BATCH MODAL
+   ================================================================ */
+let v7Tags=[];
+
+function renderV7Tags(){
+    const listEl=document.getElementById('v7TagList');
+    const badgeEl=document.getElementById('v7TagCountBadge');
+    const clearBtn=document.getElementById('btnClearAllTags');
+    const hiddenInput=document.getElementById('v7ImageList');
+    if(!listEl)return;
+
+    listEl.innerHTML=v7Tags.map((tag,idx)=>{
+        const isValid=V7_IMAGE_RE.test(tag);
+        if(isValid){
+            const colonIdx=tag.lastIndexOf(':');
+            const name=tag.slice(0,colonIdx);
+            const version=tag.slice(colonIdx+1);
+            return `<div class="tag-pill" data-index="${idx}" title="${escapeHtml(tag)}">`+
+                `<span class="tag-pill-name">${escapeHtml(name)}</span>`+
+                `<span class="tag-pill-colon">:</span>`+
+                `<span class="tag-pill-version">${escapeHtml(version)}</span>`+
+                `<button type="button" class="tag-pill-remove" data-action="remove-tag" data-index="${idx}" aria-label="移除镜像 ${escapeHtml(tag)}" title="移除">`+
+                    `<svg viewBox="0 0 16 16"><path d="M3.7 3 3 3.7 7.3 8 3 12.3l.7.7L8 8.7l4.3 4.3.7-.7L8.7 8 13 3.7 12.3 3 8 7.3 3.7 3Z"/></svg>`+
+                `</button>`+
+            `</div>`;
+        }else{
+            return `<div class="tag-pill invalid" data-index="${idx}" title="格式错误：必须为 name:tag">`+
+                `<span class="tag-pill-name">${escapeHtml(tag)}</span>`+
+                `<span class="tag-pill-err-tag">格式错误</span>`+
+                `<button type="button" class="tag-pill-remove" data-action="remove-tag" data-index="${idx}" aria-label="移除错误项" title="移除">`+
+                    `<svg viewBox="0 0 16 16"><path d="M3.7 3 3 3.7 7.3 8 3 12.3l.7.7L8 8.7l4.3 4.3.7-.7L8.7 8 13 3.7 12.3 3 8 7.3 3.7 3Z"/></svg>`+
+                `</button>`+
+            `</div>`;
+        }
+    }).join('');
+
+    const count=v7Tags.length;
+    if(badgeEl)badgeEl.textContent=`${count} 个镜像`;
+    if(clearBtn)clearBtn.style.display=count>0?'inline-flex':'none';
+
+    if(hiddenInput){
+        hiddenInput.value=v7Tags.join('\n');
+    }
+    updateV7Preview();
+    checkBuildBtnStatus();
+}
+
+function addV7Tokens(text){
+    if(!text)return 0;
+    const tokens=String(text).split(/[,，;\n\r\s]+/).map(s=>s.trim()).filter(Boolean);
+    if(!tokens.length)return 0;
+
+    let addedCount=0;
+    const existingSet=new Set(v7Tags);
+    tokens.forEach(tok=>{
+        if(!existingSet.has(tok)){
+            existingSet.add(tok);
+            v7Tags.push(tok);
+            addedCount++;
+        }
+    });
+
+    renderV7Tags();
+    return addedCount;
+}
+
+function removeV7TagByIndex(idx){
+    if(idx>=0&&idx<v7Tags.length){
+        v7Tags.splice(idx,1);
+        renderV7Tags();
+    }
+}
+
+function clearAllV7Tags(){
+    v7Tags=[];
+    renderV7Tags();
+}
+
+function openBatchModal(){
+    const modal=document.getElementById('batchModalOverlay');
+    const textarea=document.getElementById('batchModalTextarea');
+    if(!modal||!textarea)return;
+
+    textarea.value=v7Tags.join('\n');
+    updateBatchModalCounter();
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden','false');
+    setTimeout(()=>textarea.focus(),60);
+}
+
+function closeBatchModal(){
+    const modal=document.getElementById('batchModalOverlay');
+    if(!modal)return;
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden','true');
+}
+
+function updateBatchModalCounter(){
+    const textarea=document.getElementById('batchModalTextarea');
+    const counter=document.getElementById('batchModalCounter');
+    if(!textarea||!counter)return;
+    const count=String(textarea.value).split(/[,，;\n\r\s]+/).map(s=>s.trim()).filter(Boolean).length;
+    counter.textContent=`共 ${count} 个镜像`;
+}
+
+function confirmBatchModal(){
+    const textarea=document.getElementById('batchModalTextarea');
+    if(!textarea)return;
+    v7Tags=[];
+    const added=addV7Tokens(textarea.value);
+    closeBatchModal();
+    showToast(`已同步 ${v7Tags.length} 个镜像胶囊`,'success');
+}
+
 function parseV7Images(raw){
     const tokens=String(raw||'').split(/[,，;\n\r]+/).map(s=>s.trim()).filter(Boolean);
     const valid=[],invalid=[],seen=new Set();let duplicates=0;
@@ -876,6 +994,7 @@ function parseV7Images(raw){
     });
     return {valid,invalid,duplicates};
 }
+
 function updateV7Preview(){
     const el=document.getElementById('v7Preview');
     if(!el)return;
@@ -884,10 +1003,109 @@ function updateV7Preview(){
     if(!valid.length&&!invalid.length){el.textContent='格式：name:tag，每行一个或逗号分隔';return}
     if(invalid.length){
         const shown=invalid.slice(0,2).join('、')+(invalid.length>2?' 等':'');
-        el.textContent=`${valid.length?`已识别 ${valid.length} 个，`:''}${invalid.length} 行无效：${shown}（需为 name:tag）`;
+        el.textContent=`${valid.length?`已识别 ${valid.length} 个，`:''}${invalid.length} 个格式无效：${shown}（需包含 :tag）`;
         return;
     }
-    el.textContent=`已识别 ${valid.length} 个镜像${duplicates?`，忽略 ${duplicates} 个重复项`:''}`;
+    el.textContent=`✓ 已识别 ${valid.length} 个有效镜像${duplicates?`（已自动去重 ${duplicates} 个）`:''}`;
+}
+
+function initV7InputListeners(){
+    const container=document.getElementById('v7TagContainer');
+    const inlineInput=document.getElementById('v7TagInlineInput');
+    const tagList=document.getElementById('v7TagList');
+
+    if(container&&inlineInput){
+        container.addEventListener('click',e=>{
+            if(!e.target.closest('.tag-pill-remove')){
+                inlineInput.focus();
+            }
+        });
+
+        inlineInput.addEventListener('keydown',e=>{
+            if(e.key==='Enter'||e.key===','||e.key==='，'||e.key===';'||e.key==='；'){
+                e.preventDefault();
+                const val=inlineInput.value.trim();
+                if(val){
+                    addV7Tokens(val);
+                    inlineInput.value='';
+                }
+            }else if(e.key==='Backspace'&&!inlineInput.value&&v7Tags.length>0){
+                v7Tags.pop();
+                renderV7Tags();
+            }
+        });
+
+        inlineInput.addEventListener('paste',e=>{
+            const pasted=(e.clipboardData||window.clipboardData).getData('text');
+            if(pasted){
+                e.preventDefault();
+                addV7Tokens(pasted);
+                inlineInput.value='';
+            }
+        });
+
+        inlineInput.addEventListener('blur',()=>{
+            const val=inlineInput.value.trim();
+            if(val){
+                addV7Tokens(val);
+                inlineInput.value='';
+            }
+        });
+    }
+
+    if(tagList){
+        tagList.addEventListener('click',e=>{
+            const btn=e.target.closest('[data-action="remove-tag"]');
+            if(btn){
+                e.stopPropagation();
+                const idx=parseInt(btn.dataset.index,10);
+                removeV7TagByIndex(idx);
+            }
+        });
+    }
+
+    const btnClearAll=document.getElementById('btnClearAllTags');
+    if(btnClearAll)btnClearAll.addEventListener('click',clearAllV7Tags);
+
+    const btnFillSample=document.getElementById('btnFillSampleV7');
+    if(btnFillSample){
+        btnFillSample.addEventListener('click',()=>{
+            addV7Tokens('deepflow-server:v6.6.5550\ndeepflow-agent:v6.6.5617\npcap:v6.6.220');
+        });
+    }
+
+    const btnOpenModal=document.getElementById('btnOpenBatchModal');
+    if(btnOpenModal)btnOpenModal.addEventListener('click',openBatchModal);
+
+    const btnCloseModal=document.getElementById('btnCloseBatchModal');
+    if(btnCloseModal)btnCloseModal.addEventListener('click',closeBatchModal);
+
+    const btnCancelModal=document.getElementById('btnCancelBatchModal');
+    if(btnCancelModal)btnCancelModal.addEventListener('click',closeBatchModal);
+
+    const modalOverlay=document.getElementById('batchModalOverlay');
+    if(modalOverlay){
+        modalOverlay.addEventListener('click',e=>{
+            if(e.target===modalOverlay)closeBatchModal();
+        });
+    }
+
+    const modalTextarea=document.getElementById('batchModalTextarea');
+    if(modalTextarea){
+        modalTextarea.addEventListener('input',updateBatchModalCounter);
+    }
+
+    const btnModalClear=document.getElementById('btnModalClear');
+    if(btnModalClear&&modalTextarea){
+        btnModalClear.addEventListener('click',()=>{
+            modalTextarea.value='';
+            updateBatchModalCounter();
+            modalTextarea.focus();
+        });
+    }
+
+    const btnConfirmModal=document.getElementById('btnConfirmBatchModal');
+    if(btnConfirmModal)btnConfirmModal.addEventListener('click',confirmBatchModal);
 }
 
 /* ================================================================
@@ -927,6 +1145,12 @@ function initEventListeners(){
     const drawerOverlay=document.getElementById('drawerOverlay');
     if(drawerOverlay)drawerOverlay.addEventListener('click',closeDrawer);
     document.addEventListener('keydown',e=>{
-        if(e.key==='Escape')closeDrawer();
+        if(e.key==='Escape'){
+            closeDrawer();
+            closeBatchModal();
+        }
     });
+
+    initV7InputListeners();
+    renderV7Tags();
 }
