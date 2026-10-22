@@ -176,6 +176,8 @@ redis:
 | `WORKER_HEARTBEAT_INTERVAL_SECONDS` | worker.py | 心跳间隔，默认 10s |
 | `WORKER_HEARTBEAT_TTL_SECONDS` | worker.py | 心跳 TTL，默认 60s |
 | `WORKER_RECLAIM_INTERVAL_SECONDS` | worker.py | 失活任务回收扫描间隔，默认 30s |
+| `TARGET_PLATFORM` | pull_save.sh | 拉取/保存的目标平台，默认 `linux/amd64` |
+| `CONTAINERD_NAMESPACE` | nerdctl | 默认 containerd namespace，镜像内固定为 `k8s.io` |
 | `FLASK_DEBUG` | app.py `__main__` | 设为 `1` 才启用 debug |
 | `REGISTRY_USERNAME/PASSWORD` | ❌ **已移除** | `pull_save.sh` 现在硬编码凭据 |
 
@@ -227,13 +229,11 @@ redis:
 
 ### 仍存在的问题
 
-- **V6 版本选择器**仍用原生 `<select>`，100+ 版本时无法搜索
-- **升级预览不完整** — 已显示跨越 patch 数；镜像数与预计包大小需后端统计
 - **`pull_save.sh:84`** 硬编码凭据（内网环境，暂不修复）
-- **无 OSS 版本缓存** — 每次 API 调用都执行 `ossutil ls`
 - **SSE 长连接占用 gunicorn 线程** — 按当前 1~2 个用户的规模可接受（2 workers × 4 threads 足够），暂不改造
 - **`upgrade_packages/` 无自动清理**
 - **PVC 名拼写错误**: `auto-pancking-pvc`
+- **containerd 跨 namespace 历史残留** — 已设置 `CONTAINERD_NAMESPACE=k8s.io`，并提供只读巡检 `bin/check_containerd.py` 与 `docs/CONTAINERD_RUNBOOK.md`
 
 ## Directory structure (deploy branch)
 
@@ -251,6 +251,7 @@ redis:
 │   ├── pull_save.sh                 # 拉取镜像→保存 tar
 │   ├── deepflow_patch_upgrade.sh    # 部署端升级（打进包里）
 │   ├── redeploy.sh                  # 构建唯一 tag 镜像并滚动更新 K8s
+│   ├── check_containerd.py          # 只读巡检 containerd 镜像/内容一致性
 │   ├── ossutil                      # 二进制
 │   └── nerdctl                      # 二进制
 ├── templates/

@@ -194,6 +194,8 @@ redis:
   - `get_patch_image_tag_list.sh`
   - `pull_save.sh`
   - `deepflow_patch_upgrade.sh`
+  - `redeploy.sh`
+  - `check_containerd.py`
   - `ossutil`
   - `nerdctl`
 - `templates/`
@@ -677,14 +679,18 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
 
 ### 13.3 测试覆盖不足
 
-仓库有 `test/` 目录，但当前看更像脚本样例和页面样例，不构成完整 CI 测试。
+仓库有 `tests/` 目录和基础单元测试，但还没有 CI 流水线，shell 脚本和端到端构建仍以人工验证为主。
 
-因此 README 更新后，仍建议把以下内容补起来：
+### 13.4 containerd namespace 一致性
 
-- API 自动化测试
-- shell 脚本回归测试
-- Redis 队列与 worker 回收测试
-- V6/V7 端到端构建测试
+- containerd 的 content 元数据按 namespace 隔离，历史遗留的 `default` 镜像可能导致
+  `nerdctl save` 报 `content digest ... not found`。
+- worker 已通过 `CONTAINERD_NAMESPACE=k8s.io` 固定默认 namespace。
+- 只读巡检：
+  ```bash
+  python3 bin/check_containerd.py
+  ```
+- 现象、应急修复和清理规范见 [`docs/CONTAINERD_RUNBOOK.md`](./docs/CONTAINERD_RUNBOOK.md)。
 
 ## 14. 推荐的阅读顺序
 
@@ -710,6 +716,8 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
    - 当前已知的代码问题清单（按 P0/P1/P2/P3 分级）。
 10. `docs/FRONTEND_REVIEW.md`
     - 前端审查报告与改进建议。
+11. `docs/CONTAINERD_RUNBOOK.md`
+    - containerd 跨 namespace 问题的巡检、应急修复与清理规范。
 
 ## 15. 一句话总结当前项目逻辑
 

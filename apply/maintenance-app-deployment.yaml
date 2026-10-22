@@ -176,6 +176,8 @@ spec:
         env:
         - name: PATH
           value: "/app/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        - name: CONTAINERD_NAMESPACE
+          value: "k8s.io"
         - name: FLASK_APP
           value: "app.py"
         - name: FLASK_ENV
@@ -318,6 +320,8 @@ spec:
         env:
         - name: PATH
           value: "/app/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        - name: CONTAINERD_NAMESPACE
+          value: "k8s.io"
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: APP_CONFIG_PATH
