@@ -372,6 +372,8 @@ pcap_tag: v6.6.220
 - 默认容器工具是 `nerdctl`。
 - 也支持 `-c docker` 切换。
 - 仓库前缀默认是 `hub.deepflow.yunshan.net/dev/`。
+- `nerdctl pull` 使用 `--unpack=false`，保留 content store 中的 layer，避免节点开启 `discard_unpacked_layers` 后 `save` 报 `content digest ... not found`。
+- `pull`/`save` 默认固定 `--platform linux/amd64`，可通过 `TARGET_PLATFORM` 覆盖。
 - 产出的 tar 文件名格式：
   - `<image_name>_<tag>.tar`
 

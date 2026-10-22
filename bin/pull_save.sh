@@ -26,8 +26,15 @@ LOG_FILE="$BASE_DIR/../logs/app.log"
 container_cmd=(nerdctl -n k8s.io)
 # 镜像仓库前缀（默认DeepFlow仓库）
 repo="hub.deepflow.yunshan.net/dev/"
+# 目标平台（当前升级包只面向 x86_64；多架构镜像必须显式指定，否则 save 可能找不到其他架构的 layer）
+TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
 # 镜像保存目录（默认空，需通过--dir指定）
 save_dir=""
+
+# 判断是否使用 nerdctl（docker 不支持 --unpack 参数）
+is_nerdctl() {
+    [ "$(basename "${container_cmd[0]}")" = "nerdctl" ]
+}
 
 
 # ------------------------------ 工具函数 ------------------------------
@@ -105,9 +112,18 @@ pull_and_save_single() {
     log "${GREEN}开始拉取镜像：$full_image_name${NC}"
     local pull_ok=0
     for attempt in 1 2 3; do
-        if "${container_cmd[@]}" pull "$full_image_name"; then
-            pull_ok=1
-            break
+        if is_nerdctl; then
+            # --unpack=false 保留 content store 中的 layer，避免 containerd 开启
+            # discard_unpacked_layers 后 nerdctl save 报 "content digest ... not found"
+            if "${container_cmd[@]}" pull --unpack=false --platform "$TARGET_PLATFORM" "$full_image_name"; then
+                pull_ok=1
+                break
+            fi
+        else
+            if "${container_cmd[@]}" pull "$full_image_name"; then
+                pull_ok=1
+                break
+            fi
         fi
         log "${YELLOW}拉取失败（第 ${attempt}/3 次），5 秒后重试${NC}"
         sleep 5
@@ -132,16 +148,29 @@ pull_and_save_single() {
     log "${GREEN}开始保存镜像到：$save_file${NC}"
     local save_ok=0
     for attempt in 1 2 3; do
-        if "${container_cmd[@]}" save -o "$save_file" "$full_image_name"; then
-            save_ok=1
-            break
+        if is_nerdctl; then
+            if "${container_cmd[@]}" save --platform "$TARGET_PLATFORM" -o "$save_file" "$full_image_name"; then
+                save_ok=1
+                break
+            fi
+        else
+            if "${container_cmd[@]}" save -o "$save_file" "$full_image_name"; then
+                save_ok=1
+                break
+            fi
         fi
         log "${YELLOW}保存失败（第 ${attempt}/3 次），清理后重试${NC}"
         [ -f "$save_file" ] && rm -f "$save_file"
+        # content digest not found 通常是 layer 已被 containerd 清理，先重新拉取再保存
+        if [ "$attempt" -lt 3 ] && is_nerdctl; then
+            log "${YELLOW}重新拉取镜像以补齐缺失 layer...${NC}"
+            "${container_cmd[@]}" pull --unpack=false --platform "$TARGET_PLATFORM" "$full_image_name" || true
+        fi
         sleep 3
     done
     if [ "$save_ok" -ne 1 ]; then
         log "${RED}错误：保存镜像失败：$full_image_name${NC}"
+        log "${YELLOW}提示：若反复出现 content digest not found，请检查节点 containerd 的 discard_unpacked_layers 配置，或升级 nerdctl${NC}"
         # 清理失败的空文件
         if [ -f "$save_file" ]; then
             rm -f "$save_file"
