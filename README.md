@@ -49,8 +49,8 @@ V6 模式的目标是：给定当前补丁版本和目标补丁版本，自动�
 
 执行顺序如下：
 
-1. 前端调用 `GET /build?series=v6&current=<current>&target=<target>`。
-2. `app.py` 生成唯一 `task_id`，初始化任务状态为 `queued`，并把任务写入 Redis 队列。
+1. 前端调用 `POST /build`，JSON body 为 `{"series":"v6","current":"<current>","target":"<target>"}`，拿到 `task_id`。
+2. `app.py` 生成唯一 `task_id`，初始化任务状态为 `queued`，并把任务写入 Redis 队列；前端随后通过 `GET /build?task_id=<task_id>` 订阅 SSE。
 3. `worker.py` 从 Redis 队列取出任务，等待并发槽位可用。
 4. worker 调用 `run_build_task(task_id, current_version, target_version)`。
 5. 为该任务创建独立临时目录：
@@ -80,8 +80,8 @@ V7 模式不依赖 OSS 版本差异，而是直接使用用户手工输入的镜
 
 执行顺序如下：
 
-1. 前端调用 `GET /build?series=v7&images=<comma-separated-images>`。
-2. `app.py` 把镜像列表拆分为数组，写入 Redis 队列。
+1. 前端调用 `POST /build`，JSON body 为 `{"series":"v7","images":["<image>", ...]}`，拿到 `task_id`。
+2. `app.py` 把镜像列表写入 Redis 队列；前端随后通过 `GET /build?task_id=<task_id>` 订阅 SSE。
 3. `worker.py` 取任务后执行 `run_build_task_v7(task_id, images)`。
 4. worker 直接把用户提交的镜像条目写入任务专属 `patch_image_tag_list.txt`。
 5. 后续拉取、保存、打包逻辑与 V6 基本一致。
@@ -199,7 +199,7 @@ redis:
 - `templates/`
   - 前端页面模板。
 - `static/`
-  - Bootstrap、FontAwesome、favicon。
+  - `app.css`、`app.js`、`favicon.ico`（图标使用内联 SVG）。
 - `latest_image_list/`
   - 默认镜像清单输出目录。
 - `images/`
@@ -233,6 +233,7 @@ redis:
 - `GET /versions?series=v6`
   - 从 OSS 读取补丁列表。
   - 仅 `v6` 已接入。
+  - 同时返回 `package_name_template`，前端用它匹配“已有同名升级包”，避免硬编码包名前缀。
 - `GET /versions?series=v7`
   - 当前返回 `501`，属于占位逻辑。
 
@@ -245,14 +246,15 @@ redis:
 
 ### 5.3 启动构建
 
-- `GET /build?series=v6&current=<v>&target=<v>`
-- `GET /build?series=v7&images=<img1,img2,...>`
+- `POST /build`
+  - V6：`{"series":"v6","current":"<v>","target":"<v>"}`
+  - V7：`{"series":"v7","images":["<img>", ...]}`
+  - 只入队并返回 `task_id`，不承载 SSE。
+- `GET /build?task_id=<task_id>&since=<seq>`
+  - 返回 `text/event-stream`，观察任务进度。
+  - 重连只重放日志，不会重复创建任务；前端把 `task_id` 写入 URL，刷新后可恢复。
 
-特点：
-
-- 返回类型是 `text/event-stream`。
-- 首次响应即开始推送状态。
-- 前端通过 `EventSource` 持续接收任务进度。
+兼容旧调用：`GET /build?series=v6&current=&target=` 与 `GET /build?series=v7&images=` 仍会入队并直接返回 SSE，但新代码不应再使用。
 
 ### 5.4 任务状态查询
 
@@ -279,21 +281,21 @@ redis:
 
 ## 6. 前端页面逻辑
 
-当前前端只有一个页面：`templates/index.html`，但不是简单表单，已经演进成完整工作台。
+当前前端只有一个页面：`templates/index.html`，但不是简单表单，已经演进成完整工作台。样式与逻辑分别拆分到 `static/app.css`、`static/app.js`。
 
 ### 6.1 页面分区
 
-- 顶部 Hero 区
-  - 显示当前系统角色和模式说明。
+- 顶部 Header 区
+  - `h1` 标题。
+  - V6 / V7 单选式分段切换（支持键盘方向键）。
 - 左侧工作区
-  - V6 / V7 切换标签。
-  - 构建表单。
-  - 实时进度条。
-  - 日志面板。
-  - 取消构建按钮（执行中可用）。
+  - V6：当前版本 → 目标版本双列选择。
+  - V7：镜像清单输入与实时校验。
+  - 构建卡：实时进度条、状态、可折叠日志、取消按钮。
+  - 刷新页面后通过 URL 中的 `task_id` 自动恢复任务。
 - 右侧资源区
   - 已有升级包列表。
-  - 搜索和刷新。
+  - 搜索与下载。
 
 ### 6.2 V6 交互逻辑
 
@@ -311,7 +313,8 @@ redis:
 
 - 用户在文本框中输入镜像列表。
 - 支持按换行、逗号、中文逗号、分号拆分。
-- 只要文本非空即可提交。
+- 实时校验 `name:tag` 格式（支持 registry 路径），自动去重并提示非法行。
+- 存在非法行时构建按钮禁用，避免把脏数据写入镜像清单。
 
 注意：
 
@@ -691,8 +694,8 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
    - 先理解配置、Redis key、任务状态结构、接口定义。
 2. `worker.py`
    - 再理解队列消费、心跳、回收与并发控制。
-3. `templates/index.html`
-   - 理解前端如何发起任务和消费 SSE。
+3. `templates/index.html` + `static/app.js`
+   - 理解前端如何发起任务、恢复任务和消费 SSE。
 4. `bin/get_patch_image_tag_list.sh`
    - 理解 V6 的 patch 差异来源。
 5. `bin/pull_save.sh`

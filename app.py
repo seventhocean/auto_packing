@@ -33,6 +33,8 @@ OSS_VERSIONS_TMP_FILE = os.path.join(TRASH_DIR, 'oss_patch_version.txt')
 PATCH_LIST_SCRIPT_PATH = os.path.join(BIN_DIR, 'get_patch_image_tag_list.sh') # 生成patch_list.txt的脚本路径
 UPGRADE_SCRIPT_PATH = os.path.join(BIN_DIR, "deepflow_patch_upgrade.sh")
 APP_CONFIG_PATH = os.environ.get('APP_CONFIG_PATH', os.path.join(BASE_DIR, 'config.yaml'))
+# V6 升级包命名模板：作为唯一事实来源，同时下发给前端做"已有同名包"匹配
+PACKAGE_NAME_TEMPLATE = "deepflow_patch_v669_{current}_{target}.tar.gz"
 
 # 构建超时配置（秒）。拉镜像是最容易卡住的步骤，必须有上限，否则任务会永久占用槽位。
 PULL_TIMEOUT_SECONDS = int(os.environ.get('PULL_TIMEOUT_SECONDS', 2 * 3600))
@@ -241,9 +243,9 @@ def append_task_log(task_id, timestamp, level, content):
     redis_client.ltrim(task_logs_key(task_id), -REDIS_CONFIG['max_logs'], -1)
 
 
-def initialize_task_status(task_id, message):
+def initialize_task_status(task_id, message, task_type=None):
     now = int(time.time())
-    set_task_status(task_id, {
+    status = {
         "task_id": task_id,
         "status": "queued",
         "percent": 0,
@@ -253,7 +255,10 @@ def initialize_task_status(task_id, message):
         "created_at": now,
         "updated_at": now,
         "download_expire_at": None
-    })
+    }
+    if task_type:
+        status["task_type"] = task_type
+    set_task_status(task_id, status)
     redis_client.delete(task_logs_key(task_id))
     redis_client.delete(task_log_seq_key(task_id))
     redis_client.delete(task_cancel_key(task_id))
@@ -310,6 +315,57 @@ def reconcile_build_counter():
 
 def enqueue_build_task(payload):
     redis_client.lpush(build_queue_key(), json.dumps(payload, ensure_ascii=False))
+
+
+def _validate_v6_versions(current_version, target_version):
+    """校验 V6 版本参数，返回错误信息；通过时返回 None。"""
+    if not current_version or not target_version:
+        return "缺少必要参数：current或target版本不能为空"
+    # 版本号会参与目录/包名拼接，必须限制字符集（防路径穿越）
+    if not _is_safe_version_value(current_version) or not _is_safe_version_value(target_version):
+        return "版本参数包含非法字符"
+    if current_version == target_version:
+        return "当前版本与目标版本不能相同"
+    return None
+
+
+def _create_build_task(task_id, task_type, payload):
+    """初始化任务元数据并入队；入队失败时尽力标记任务错误。"""
+    initialize_task_status(task_id, "任务已创建，等待 worker 调度", task_type=task_type)
+    try:
+        enqueue_build_task(payload)
+    except Exception as e:
+        update_task_status(task_id, {
+            "status": "error",
+            "message": f"任务入队失败：{str(e)}",
+            "complete": True,
+            "error": True
+        }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
+        raise
+    return task_id
+
+
+def _create_v6_build_task(current_version, target_version):
+    timestamp = int(time.time() * 1000)
+    current_abbr = current_version[:8] if len(current_version) >= 8 else current_version
+    target_abbr = target_version[:8] if len(target_version) >= 8 else target_version
+    task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}_{uuid.uuid4().hex[:8]}"
+    return _create_build_task(task_id, "v6", {
+        "task_id": task_id,
+        "task_type": "v6",
+        "current_version": current_version,
+        "target_version": target_version
+    })
+
+
+def _create_v7_build_task(images):
+    timestamp = int(time.time() * 1000)
+    task_id = f"build_v7_{timestamp}_{uuid.uuid4().hex[:8]}"
+    return _create_build_task(task_id, "v7", {
+        "task_id": task_id,
+        "task_type": "v7",
+        "images": images
+    })
 
 
 # -------------------------- 工具函数（文件列表处理） --------------------------
@@ -769,7 +825,9 @@ def run_build_task(task_id, current_version, target_version):
             update_progress(task_id, 75, "开始打包TAR.GZ升级包")
             current_patch_version = current_version.split('-')[0]
             target_patch_version = target_version.split('-')[0]
-            upgrade_package = f"deepflow_patch_v669_{current_patch_version}_{target_patch_version}.tar.gz"
+            upgrade_package = PACKAGE_NAME_TEMPLATE.format(
+                current=current_patch_version, target=target_patch_version
+            )
             upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
 
             # 打包TAR.GZ升级包（两步 transform：先去路径前缀，再加目录前缀）
@@ -1078,6 +1136,7 @@ def api_get_versions():
         return jsonify({
             "success": True,
             "versions": versions,
+            "package_name_template": PACKAGE_NAME_TEMPLATE,
             "message": f"成功获取{len(versions)}个版本"
         })
     else:
@@ -1109,30 +1168,39 @@ def api_task_status(task_id):
 # -------------------------- 构建任务（兼容前端SSE） --------------------------
 @app.route('/build', methods=['POST'])
 def api_build_post():
-    """V7 专用：通过 POST JSON 提交镜像列表，避免 URL 超长。返回 task_id 供前端 SSE 连接。"""
-    data = request.get_json(silent=True) or {}
+    """创建构建任务（V6/V7 共用）。
+
+    只负责入队并返回 task_id，不再复用 GET 建任务 + SSE 的混合语义：
+    前端拿到 task_id 后统一通过 `GET /build?task_id=...` 订阅进度，
+    这样 SSE 重连不会重复创建任务。
+    """
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
     series = data.get('series', 'v7')
-    if series == 'v7':
-        images = data.get('images', [])
-        if not isinstance(images, list) or not images:
-            return jsonify({"success": False, "message": "缺少必要参数：images 不能为空"}), 400
-        images = [img.strip() for img in images if isinstance(img, str) and img.strip()]
-        if not images:
-            return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
-        timestamp = int(time.time() * 1000)
-        task_id = f"build_v7_{timestamp}_{uuid.uuid4().hex[:8]}"
-        try:
-            initialize_task_status(task_id, "任务已创建，等待 worker 调度")
-            enqueue_build_task({"task_id": task_id, "task_type": "v7", "images": images})
-        except Exception as e:
-            update_task_status(task_id, {
-                "status": "error", "message": f"任务入队失败：{str(e)}",
-                "complete": True, "error": True
-            }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
-            return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
-        return jsonify({"success": True, "task_id": task_id})
-    else:
-        return jsonify({"success": False, "message": f"不支持的 series: {series}"}), 400
+
+    try:
+        if series == 'v7':
+            images = data.get('images', [])
+            if not isinstance(images, list) or not images:
+                return jsonify({"success": False, "message": "缺少必要参数：images 不能为空"}), 400
+            images = [img.strip() for img in images if isinstance(img, str) and img.strip()]
+            if not images:
+                return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
+            task_id = _create_v7_build_task(images)
+        elif series == 'v6':
+            current_version = (data.get('current') or '').strip()
+            target_version = (data.get('target') or '').strip()
+            error = _validate_v6_versions(current_version, target_version)
+            if error:
+                return jsonify({"success": False, "message": error}), 400
+            task_id = _create_v6_build_task(current_version, target_version)
+        else:
+            return jsonify({"success": False, "message": f"不支持的 series: {series}"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
+
+    return jsonify({"success": True, "task_id": task_id})
 
 
 @app.route('/build/<task_id>/cancel', methods=['POST'])
@@ -1196,59 +1264,21 @@ def api_build():
     target_version = request.args.get('target')
     v7_images = request.args.get('images', '')
 
-    if series == 'v7':
-        if not v7_images.strip():
-            return jsonify({"success": False, "message": "缺少必要参数：images不能为空"}), 400
-        images = [img.strip() for img in v7_images.split(',') if img.strip()]
-        if not images:
-            return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
-        timestamp = int(time.time() * 1000)
-        task_id = f"build_v7_{timestamp}_{uuid.uuid4().hex[:8]}"
-        try:
-            initialize_task_status(task_id, "任务已创建，等待 worker 调度")
-            enqueue_build_task({
-                "task_id": task_id,
-                "task_type": "v7",
-                "images": images
-            })
-        except Exception as e:
-            update_task_status(task_id, {
-                "status": "error",
-                "message": f"任务入队失败：{str(e)}",
-                "complete": True,
-                "error": True
-            }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
-            return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
-    else:
-        # 参数校验：版本号会参与目录/包名拼接，必须限制字符集（防路径穿越）
-        if not current_version or not target_version:
-            return jsonify({"success": False, "message": "缺少必要参数：current或target版本不能为空"}), 400
-        if not _is_safe_version_value(current_version) or not _is_safe_version_value(target_version):
-            return jsonify({"success": False, "message": "版本参数包含非法字符"}), 400
-        if current_version == target_version:
-            return jsonify({"success": False, "message": "当前版本与目标版本不能相同"}), 400
-
-        # 生成唯一任务ID
-        timestamp = int(time.time() * 1000)
-        current_abbr = current_version[:8] if len(current_version)>=8 else current_version
-        target_abbr = target_version[:8] if len(target_version)>=8 else target_version
-        task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}_{uuid.uuid4().hex[:8]}"
-        try:
-            initialize_task_status(task_id, "任务已创建，等待 worker 调度")
-            enqueue_build_task({
-                "task_id": task_id,
-                "task_type": "v6",
-                "current_version": current_version,
-                "target_version": target_version
-            })
-        except Exception as e:
-            update_task_status(task_id, {
-                "status": "error",
-                "message": f"任务入队失败：{str(e)}",
-                "complete": True,
-                "error": True
-            }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
-            return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
+    try:
+        if series == 'v7':
+            if not v7_images.strip():
+                return jsonify({"success": False, "message": "缺少必要参数：images不能为空"}), 400
+            images = [img.strip() for img in v7_images.split(',') if img.strip()]
+            if not images:
+                return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
+            task_id = _create_v7_build_task(images)
+        else:
+            error = _validate_v6_versions(current_version, target_version)
+            if error:
+                return jsonify({"success": False, "message": error}), 400
+            task_id = _create_v6_build_task(current_version, target_version)
+    except Exception as e:
+        return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
 
     # 建立SSE连接，实时推送进度和日志
     def generate_sse():

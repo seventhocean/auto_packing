@@ -5,6 +5,7 @@
     python -m unittest tests.test_app_logic -v
 """
 import fnmatch
+import json
 import os
 import shutil
 import sys
@@ -153,9 +154,73 @@ class AppLogicTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.get_json()['status'], 'ok')
 
+    def test_index_uses_external_assets(self):
+        client = ap.app.test_client()
+        html = client.get('/').get_data(as_text=True)
+        self.assertIn('static/app.css', html)
+        self.assertIn('static/app.js', html)
+        self.assertNotIn('bootstrap', html)
+        self.assertNotIn('<style>', html)
+
+    def test_package_name_template(self):
+        self.assertEqual(
+            ap.PACKAGE_NAME_TEMPLATE.format(current='01', target='13'),
+            'deepflow_patch_v669_01_13.tar.gz'
+        )
+
+    def test_versions_response_exposes_package_template(self):
+        original = ap.get_oss_versions
+        ap.get_oss_versions = lambda use_cache=True: [
+            {'display': 'v6.6.1', 'value': 'v6.6.1-20260101', 'seq_num': 1}
+        ]
+        self.addCleanup(lambda: setattr(ap, 'get_oss_versions', original))
+
+        client = ap.app.test_client()
+        data = client.get('/versions?series=v6').get_json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['package_name_template'], ap.PACKAGE_NAME_TEMPLATE)
+
     def test_build_route_rejects_unsafe_version(self):
         client = ap.app.test_client()
         resp = client.get('/build?series=v6&current=../../etc&target=02-x')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_create_v6_build_via_post(self):
+        client = ap.app.test_client()
+        resp = client.post('/build', json={
+            'series': 'v6',
+            'current': '01-20250101-1',
+            'target': '02-20250202-2'
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data['success'])
+
+        task_id = data['task_id']
+        status = ap.get_task_status(task_id)
+        self.assertEqual(status['status'], 'queued')
+        self.assertEqual(status['task_type'], 'v6')
+        self.assertFalse(status['complete'])
+
+        queued = json.loads(ap.redis_client.lrange(ap.build_queue_key(), 0, -1)[0])
+        self.assertEqual(queued['task_id'], task_id)
+        self.assertEqual(queued['current_version'], '01-20250101-1')
+        self.assertEqual(queued['target_version'], '02-20250202-2')
+
+    def test_post_v6_rejects_bad_versions(self):
+        client = ap.app.test_client()
+
+        resp = client.post('/build', json={
+            'series': 'v6', 'current': '../../etc', 'target': '02-x'
+        })
+        self.assertEqual(resp.status_code, 400)
+
+        resp = client.post('/build', json={
+            'series': 'v6', 'current': '01-20250101-1', 'target': '01-20250101-1'
+        })
+        self.assertEqual(resp.status_code, 400)
+
+        resp = client.post('/build', json={'series': 'v6', 'current': '01-20250101-1'})
         self.assertEqual(resp.status_code, 400)
 
     def test_incremental_logs_by_seq(self):

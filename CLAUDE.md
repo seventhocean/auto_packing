@@ -107,33 +107,33 @@ docker run -p 8000:8000 \
 | `/` | GET | 前端工作台页面 |
 | `/health` | GET | 轻量健康检查（Redis ping，供 K8s 探针） |
 | `/versions?series=v6` | GET | OSS 补丁版本列表（v7 返回 501） |
-| `/build?series=v6&current=&target=` | GET | V6 入队 + SSE 流 |
-| `/build` | POST | V7 入队（JSON `{series, images}`），返回 task_id |
+| `/build` | POST | V6/V7 入队（JSON），返回 task_id；前端统一走此入口 |
 | `/build/<task_id>/cancel` | POST | 取消排队中/执行中的任务 |
-| `/build?task_id=` | GET | 观察已有任务的 SSE 流 |
+| `/build?task_id=` | GET | 观察已有任务的 SSE 流（重连不重复入队） |
+| `/build?series=v6&current=&target=` | GET | V6 入队 + SSE 流（兼容旧调用） |
 | `/build?series=v7&images=` | GET | V7 入队 + SSE 流（兼容旧调用） |
 | `/task-status/<task_id>` | GET | 查询任务状态（含日志） |
 | `/download/<task_id>` | GET | 下载构建产物（检查过期） |
 | `/existing-packages` | GET | 列出 upgrade_packages/ 下所有 .tar.gz |
 | `/download-existing/<filename>` | GET | 下载历史包（路径穿越校验） |
 
-### Frontend (`templates/index.html`, 1828 lines)
+### Frontend (`templates/index.html` + `static/app.css` + `static/app.js`)
 
-单页工作台，三个区域：
-- **顶部 Hero**：标题 + 系统概览（当前模式、已有包数量）
-- **左侧工作区**（`main.workspace`）：
-  - V6/V7 下拉切换（`#seriesModeSelect`），切换时改变 `body[data-series]` 触发不同配色主题
-  - V6 Panel：两个可搜索版本选择器（自定义 combobox + `fetchVersions()`）
-  - V7 Panel：`<textarea>` 输入镜像列表
-  - 任务状态区：进度条 + 日志 + 下载按钮 / 空闲占位
-- **右侧资源区**（`aside.resource-panel`）：已有升级包列表 + 搜索 + 刷新
+单页工作台，结构、样式、逻辑已拆分：
+- 模板只保留 DOM 结构；样式在 `static/app.css`，逻辑在 `static/app.js`（`defer` 加载）。
+- 顶部 Header：`h1` 标题 + V6/V7 `radiogroup`，切换时改变 `body[data-mode]` 触发不同配色主题。
+- 工作区（`main.workspace`）：
+  - V6 Panel：两个可搜索版本选择器（自定义 combobox + `fetchVersions()`），左右双列布局
+  - V7 Panel：`<textarea>` 输入镜像列表，实时校验 `name:tag`、去重并提示非法行
+  - 构建卡：进度条 + 状态行 + 可折叠日志；空闲态紧凑显示
+- 右侧资源区（`aside.packages`）：已有升级包列表 + 搜索
 
 关键前端逻辑：
-- `currentSeries` 全局变量跟踪当前模式
-- 版本选择：`fetchVersions('v6')` / V7 切换时清空
-- 构建：`EventSource` 连接 `/build?...`，`handleBuildStatus()` 处理 SSE 消息
-- 日志去重：`lastLogMessage` 变量避免重复渲染
-- 图片列表解析：`v7ImageList` 支持换行/逗号/中文逗号/分号分割
+- `currentSeries` 跟踪当前模式；`setMode()` 同步单选按钮、面板与主题
+- 构建统一为 `POST /build` 拿 `task_id`，再用 `EventSource` 订阅 `/build?task_id=...`；重连不会重复入队
+- `task_id` 写入 URL，刷新页面自动恢复任务
+- 日志按 `lastLogSeq` 增量渲染，使用服务端时间戳；仅在接近底部时自动跟随
+- 包名匹配使用 `/versions` 返回的 `package_name_template`，不在前端硬编码 `v669`
 
 ### Shell scripts
 
@@ -254,8 +254,8 @@ redis:
 │   ├── ossutil                      # 二进制
 │   └── nerdctl                      # 二进制
 ├── templates/
-│   └── index.html       # 单页工作台
-├── static/              # Bootstrap 5 + FontAwesome
+│   └── index.html       # 单页结构
+├── static/              # app.css / app.js / favicon
 ├── apply/
 │   ├── maintenance-app-deployment.yaml  # K8s: app + worker + redis + config
 │   └── persistent-volume.yaml
