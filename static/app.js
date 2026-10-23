@@ -208,10 +208,13 @@ function handleTargetVersionChange(){
 function updateV6Preview(){
     const el=document.getElementById('v6Preview');
     if(!el)return;
-    el.textContent='';
+    el.innerHTML='';
     const cur=currentPicker?currentPicker.getSelected():null;
     const tgt=targetPicker?targetPicker.getSelected():null;
-    if(!cur||!tgt)return;
+    if(!cur||!tgt){
+        el.textContent='选择已发布的起始版本与目标版本，系统将自动对比并计算差集镜像清单';
+        return;
+    }
 
     const span=Number(tgt.seq_num)-Number(cur.seq_num);
     const from=String(cur.value).split('-')[0];
@@ -222,12 +225,12 @@ function updateV6Preview(){
     const existing=expected?(existingFilesData||[]).find(f=>f.name===expected):null;
 
     const info=document.createElement('span');
-    info.textContent=`将跨越 ${span} 个 patch`;
+    info.textContent=`✓ 已选定跨越 ${span} 个 patch 版本（${cur.value} → ${tgt.value}）`;
     el.appendChild(info);
     if(existing){
         const link=document.createElement('a');
         link.href=`/download-existing/${encodeURIComponent(existing.name)}`;
-        link.textContent='已有同名升级包，可直接下载';
+        link.textContent='（已有同名升级包，可直接下载）';
         el.appendChild(link);
     }
 }
@@ -585,12 +588,13 @@ function updatePipelineStepper(status, percent, message){
 
     const connectors = stepper.querySelectorAll('.step-connector');
     connectors.forEach((conn, idx) => {
-        const fromStep = idx + 1;
-        conn.classList.remove('active', 'completed', 'error');
-        if(isComplete || activeStep > fromStep){
+        conn.classList.remove('completed', 'error');
+        if(isComplete){
             conn.classList.add('completed');
-        } else if(activeStep === fromStep){
-            conn.classList.add(isError ? 'error' : 'active');
+        } else if(isError && activeStep === idx + 1){
+            conn.classList.add('error');
+        } else if(activeStep > idx + 1){
+            conn.classList.add('completed');
         }
     });
 }

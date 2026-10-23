@@ -41,7 +41,10 @@
             <div id="v6Workspace" class="workspace-panel active">
                 <form id="buildForm" class="form-card">
                     <div class="form-head">
-                        <h2 class="form-card-title">V6 Patch 升级</h2>
+                        <div class="v6-head-left">
+                            <h2 class="form-card-title">V6 Patch 升级</h2>
+                            <span class="v6-badge-mode">版本差集构建</span>
+                        </div>
                     </div>
                     <div class="form-body">
                         <div class="version-grid">
@@ -50,7 +53,7 @@
                                 <div class="combo" id="currentVersionCombo">
                                     <input class="form-control combo-input" id="currentVersionInput" type="text"
                                         role="combobox" aria-expanded="false" aria-controls="currentVersionList"
-                                        aria-autocomplete="list" autocomplete="off" placeholder="加载中...">
+                                        aria-autocomplete="list" autocomplete="off" placeholder="请选择起始版本...">
                                     <svg class="combo-toggle" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.7 3.3 6l1.1-1.1L8 8.5l3.6-3.6L12.7 6 8 10.7Z"/></svg>
                                     <div class="combo-list" id="currentVersionList" role="listbox" tabindex="-1" hidden></div>
                                 </div>
@@ -67,7 +70,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-hint" id="v6Preview" aria-live="polite"></div>
+                        <div class="form-hint" id="v6Preview" aria-live="polite">选择已发布的起始版本与目标版本，系统将自动对比并计算差集镜像清单</div>
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn-build" id="v6BuildBtn" disabled>
@@ -186,10 +189,9 @@
                             </div>
                             <span class="step-title">4. 交付就绪</span>
                         </div>
-                    </div>
-
-                    <div class="progress-wrap">
-                        <div class="progress-fill" id="progressBar" style="width:0%;"></div>
+                        <div class="progress-wrap">
+                            <div class="progress-fill" id="progressBar" style="width:0%;"></div>
+                        </div>
                     </div>
                     <div class="build-status-row">
                         <span class="build-status-text" aria-live="polite">
