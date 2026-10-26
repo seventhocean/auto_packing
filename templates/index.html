@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeepFlow 升级包构建</title>
     <link rel="icon" href="static/favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="static/app.css?v=20261023c">
-    <script src="static/app.js?v=20261023c" defer></script>
+    <link rel="stylesheet" href="static/app.css?v=20261026a">
+    <script src="static/app.js?v=20261026a" defer></script>
 </head>
 <body data-mode="v6">
 <div class="app-shell">
@@ -15,9 +15,10 @@
     <header class="app-header">
         <h1 class="header-title"><span>DeepFlow</span> <span class="header-subtitle">升级包构建</span></h1>
         <div class="header-right">
-            <button type="button" class="btn-drawer-toggle" id="btnToggleDrawer" title="查看已有升级包">
+            <button type="button" class="btn-drawer-toggle" id="btnToggleDrawer" title="查看已有升级包"
+                aria-label="查看已有升级包" aria-controls="packagesDrawer" aria-expanded="false">
                 <svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5V5h12V3.5a.5.5 0 0 0-.5-.5h-11zm12 3H2v6.5a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 .5-.5V6z"/></svg>
-                <span>已有升级包</span>
+                <span class="btn-drawer-label">已有升级包</span>
                 <span class="header-badge" id="headerPackagesCount">-</span>
             </button>
             <div class="mode-toggle" id="modeToggle" role="radiogroup" aria-label="构建模式">
@@ -100,7 +101,8 @@
                     </div>
                     <div class="form-body">
                         <div class="form-row">
-                            <textarea class="sr-only" id="v7ImageList" aria-required="true" tabindex="-1"></textarea>
+                            <label class="sr-only" for="v7ImageList">镜像清单原始数据</label>
+                            <textarea class="sr-only" id="v7ImageList" tabindex="-1"></textarea>
                             <div class="tag-box" id="v7TagContainer" role="group" aria-label="镜像胶囊列表">
                                 <div class="tag-list" id="v7TagList"></div>
                                 <input type="text" class="tag-inline-input" id="v7TagInlineInput"
@@ -235,10 +237,10 @@
 
 <!-- PACKAGES DRAWER & OVERLAY (FROSTED GLASS) -->
 <div class="drawer-overlay" id="drawerOverlay"></div>
-<aside class="packages-drawer" id="packagesDrawer" aria-hidden="true">
+<div class="packages-drawer" id="packagesDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" aria-hidden="true" inert>
     <div class="drawer-header">
         <div class="drawer-title-wrap">
-            <h2 class="drawer-title">已有升级包</h2>
+            <h2 class="drawer-title" id="drawerTitle">已有升级包</h2>
             <span class="packages-count" id="filesSummary">加载中...</span>
         </div>
         <button type="button" class="btn-close-drawer" id="btnCloseDrawer" aria-label="关闭抽屉" title="关闭 (Esc)">
@@ -257,10 +259,10 @@
             <div id="filesList"></div>
         </div>
     </div>
-</aside>
+</div>
 
 <!-- BATCH IMPORT / EDIT MODAL (FROSTED GLASS) -->
-<div class="modal-overlay" id="batchModalOverlay" aria-hidden="true">
+<div class="modal-overlay" id="batchModalOverlay" aria-hidden="true" inert>
     <div class="modal-dialog" role="dialog" aria-labelledby="batchModalTitle" aria-modal="true">
         <div class="modal-header">
             <div class="modal-title-wrap">
@@ -289,8 +291,6 @@
             <button type="button" class="btn-modal-cancel" id="btnCancelBatchModal">取消</button>
             <button type="button" class="btn-modal-confirm" id="btnConfirmBatchModal">确认同步到胶囊</button>
         </div>
-    </div>
-</div>
     </div>
 </div>
 

@@ -5,6 +5,7 @@
 let versionData=[],packageNameTemplate='',eventSource=null,currentSeries='v6',isBuilding=false;
 let existingFilesData=[],logExpanded=false,lastLogSeq=0,currentTaskId='',sseRetries=0;
 let overviewTimer=null,overviewLoading=false;
+let lastFocusBeforeDrawer=null,lastFocusBeforeModal=null;
 const OVERVIEW_POLL_MS=5000;
 const TASK_QUERY_KEY='task_id';
 const ICON_DOWNLOAD='<svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M7.25 1h1.5v7.1l2.6-2.6 1.05 1.05L8 11.5 3.6 7.1 4.65 6.05l2.6 2.6V1ZM2 13h12v2H2v-2Z"/></svg>';
@@ -57,8 +58,18 @@ function setMode(m){
     document.querySelectorAll('#modeToggle input[name="buildMode"]').forEach(r=>{r.checked=r.value===m});
     document.getElementById('v6Workspace').classList.toggle('active',m==='v6');
     document.getElementById('v7Workspace').classList.toggle('active',m==='v7');
-    if(!isBuilding)checkBuildBtnStatus();
+    const url=new URL(location.href);
+    if(url.searchParams.get('series')!==m){
+        url.searchParams.set('series',m);
+        history.replaceState(null,'',url.pathname+url.search+url.hash);
+    }
+    if(!isBuilding){checkBuildBtnStatus();updateStepperLabels(m);}
     updateV7Preview();
+}
+
+function updateStepperLabels(m){
+    const step1=document.querySelector('.step-item[data-step="1"] .step-title');
+    if(step1)step1.textContent=m==='v7'?'1. 清单准备':'1. 差集计算';
 }
 function handleModeChange(e){
     const m=e.target&&e.target.value;
@@ -225,7 +236,7 @@ function updateV6Preview(){
     const existing=expected?(existingFilesData||[]).find(f=>f.name===expected):null;
 
     const info=document.createElement('span');
-    info.textContent=`✓ 已选定跨越 ${span} 个 patch 版本（${cur.value} → ${tgt.value}）`;
+    info.textContent=`✓ 已选定跨越 ${span} 个 patch 版本（${cur.display||cur.value} → ${tgt.display||tgt.value}）`;
     el.appendChild(info);
     if(existing){
         const link=document.createElement('a');
@@ -302,6 +313,28 @@ function setLogExpanded(v){
     if(logExpanded&&el)requestAnimationFrame(()=>{el.scrollTop=el.scrollHeight});
 }
 
+function fallbackCopy(text,successMessage){
+    const ta=document.createElement('textarea');
+    ta.value=text;ta.setAttribute('readonly','');
+    ta.style.position='fixed';ta.style.top='-1000px';ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.select();ta.setSelectionRange(0,ta.value.length);
+    let ok=false;
+    try{ok=document.execCommand('copy')}catch(e){}
+    ta.remove();
+    if(ok)showToast(successMessage);
+    else showToast('复制失败，请手动选择文本','error');
+}
+function copyTextToClipboard(text,successMessage){
+    if(window.isSecureContext&&navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text)
+            .then(()=>showToast(successMessage))
+            .catch(()=>fallbackCopy(text,successMessage));
+    }else{
+        fallbackCopy(text,successMessage);
+    }
+}
+
 function copyLogsToClipboard(){
     const el=document.getElementById('buildLog');
     if(!el||!el.textContent.trim()){
@@ -309,16 +342,7 @@ function copyLogsToClipboard(){
         return;
     }
     const entries=Array.from(el.querySelectorAll('.log-entry')).map(e=>e.textContent).join('\n');
-    const text=entries||el.textContent;
-    if(navigator.clipboard&&navigator.clipboard.writeText){
-        navigator.clipboard.writeText(text).then(()=>{
-            showToast('控制台日志已复制到剪贴板');
-        }).catch(()=>{
-            showToast('复制失败，请手动选择日志','error');
-        });
-    }else{
-        showToast('浏览器不支持剪贴板API','error');
-    }
+    copyTextToClipboard(entries||el.textContent,'控制台日志已复制到剪贴板');
 }
 
 function clearLogScreen(){
@@ -328,14 +352,14 @@ function clearLogScreen(){
 }
 
 function notifyBuildComplete(title,body){
-    if(!('Notification' in window))return;
+    if(!window.isSecureContext||!('Notification' in window))return;
     if(Notification.permission==='granted'){
         try{new Notification(title,{body,icon:'static/favicon.ico'})}catch(e){}
     }
 }
 
 function requestNotificationPermission(){
-    if(!('Notification' in window))return;
+    if(!window.isSecureContext||!('Notification' in window))return;
     if(Notification.permission==='default'){
         Notification.requestPermission();
     }
@@ -344,15 +368,7 @@ function requestNotificationPermission(){
 function copyCurlCommand(fileName){
     const url=`${window.location.origin}/download-existing/${encodeURIComponent(fileName)}`;
     const cmd=`curl -O "${url}"`;
-    if(navigator.clipboard&&navigator.clipboard.writeText){
-        navigator.clipboard.writeText(cmd).then(()=>{
-            showToast('已复制 curl 下载命令');
-        }).catch(()=>{
-            showToast('复制命令失败','error');
-        });
-    }else{
-        showToast(cmd);
-    }
+    copyTextToClipboard(cmd,'已复制 curl 下载命令');
 }
 function currentProgressPercent(){
     const w=parseFloat(document.getElementById('progressBar').style.width);
@@ -389,7 +405,7 @@ function startBuildProcess(e){
         payload={series:'v6',current:cv,target:tv};
     }
 
-    isBuilding=true;sseRetries=0;window.addEventListener('beforeunload',beforeUnloadHandler);
+    isBuilding=true;sseRetries=0;updateStepperLabels(currentSeries);window.addEventListener('beforeunload',beforeUnloadHandler);
     requestNotificationPermission();
     currentTaskId='';showCancelButton(true,false);setBuildButtonsBusy();hideCompletionActions();
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
@@ -490,7 +506,10 @@ function handleBuildStatus(d){
     const st=document.getElementById('taskStateText');
     const mt=document.getElementById('taskMessageText'),logs=Array.isArray(d.logs)?d.logs:[];
     // 刷新恢复任务时，用任务类型校准当前面板
-    if((d.task_type==='v6'||d.task_type==='v7')&&d.task_type!==currentSeries)setMode(d.task_type);
+    if(d.task_type==='v6'||d.task_type==='v7'){
+        updateStepperLabels(d.task_type);
+        if(d.task_type!==currentSeries)setMode(d.task_type);
+    }
     if(d.task_id){
         currentTaskId=d.task_id;
         if(isBuilding){
@@ -839,20 +858,41 @@ function updateFilesSummary(n){
     if(s)s.textContent=n+' 个包';
     const hb=document.getElementById('headerPackagesCount');
     if(hb)hb.textContent=n;
+    const trigger=document.getElementById('btnToggleDrawer');
+    if(trigger)trigger.setAttribute('aria-label',`查看已有升级包（${n} 个）`);
 }
 
 function openDrawer(){
     const d=document.getElementById('packagesDrawer');
     const o=document.getElementById('drawerOverlay');
-    if(d){d.classList.add('open');d.setAttribute('aria-hidden','false')}
+    const trigger=document.getElementById('btnToggleDrawer');
+    if(!d)return;
+    lastFocusBeforeDrawer=document.activeElement;
+    const shell=document.querySelector('.app-shell');
+    if(shell)shell.inert=true;
+    d.inert=false;d.removeAttribute('inert');
+    d.classList.add('open');d.setAttribute('aria-hidden','false');
+    if(trigger)trigger.setAttribute('aria-expanded','true');
     if(o)o.classList.add('open');
+    setTimeout(()=>{const close=document.getElementById('btnCloseDrawer');if(close)close.focus()},50);
 }
 
 function closeDrawer(){
     const d=document.getElementById('packagesDrawer');
     const o=document.getElementById('drawerOverlay');
-    if(d){d.classList.remove('open');d.setAttribute('aria-hidden','true')}
+    const trigger=document.getElementById('btnToggleDrawer');
+    const wasOpen=!!(d&&d.classList.contains('open'));
+    if(d){
+        d.classList.remove('open');d.setAttribute('aria-hidden','true');d.inert=true;
+    }
+    if(trigger)trigger.setAttribute('aria-expanded','false');
     if(o)o.classList.remove('open');
+    const shell=document.querySelector('.app-shell');
+    if(shell)shell.inert=false;
+    if(wasOpen&&lastFocusBeforeDrawer&&lastFocusBeforeDrawer.focus){
+        lastFocusBeforeDrawer.focus();
+    }
+    lastFocusBeforeDrawer=null;
 }
 function filterExistingFiles(){
     const q=document.getElementById('fileSearchInput').value.toLowerCase();
@@ -957,8 +997,12 @@ function openBatchModal(){
     const textarea=document.getElementById('batchModalTextarea');
     if(!modal||!textarea)return;
 
+    lastFocusBeforeModal=document.activeElement;
+    const shell=document.querySelector('.app-shell');
+    if(shell)shell.inert=true;
     textarea.value=v7Tags.join('\n');
     updateBatchModalCounter();
+    modal.inert=false;modal.removeAttribute('inert');
     modal.classList.add('open');
     modal.setAttribute('aria-hidden','false');
     setTimeout(()=>textarea.focus(),60);
@@ -967,8 +1011,16 @@ function openBatchModal(){
 function closeBatchModal(){
     const modal=document.getElementById('batchModalOverlay');
     if(!modal)return;
+    const wasOpen=modal.classList.contains('open');
     modal.classList.remove('open');
     modal.setAttribute('aria-hidden','true');
+    modal.inert=true;
+    const shell=document.querySelector('.app-shell');
+    if(shell)shell.inert=false;
+    if(wasOpen&&lastFocusBeforeModal&&lastFocusBeforeModal.focus){
+        lastFocusBeforeModal.focus();
+    }
+    lastFocusBeforeModal=null;
 }
 
 function updateBatchModalCounter(){
@@ -983,7 +1035,7 @@ function confirmBatchModal(){
     const textarea=document.getElementById('batchModalTextarea');
     if(!textarea)return;
     v7Tags=[];
-    const added=addV7Tokens(textarea.value);
+    addV7Tokens(textarea.value);
     closeBatchModal();
     showToast(`已同步 ${v7Tags.length} 个镜像胶囊`,'success');
 }
@@ -1112,6 +1164,19 @@ function initV7InputListeners(){
     if(btnConfirmModal)btnConfirmModal.addEventListener('click',confirmBatchModal);
 }
 
+function trapFocus(container,e){
+    if(!container)return;
+    const selectors='a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    const items=Array.from(container.querySelectorAll(selectors)).filter(el=>el.getClientRects().length>0);
+    if(!items.length){e.preventDefault();return}
+    const first=items[0],last=items[items.length-1],active=document.activeElement;
+    if(e.shiftKey&&(active===first||!container.contains(active))){
+        e.preventDefault();last.focus();
+    }else if(!e.shiftKey&&(active===last||!container.contains(active))){
+        e.preventDefault();first.focus();
+    }
+}
+
 /* ================================================================
    LISTENERS
    ================================================================ */
@@ -1149,9 +1214,15 @@ function initEventListeners(){
     const drawerOverlay=document.getElementById('drawerOverlay');
     if(drawerOverlay)drawerOverlay.addEventListener('click',closeDrawer);
     document.addEventListener('keydown',e=>{
-        if(e.key==='Escape'){
-            closeDrawer();
-            closeBatchModal();
+        const modal=document.getElementById('batchModalOverlay');
+        if(modal&&modal.classList.contains('open')){
+            if(e.key==='Escape'){closeBatchModal();return}
+            if(e.key==='Tab'){trapFocus(modal.querySelector('.modal-dialog'),e);return}
+        }
+        const drawer=document.getElementById('packagesDrawer');
+        if(drawer&&drawer.classList.contains('open')){
+            if(e.key==='Escape'){closeDrawer();return}
+            if(e.key==='Tab'){trapFocus(drawer,e);return}
         }
     });
 
