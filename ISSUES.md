@@ -1,61 +1,79 @@
 # 问题清单 — dev 分支
 
-> 更新日期：2026-10-22
+> 更新日期：2026-10-26
 > 当前策略：**稳定优先**，非必要不修改构建主链路；凭据和升级包清理暂不处理。
 
-## 仍需关注
-
-### P1
+## P1：优先关注
 
 **1. containerd 跨 namespace 历史残留**
 - `default` namespace 的历史镜像可能导致 `nerdctl -n k8s.io save` 报
   `content digest ... not found`。
-- 已做低风险治理：固定 `CONTAINERD_NAMESPACE=k8s.io`、新增只读巡检
+- 已做低风险治理：固定 `CONTAINERD_NAMESPACE=k8s.io`、只读巡检
   `bin/check_containerd.py`、处理手册 `docs/CONTAINERD_RUNBOOK.md`。
 - 未修改 `pull_save.sh` 主流程。
 
 **2. 多节点部署限制**
-- `auto-pancking-pvc` 和 Redis PVC 都基于 hostPath + ReadWriteOnce。
-- 没有 nodeAffinity；多节点集群中 Pod 调度到其他节点可能挂载失败。
-- 当前单节点环境不受影响。
+- 升级包和 Redis 都使用 hostPath + ReadWriteOnce，且没有 nodeAffinity。
+- 多节点集群中 Pod 调度到其他节点可能挂载失败。
+- 当前按单节点部署理解；多节点需要 nodeAffinity 或共享存储。
 
-**3. `upgrade_packages/` 无自动清理**
+**3. `upgrade_packages/` 无自动清理**（暂不处理）
 - 历史包只增不减，长期会占满 20Gi PVC。
-- 按当前策略暂不处理，建议先人工清理。
 
-**4. 镜像仓库凭据硬编码**
-- `bin/pull_save.sh` 中有明文账号密码。
-- 内网环境暂不处理。
+**4. 镜像仓库凭据硬编码**（暂不处理）
+- `bin/pull_save.sh` 中有明文账号密码；内网环境暂不调整。
 
-**5. 没有 CI**
-- `tests/test_app_logic.py` 目前有 19 项单测，但需要手动执行。
-- 建议后续加一个最小 CI job：安装依赖 + 跑单测 + 构建镜像。
+## P2：体验/可靠性
 
-**6. 升级预览不完整**
-- 已显示“跨越 N 个 patch”。
-- 镜像数量和预计包大小需要后端扫描 nuwa 差异，暂未实现。
+**5. SSE 断连后允许直接新建构建**
+- `handleStreamLost()` 会把 `isBuilding` 设为 `false`，但旧任务可能仍在运行。
+- 用户可能重复提交，且当前界面会丢失旧任务跟踪。
+- 建议保留“任务恢复中”状态，或提示先去任务中心确认。
 
-### P2（当前规模可接受）
+**6. 构建中切换 V6/V7 会被强制拉回**
+- `handleBuildStatus()` 每条 SSE 都按 `task_type` 校准面板。
+- 用户切到另一模式准备下一单时会被拉回；建议只在首次恢复任务时校准。
 
-- **SSE 长连接占用 gunicorn 线程**：1~2 个用户规模下 2 workers × 4 threads 足够。
-- **`logs/app.log` 无轮转**：日志量不大，但长期运行建议加轮转或启动截断。
-- **PVC 名拼写错误**：`auto-pancking-pvc`，改名需要迁移，暂不动。
-- **`bin/nerdctl` / `bin/ossutil` 随仓库分发**：约 46MB，可后续改为构建时下载。
-- **`deepflow_patch_upgrade.sh` 目标环境写死**：目标仓库、组件列表、`upgrade_version` 需要按客户环境修改。
-- **`tar.gz` 压缩收益低**：镜像层已压缩，长期可评估 OCI archive 或 `skopeo` 直出。
-- **滚动更新会中断构建**：当前使用频率低，构建一般不会和更新重叠，暂不处理。
+**7. Worker 在线阈值偏短**
+- `app.py` 使用 30 秒判断，心跳 TTL 是 60 秒。
+- Redis 抖动时可能短暂显示“Worker 离线”；建议阈值与 TTL 对齐。
+
+**8. 任务中心轮询无超时**
+- `refreshTaskOverview()` 没有 AbortController/超时。
+- 请求挂住时 `overviewLoading` 会一直为 `true`，后续轮询被跳过。
+
+**9. V7 不支持带端口的 registry**
+- 校验正则的镜像名部分不允许 `:`，`registry:5000/image:tag` 会被判为格式错误。
+- 同时确认 `pull_save.sh` 对完整 registry 地址的前缀处理。
+
+**10. 没有 CI**
+- 当前有 23 个后端单测，但只能手动执行。
+- 建议加最小 CI：安装依赖 + 单测 + 镜像构建。
+
+**11. `logs/app.log` 无轮转**
+- 长期运行会持续增长，建议加大小限制或启动截断。
+
+**12. 任务中心只保留最近 5 条完成记录**
+- 更早记录只能通过 Redis TTL 或升级包列表查看；需要历史可加查询接口。
+
+## P3：细节/文档
+
+- HTTP 环境下 `window.isSecureContext=false`，浏览器通知功能实际不会工作。
+- `copyCurlCommand` 使用 `window.location.origin`，部署到子路径/Ingress 下会缺路径。
+- `bin/nerdctl` / `bin/ossutil` 约 46MB 仍在仓库中。
+- PVC 名拼写 `auto-pancking-pvc`。
+- `deepflow_patch_upgrade.sh` 的目标仓库、组件列表、`upgrade_version` 仍写死。
+- `max_concurrent_tasks=1` 与 2 个 worker 副本：单节点可把副本降为 1；保留 2 个则多一个空闲副本作为故障备份。
 
 ## 已完成的重点
 
-- 拉取超时保护、升级包原子写入、V6 版本参数防路径穿越。
-- 并发槽位改为 slot 锁 + TTL；Redis AOF + PVC 持久化。
-- worker 心跳 10s/60s；Redis 异常、非法队列消息、已结束任务的处理。
-- OSS/GitLab/仓库登录/拉取/保存重试；`/versions` 缓存与回退。
-- SSE 增量日志与断线重连；任务可取消；V6 可搜索版本选择器。
-- V7 输入校验/去重；升级预览与已有包匹配提示。
-- Python 3.12 基础镜像与 Flask 3.1 等依赖升级。
-- `redeploy.sh` 唯一 tag 发布；部署清单镜像 tag 固化。
-- 仓库清理（跟踪文件 1469 → 29）；新增 19 项后端测试。
-- containerd 只读巡检脚本与 runbook。
+- 回收失活任务时清理 slot，并增加 `build:reclaim:lock` 互斥锁，避免单并发阻塞和重复入队。
+- 23 个后端单测，覆盖槽位、取消、回收、日志、SSE、下载、任务中心等。
+- 任务中心：进行中/最近完成、Worker 在线、队列、槽位、磁盘余量。
+- 前端：可搜索版本选择器、V7 胶囊/批量编辑、流水线步骤条、历史包抽屉、SSE 断线恢复。
+- 拉取超时保护、原子打包、V6 参数防路径穿越、Redis AOF + PVC、OSS/GitLab 重试。
+- Python 3.12 / Flask 3.1 / gunicorn 23 / redis 5.2。
+- `bin/redeploy.sh` 唯一 tag 发布，部署清单镜像 tag 固化。
+- 仓库清理和 containerd 只读巡检 + runbook。
 
-> 历史修复明细可通过 `git log --oneline` 查看，不在本文件重复维护。
+> 历史修复明细通过 `git log --oneline` 查看，不在本文件重复维护。

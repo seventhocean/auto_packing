@@ -34,7 +34,7 @@
 ### 1.2 与旧实现相比的重要变化
 
 - 不再依赖 `Semaphore(3)` 这类进程内并发控制。
-- 当前并发控制由 Redis 中的 `active_builds` 计数和 `max_concurrent_tasks` 配置驱动。
+- 当前并发控制由 Redis 中的 `task:<id>:slot` 和 `max_concurrent_tasks` 配置驱动；`builds:active` 仅作为观测值。
 - Web 进程与构建执行已经解耦，Web 只负责入队和状态查询，真正构建由 `worker.py` 执行。
 - 任务状态和日志不再只存在内存里，而是保存在 Redis，便于多副本部署。
 - 前端界面已改为双模式工作台：
@@ -157,7 +157,7 @@ redis:
 
 - 每个 worker 真正开始执行前，会调用 `try_acquire_build_slot()`。
 - 槽位以 `task:<id>:slot` 为准：先 `SET NX` 抢占，再统计现有 slot 数量；超过 `max_concurrent_tasks` 时释放并继续排队。
-- slot 带 6 小时 TTL 兜底，worker 异常退出后不会永久占用并发额度。
+- slot 带 6 小时 TTL 兜底；失活回收时会删除对应任务的 slot，避免阻塞后续任务。
 - `builds:active` 仅作为观测值，由实际 slot 数量同步。
 - 每个 worker 进程串行处理任务，实际并发上限为 `min(max_concurrent_tasks, worker 副本数)`；单节点部署下配置为 1，同一时刻只执行一个构建；其余任务保持排队，避免并行拉镜像把本机磁盘和网络打满。
 - worker 通过 `heartbeat_loop()` 每 10 秒写一次心跳，TTL 为 60 秒（避免 Redis 短暂抖动导致任务被误回收）。
@@ -186,6 +186,12 @@ redis:
   - 容器镜像构建文件。
 - `requirements.txt`
   - Python 依赖。
+- `AGENTS.md`
+  - 通用 AI/开发助手指南：架构、命令、约束、已知问题入口。
+- `ISSUES.md`
+  - 当前问题清单与已完成优化摘要。
+- `docs/`
+  - 运维手册，目前包含 containerd 跨 namespace 处理手册。
 
 ### 4.2 业务目录
 
@@ -322,10 +328,11 @@ redis:
 
 ### 6.3 V7 交互逻辑
 
-- 用户在文本框中输入镜像列表。
-- 支持按换行、逗号、中文逗号、分号拆分。
-- 实时校验 `name:tag` 格式（支持 registry 路径），自动去重并提示非法行。
+- 用户通过镜像胶囊输入框逐条添加，或使用“批量编辑 / 粘贴”弹窗一次粘贴多行。
+- 支持换行、逗号、中文逗号、分号、空格分隔。
+- 实时校验 `name:tag` 格式（支持 registry 域名路径），自动去重并提示非法行。
 - 存在非法行时构建按钮禁用，避免把脏数据写入镜像清单。
+- 注意：当前校验不支持带端口的 registry（如 `registry:5000/image:tag`）。
 
 注意：
 
@@ -604,7 +611,7 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
 
 ### 11.1 关键点
 
-- app 与 worker 使用同一个镜像，tag 固化在清单中（当前 `auto_packing:20261026-dd1a042`，由 `bin/redeploy.sh` 自动更新）
+- app 与 worker 使用同一个镜像，tag 固化在清单中（由 `bin/redeploy.sh` 自动更新，具体值以清单为准）
 - worker 通过 `args: ["python", "worker.py"]` 启动
 - Redis 密码通过 Secret 注入
 - app / worker 都依赖：
@@ -722,8 +729,8 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
    - 理解最终交付物如何被使用。
 7. `apply/maintenance-app-deployment.yaml`
    - 理解线上部署形态。
-8. `CLAUDE.md`
-   - AI 助手的代码库指南，包含架构速览、命令、环境变量、已知问题。
+8. `AGENTS.md`
+   - 通用 AI/开发助手指南，包含架构速览、命令、环境变量、修改约束。
 9. `ISSUES.md`
    - 当前已知问题与已完成优化摘要。
 10. `docs/CONTAINERD_RUNBOOK.md`

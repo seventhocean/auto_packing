@@ -17,7 +17,7 @@ nuwa/
 Dockerfile*
 dockerfile
 README.md
-CLAUDE.md
+AGENTS.md
 DESIGN*.md
 ISSUES.md
 auto_packing_latest
