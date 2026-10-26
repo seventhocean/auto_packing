@@ -330,6 +330,39 @@ class AppLogicTest(unittest.TestCase):
         # 没有占用构建槽位
         self.assertEqual(ap._count_active_slots(), 0)
 
+    def test_reclaim_clears_stale_slot_and_requeues_task(self):
+        import worker
+
+        ap.REDIS_CONFIG['max_concurrent_tasks'] = 1
+        ap.initialize_task_status('dead-task', 'queued')
+        self.assertTrue(ap.try_acquire_build_slot('dead-task'))
+        payload = json.dumps({'task_id': 'dead-task', 'task_type': 'v7', 'images': []})
+        ap.redis_client.rpush(ap.build_processing_key('dead-worker'), payload)
+
+        reclaimed = worker.reclaim_stale_tasks()
+
+        self.assertEqual(reclaimed, 1)
+        # 失效 worker 的 slot 必须被清掉，否则单并发下其他任务会一直排队
+        self.assertEqual(ap._count_active_slots(), 0)
+        self.assertEqual(ap.redis_client.llen(ap.build_queue_key()), 1)
+        self.assertEqual(ap.redis_client.llen(ap.build_processing_key('dead-worker')), 0)
+
+        ap.initialize_task_status('new-task', 'queued')
+        self.assertTrue(ap.try_acquire_build_slot('new-task'))
+        ap.release_build_slot('new-task')
+
+    def test_reclaim_is_skipped_when_lock_is_held(self):
+        import worker
+
+        ap.initialize_task_status('dead-task', 'queued')
+        payload = json.dumps({'task_id': 'dead-task', 'task_type': 'v7', 'images': []})
+        ap.redis_client.rpush(ap.build_processing_key('dead-worker'), payload)
+        ap.redis_client.set(worker.RECLAIM_LOCK_KEY, 'other-worker')
+
+        self.assertEqual(worker.reclaim_stale_tasks(), 0)
+        self.assertEqual(ap.redis_client.llen(ap.build_queue_key()), 0)
+        self.assertEqual(ap.redis_client.llen(ap.build_processing_key('dead-worker')), 1)
+
     def test_run_and_stream_can_be_cancelled(self):
         log_path = os.path.join(self.tmpdir, 'cancel.log')
         threading.Timer(0.5, lambda: ap.redis_client.set(ap.task_cancel_key('cancel-stream'), '1')).start()

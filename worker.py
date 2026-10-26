@@ -18,6 +18,7 @@ from app import (
     redis_client,
     run_build_task,
     run_build_task_v7,
+    task_slot_key,
     try_acquire_build_slot,
     update_task_status,
     worker_heartbeat_key,
@@ -32,6 +33,8 @@ HEARTBEAT_KEY = worker_heartbeat_key(WORKER_ID)
 HEARTBEAT_INTERVAL_SECONDS = int(os.environ.get("WORKER_HEARTBEAT_INTERVAL_SECONDS", 10))
 HEARTBEAT_TTL_SECONDS = int(os.environ.get("WORKER_HEARTBEAT_TTL_SECONDS", 60))
 RECLAIM_INTERVAL_SECONDS = int(os.environ.get("WORKER_RECLAIM_INTERVAL_SECONDS", 30))
+RECLAIM_LOCK_KEY = "{}:build:reclaim:lock".format(REDIS_CONFIG["key_prefix"])
+RECLAIM_LOCK_TTL_SECONDS = 120
 
 
 def heartbeat_loop():
@@ -45,27 +48,54 @@ def heartbeat_loop():
 
 
 def reclaim_stale_tasks():
-    processing_pattern = "{}:build:processing:*".format(REDIS_CONFIG["key_prefix"])
-    reclaimed_count = 0
-    for processing_key in redis_client.scan_iter(match=processing_pattern):
-        worker_id = processing_key.split(":")[-1]
-        heartbeat_key = worker_heartbeat_key(worker_id)
-        if redis_client.exists(heartbeat_key):
-            continue
+    # 多 worker 副本会同时执行回收；加一个短锁，避免同一批任务被重复入队。
+    try:
+        acquired = redis_client.set(RECLAIM_LOCK_KEY, WORKER_ID, nx=True, ex=RECLAIM_LOCK_TTL_SECONDS)
+    except Exception as exc:
+        write_log("获取回收锁失败：{}".format(str(exc)), level="WARNING")
+        return 0
+    if not acquired:
+        return 0
 
-        pending_tasks = redis_client.lrange(processing_key, 0, -1)
-        if not pending_tasks:
+    try:
+        processing_pattern = "{}:build:processing:*".format(REDIS_CONFIG["key_prefix"])
+        reclaimed_count = 0
+        for processing_key in redis_client.scan_iter(match=processing_pattern):
+            worker_id = processing_key.split(":")[-1]
+            heartbeat_key = worker_heartbeat_key(worker_id)
+            if redis_client.exists(heartbeat_key):
+                continue
+
+            pending_tasks = redis_client.lrange(processing_key, 0, -1)
+            if not pending_tasks:
+                redis_client.delete(processing_key)
+                continue
+
+            for raw_payload in reversed(pending_tasks):
+                # 失活 worker 的 slot 不会自己释放；先清理，否则 max_concurrent_tasks=1
+                # 时其他任务会一直抢不到槽位，直到 6 小时 TTL 到期。
+                try:
+                    payload = json.loads(raw_payload)
+                    task_id = payload.get("task_id") if isinstance(payload, dict) else None
+                    if task_id:
+                        redis_client.delete(task_slot_key(task_id))
+                except (TypeError, ValueError):
+                    pass
+                redis_client.rpush(build_queue_key(), raw_payload)
             redis_client.delete(processing_key)
-            continue
+            reclaimed_count += 1
+            write_log("检测到失活 worker {}，已回收 {} 个任务".format(worker_id, len(pending_tasks)), level="WARNING")
 
-        for raw_payload in reversed(pending_tasks):
-            redis_client.rpush(build_queue_key(), raw_payload)
-        redis_client.delete(processing_key)
-        reclaimed_count += 1
-        write_log("检测到失活 worker {}，已回收 {} 个任务".format(worker_id, len(pending_tasks)), level="WARNING")
-
-    if reclaimed_count > 0:
-        reconcile_build_counter()
+        if reclaimed_count > 0:
+            reconcile_build_counter()
+        return reclaimed_count
+    finally:
+        try:
+            # 锁过期后可能已被其他 worker 获取；只删除自己持有的锁。
+            if redis_client.get(RECLAIM_LOCK_KEY) == WORKER_ID:
+                redis_client.delete(RECLAIM_LOCK_KEY)
+        except Exception:
+            pass
 
 
 def reclaim_loop():
