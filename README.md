@@ -191,7 +191,7 @@ redis:
 - `ISSUES.md`
   - 当前问题清单与已完成优化摘要。
 - `docs/`
-  - 运维手册，目前包含 containerd 跨 namespace 处理手册。
+  - 运维与架构手册：containerd 处理手册、镜像交付与多节点评估。
 
 ### 4.2 业务目录
 
@@ -223,7 +223,7 @@ redis:
 - `tests/`
   - 后端单元测试（`python -m unittest tests.test_app_logic`）。
 - `docs/`
-  - 运维与巡检手册（`CONTAINERD_RUNBOOK.md`）。
+  - 运维与架构手册：`CONTAINERD_RUNBOOK.md`、`ARTIFACT_DELIVERY.md`。
 
 ### 4.3 运行时依赖目录
 
@@ -735,6 +735,8 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
    - 当前已知问题与已完成优化摘要。
 10. `docs/CONTAINERD_RUNBOOK.md`
     - containerd 跨 namespace 问题的巡检、应急修复与清理规范。
+11. `docs/ARTIFACT_DELIVERY.md`
+    - 镜像交付格式、skopeo 方案与 3 节点部署评估。
 
 ## 15. 一句话总结当前项目逻辑
 

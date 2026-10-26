@@ -217,7 +217,8 @@ node --check static/app.js
 
 ## 12. 已知问题与修改建议
 
-当前问题见 [`ISSUES.md`](./ISSUES.md)。重点注意：
+当前问题见 [`ISSUES.md`](./ISSUES.md)；镜像交付与多节点方案见
+[`docs/ARTIFACT_DELIVERY.md`](./docs/ARTIFACT_DELIVERY.md)。重点注意：
 
 - containerd `default` namespace 历史残留可能导致 `nerdctl save` 报
   `content digest not found`；先跑 `bin/check_containerd.py`，不要盲目重试 save。
@@ -259,7 +260,7 @@ node --check static/app.js
 │   ├── maintenance-app-deployment.yaml
 │   └── persistent-volume.yaml
 ├── tests/                 # 后端单测
-├── docs/                  # containerd runbook
+├── docs/                  # containerd runbook / 交付架构评估
 ├── latest_image_list/     # 运行时镜像清单
 ├── images/                # 构建临时目录
 ├── upgrade_packages/      # 升级包产物
