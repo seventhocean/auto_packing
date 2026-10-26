@@ -168,7 +168,7 @@ spec:
       containers:
       # 真正的 maintenance-app 业务容器。
       - name: maintenance-app
-        image: auto_packing:20261022-2b453e0
+        image: auto_packing:20261026-dd1a042
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -312,7 +312,7 @@ spec:
       containers:
       # 真正的 worker 业务容器。
       - name: maintenance-worker
-        image: auto_packing:20261022-2b453e0
+        image: auto_packing:20261026-dd1a042
         imagePullPolicy: IfNotPresent
         args:
         - python

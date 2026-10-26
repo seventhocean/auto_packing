@@ -604,7 +604,7 @@ REGISTRY=registry.example.com ./bin/redeploy.sh
 
 ### 11.1 关键点
 
-- app 与 worker 使用同一个镜像，tag 固化在清单中（当前 `auto_packing:20261022-2b453e0`，由 `bin/redeploy.sh` 自动更新）
+- app 与 worker 使用同一个镜像，tag 固化在清单中（当前 `auto_packing:20261026-dd1a042`，由 `bin/redeploy.sh` 自动更新）
 - worker 通过 `args: ["python", "worker.py"]` 启动
 - Redis 密码通过 Secret 注入
 - app / worker 都依赖：
