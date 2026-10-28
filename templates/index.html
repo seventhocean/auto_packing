@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeepFlow 升级包构建</title>
     <link rel="icon" href="static/favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="static/app.css?v=20261026a">
-    <script src="static/app.js?v=20261026a" defer></script>
+    <link rel="stylesheet" href="static/app.css?v=20261028b">
+    <script src="static/app.js?v=20261028b" defer></script>
 </head>
 <body data-mode="v6">
 <div class="app-shell">
@@ -21,16 +21,6 @@
                 <span class="btn-drawer-label">已有升级包</span>
                 <span class="header-badge" id="headerPackagesCount">-</span>
             </button>
-            <div class="mode-toggle" id="modeToggle" role="radiogroup" aria-label="构建模式">
-                <label class="mode-option">
-                    <input type="radio" name="buildMode" value="v6" aria-controls="v6Workspace" checked>
-                    <span>V6 Patch</span>
-                </label>
-                <label class="mode-option">
-                    <input type="radio" name="buildMode" value="v7" aria-controls="v7Workspace">
-                    <span>V7 Image</span>
-                </label>
-            </div>
         </div>
     </header>
 
@@ -38,13 +28,48 @@
     <div class="app-main">
         <main class="workspace">
 
+            <!-- MODE SWITCH：页面主决策，放在工作区顶部而不是 header 角落 -->
+            <div class="mode-switch" id="modeToggle" role="radiogroup" aria-label="构建模式">
+                <label class="mode-card">
+                    <input type="radio" name="buildMode" value="v6" aria-controls="v6Workspace" checked>
+                    <span class="mode-card-body">
+                        <span class="mode-card-icon">
+                            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9zm2 1v1.2h8V4.5H4zm0 3v1.2h5V7.5H4zm0 3v1.2h8v-1.2H4z"/></svg>
+                        </span>
+                        <span class="mode-card-text">
+                            <span class="mode-card-title">固定版本镜像获取</span>
+                            <span class="mode-card-desc">选版本线与起止 patch，自动算差集镜像并打包</span>
+                        </span>
+                    </span>
+                </label>
+                <label class="mode-card">
+                    <input type="radio" name="buildMode" value="v7" aria-controls="v7Workspace">
+                    <span class="mode-card-body">
+                        <span class="mode-card-icon">
+                            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 14 5v6l-6 3.5L2 11V5l6-3.5zm0 1.7L3.5 5.9v4.2L8 12.8l4.5-2.7V5.9L8 3.2zm0 2.1 2.6 1.6v2.2L8 10.7 5.4 9.1V6.9L8 5.3z"/></svg>
+                        </span>
+                        <span class="mode-card-text">
+                            <span class="mode-card-title">自定义镜像获取</span>
+                            <span class="mode-card-desc">手填镜像清单，直接拉取并打包</span>
+                        </span>
+                    </span>
+                </label>
+            </div>
+
             <!-- V6 Panel -->
             <div id="v6Workspace" class="workspace-panel active">
                 <form id="buildForm" class="form-card">
                     <div class="form-head">
                         <div class="v6-head-left">
-                            <h2 class="form-card-title">V6 Patch 升级</h2>
+                            <h2 class="form-card-title">构建参数</h2>
                             <span class="v6-badge-mode">版本差集构建</span>
+                        </div>
+                        <div class="channel-picker">
+                            <label class="channel-label" for="channelSelect">版本线</label>
+                            <span class="channel-select-wrap">
+                                <select class="channel-select" id="channelSelect" aria-label="选择版本线"></select>
+                                <svg class="channel-caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.7 3.3 6l1.1-1.1L8 8.5l3.6-3.6L12.7 6 8 10.7Z"/></svg>
+                            </span>
                         </div>
                     </div>
                     <div class="form-body">
@@ -86,7 +111,7 @@
                 <div class="form-card">
                     <div class="form-head">
                         <div class="v7-head-left">
-                            <h2 class="form-card-title">V7 镜像清单构建</h2>
+                            <h2 class="form-card-title">镜像清单</h2>
                             <span class="v7-badge-count" id="v7TagCountBadge">0 个镜像</span>
                         </div>
                         <div class="v7-head-actions">

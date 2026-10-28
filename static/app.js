@@ -3,6 +3,7 @@
    STATE
    ================================================================ */
 let versionData=[],packageNameTemplate='',eventSource=null,currentSeries='v6',isBuilding=false;
+let channelList=[],currentChannel='';
 let existingFilesData=[],logExpanded=false,lastLogSeq=0,currentTaskId='',sseRetries=0;
 let overviewTimer=null,overviewLoading=false;
 let lastFocusBeforeDrawer=null,lastFocusBeforeModal=null;
@@ -40,42 +41,93 @@ function showToast(message,type){
 /* ================================================================
    INIT
    ================================================================ */
-document.addEventListener('DOMContentLoaded',()=>{
-    const seriesParam=new URLSearchParams(location.search).get('series');
-    if(seriesParam==='v7'||seriesParam==='v6')currentSeries=seriesParam;
+document.addEventListener('DOMContentLoaded',async()=>{
+    const params=new URLSearchParams(location.search);
+    const modeParam=params.get('mode')||params.get('series');
+    if(modeParam==='v7'||modeParam==='custom')currentSeries='v7';
+    else if(modeParam==='v6'||modeParam==='patch')currentSeries='v6';
     initVersionPickers();initEventListeners();setMode(currentSeries);
-    fetchVersions(currentSeries);fetchExistingFiles();startTaskOverviewPolling();
+    await loadChannels(params.get('channel'));
+    fetchExistingFiles();startTaskOverviewPolling();
     // 刷新后凭 URL 中的 task_id 恢复正在进行的构建
-    const taskId=new URLSearchParams(location.search).get(TASK_QUERY_KEY);
+    const taskId=params.get(TASK_QUERY_KEY);
     if(taskId)resumeBuildTask(taskId);
 });
 
 /* ================================================================
-   MODE
+   MODE & CHANNEL
    ================================================================ */
 function setMode(m){
     currentSeries=m;document.body.dataset.mode=m;
     document.querySelectorAll('#modeToggle input[name="buildMode"]').forEach(r=>{r.checked=r.value===m});
     document.getElementById('v6Workspace').classList.toggle('active',m==='v6');
     document.getElementById('v7Workspace').classList.toggle('active',m==='v7');
-    const url=new URL(location.href);
-    if(url.searchParams.get('series')!==m){
-        url.searchParams.set('series',m);
-        history.replaceState(null,'',url.pathname+url.search+url.hash);
-    }
+    syncUrlParams();
     if(!isBuilding){checkBuildBtnStatus();updateStepperLabels(m);}
     updateV7Preview();
+}
+
+// 把「模式 + 版本线」写进 URL，刷新后能还原到同一屏
+function syncUrlParams(){
+    const url=new URL(location.href);
+    const mode=currentSeries==='v7'?'custom':'patch';
+    if(url.searchParams.get('mode')!==mode)url.searchParams.set('mode',mode);
+    url.searchParams.delete('series');
+    if(currentSeries==='v6'&&currentChannel){
+        if(url.searchParams.get('channel')!==currentChannel)url.searchParams.set('channel',currentChannel);
+    }else if(url.searchParams.has('channel')){
+        url.searchParams.delete('channel');
+    }
+    history.replaceState(null,'',url.pathname+url.search+url.hash);
+}
+
+async function loadChannels(preferred){
+    const sel=document.getElementById('channelSelect');
+    try{
+        const r=await fetch('/channels',{cache:'no-store'});
+        const d=await r.json();
+        if(d.success&&Array.isArray(d.channels))channelList=d.channels;
+    }catch(e){channelList=[]}
+    if(!channelList.length){
+        if(currentPicker)currentPicker.setOptions([],'版本线加载失败');
+        return;
+    }
+    const want=(preferred&&channelList.some(c=>c.key===preferred))
+        ? preferred
+        : (channelList.find(c=>c.is_default)||channelList[0]).key;
+    currentChannel=want;
+    if(sel){
+        sel.innerHTML=channelList.map(c=>`<option value="${escapeHtml(c.key)}">${escapeHtml(c.label)}</option>`).join('');
+        sel.value=want;
+    }
+    syncUrlParams();
+    fetchVersions(want);
+}
+
+function handleChannelChange(e){
+    const v=e.target.value;
+    if(!v||v===currentChannel)return;
+    currentChannel=v;
+    versionData=[];packageNameTemplate='';
+    if(targetPicker){targetPicker.setOptions([],'请先选择当前版本');targetPicker.setDisabled(true)}
+    updateV6Preview();checkBuildBtnStatus();syncUrlParams();
+    fetchVersions(v);
 }
 
 function updateStepperLabels(m){
     const step1=document.querySelector('.step-item[data-step="1"] .step-title');
     if(step1)step1.textContent=m==='v7'?'1. 清单准备':'1. 差集计算';
 }
+function setModeLocked(locked){
+    document.body.classList.toggle('is-building',!!locked);
+    document.querySelectorAll('#modeToggle input[name="buildMode"]').forEach(i=>{i.disabled=!!locked});
+}
+
 function handleModeChange(e){
     const m=e.target&&e.target.value;
     if(e.target.name!=='buildMode'||!m||m===currentSeries)return;
     setMode(m);
-    if(m==='v6'&&versionData.length===0)fetchVersions('v6');
+    if(m==='v6'&&versionData.length===0)fetchVersions(currentChannel);
 }
 
 /* ================================================================
@@ -183,16 +235,16 @@ function createVersionPicker(cfg){
     };
 }
 
-async function fetchVersions(series){
-    if(series!=='v6'){if(versionData.length>0)return;renderVersionOptions(true);return}
+async function fetchVersions(channel){
+    if(!channel)return;
     if(currentPicker)currentPicker.setOptions([], '加载中...');
     try{
-        const r=await fetch(`/versions?series=${encodeURIComponent(series)}`);
-        if(currentSeries!==series)return;
+        const r=await fetch(`/versions?channel=${encodeURIComponent(channel)}`);
+        if(currentChannel!==channel)return;
         const d=await r.json();
         if(d.success&&d.versions){versionData=d.versions;packageNameTemplate=d.package_name_template||'';renderVersionOptions()}
         else{versionData=[];renderVersionOptions(true)}
-    }catch(e){if(currentSeries!==series)return;versionData=[];renderVersionOptions(true)}
+    }catch(e){if(currentChannel!==channel)return;versionData=[];renderVersionOptions(true)}
 }
 function renderVersionOptions(isError){
     if(!currentPicker)return;
@@ -375,7 +427,7 @@ function currentProgressPercent(){
     return Number.isFinite(w)?w:0;
 }
 function finishBuild(){
-    isBuilding=false;
+    isBuilding=false;setModeLocked(false);
     window.removeEventListener('beforeunload',beforeUnloadHandler);
     if(eventSource){eventSource.close();eventSource=null}
     resetBuildButtons();
@@ -400,12 +452,12 @@ function startBuildProcess(e){
             return;
         }
         if(parsed.valid.length===0){showToast('请输入至少一个镜像名称','error');return}
-        payload={series:'v7',images:parsed.valid};
+        payload={mode:'custom',images:parsed.valid};
     }else{
-        payload={series:'v6',current:cv,target:tv};
+        payload={mode:'patch',channel:currentChannel,current:cv,target:tv};
     }
 
-    isBuilding=true;sseRetries=0;updateStepperLabels(currentSeries);window.addEventListener('beforeunload',beforeUnloadHandler);
+    isBuilding=true;sseRetries=0;updateStepperLabels(currentSeries);setModeLocked(true);window.addEventListener('beforeunload',beforeUnloadHandler);
     requestNotificationPermission();
     currentTaskId='';showCancelButton(true,false);setBuildButtonsBusy();hideCompletionActions();
     const bc=document.getElementById('buildCard'),bl=document.getElementById('buildLog');
@@ -444,7 +496,7 @@ function startBuildProcess(e){
 }
 
 function resumeBuildTask(taskId){
-    currentTaskId=taskId;isBuilding=true;sseRetries=0;
+    currentTaskId=taskId;isBuilding=true;sseRetries=0;setModeLocked(true);
     window.addEventListener('beforeunload',beforeUnloadHandler);
     requestNotificationPermission();
     setBuildButtonsBusy();showCancelButton(true,false);hideCompletionActions();
@@ -479,7 +531,7 @@ function connectBuildStream(url){
 }
 
 function handleStreamLost(){
-    isBuilding=false;
+    isBuilding=false;setModeLocked(false);
     window.removeEventListener('beforeunload',beforeUnloadHandler);
     resetBuildButtons();checkBuildBtnStatus();
     document.getElementById('taskStateText').textContent='连接中断';
@@ -490,7 +542,7 @@ function handleStreamLost(){
 
 function resetBuildState(){
     resetBuildButtons();
-    isBuilding=false;window.removeEventListener('beforeunload',beforeUnloadHandler);
+    isBuilding=false;setModeLocked(false);window.removeEventListener('beforeunload',beforeUnloadHandler);
     lastLogSeq=0;sseRetries=0;currentTaskId='';showCancelButton(false);
     if(eventSource){eventSource.close();eventSource=null}
     document.getElementById('buildCard').classList.remove('active');
@@ -505,11 +557,16 @@ let newPackageName='';
 function handleBuildStatus(d){
     const st=document.getElementById('taskStateText');
     const mt=document.getElementById('taskMessageText'),logs=Array.isArray(d.logs)?d.logs:[];
-    // 刷新恢复任务时，用任务类型校准当前面板
-    if(d.task_type==='v6'||d.task_type==='v7'){
-        updateStepperLabels(d.task_type);
-        if(d.task_type!==currentSeries)setMode(d.task_type);
+    // 刷新恢复任务时，用任务元数据校准当前模式与版本线
+    const taskMode=(d.mode==='custom'||(!d.mode&&d.task_type==='v7'))?'v7':'v6';
+    if(taskMode==='v6'&&d.channel&&d.channel!==currentChannel){
+        currentChannel=d.channel;
+        const sel=document.getElementById('channelSelect');
+        if(sel)sel.value=d.channel;
+        fetchVersions(d.channel);
     }
+    updateStepperLabels(taskMode);
+    if(taskMode!==currentSeries)setMode(taskMode);
     if(d.task_id){
         currentTaskId=d.task_id;
         if(isBuilding){
@@ -716,9 +773,11 @@ function taskRowHtml(t,isActive,serverTime){
         :(t.package_name
             ?`<a class="btn-sm" href="/download-existing/${encodeURIComponent(t.package_name)}" data-download="1">下载</a>`
             :'');
+    const chipText=t.channel||((t.mode==='custom'||t.task_type==='v7')?'自定义':'');
+    const chip=chipText?`<span class="task-channel">${escapeHtml(chipText)}</span>`:'';
     return `<div class="task-item">`
         +`<div class="task-main">`
-        +`<div class="task-line"><span class="task-label" title="${label}">${label}</span>`
+        +`<div class="task-line">${chip}<span class="task-label" title="${label}">${label}</span>`
         +`<span class="task-status ${status.cls}">${status.text}</span></div>`
         +`<div class="task-message" title="${meta}">${meta}</div>`
         +`</div><div class="task-actions">${actions}</div></div>`;
@@ -847,10 +906,13 @@ function renderExistingFiles(files){
     nf.style.display='none';
     fl.innerHTML=files.map(f=>{
         const m=f.name.match(/deepflow_patch_v(\d+)_(.+)_(.+)\.tar\.gz/);
-        const d=m?m[2]+' → '+m[3].replace(/_/g,'-'):f.name.replace('deepflow_patch_','').replace('.tar.gz','');
+        const custom=f.name.match(/deepflow_patch_custom_(.+)\.tar\.gz/);
+        const d=m?m[2]+' → '+m[3].replace(/_/g,'-'):(custom?'自定义 · '+custom[1]:f.name.replace('deepflow_patch_','').replace('.tar.gz',''));
+        const code=m?'v'+m[1]:(custom?'custom':'');
+        const codeChip=code?`<span class="pkg-code">${code}</span>`:'';
         const mb=(f.size/1048576).toFixed(1);
         const badge=(f.name===newPackageName)?'<span class="pkg-new">NEW</span>':'';
-        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${escapeHtml(f.name)}">${escapeHtml(d)}${badge}</div><div class="pkg-meta">${mb} MB</div></div><div class="pkg-actions"><button type="button" class="pkg-action-btn secondary" title="复制跳板机 curl 下载命令" data-copy-cmd="${escapeHtml(f.name)}">${ICON_COPY}</button><a class="pkg-action-btn" href="/download-existing/${encodeURIComponent(f.name)}" onclick="return checkExistingFileDownload(event,this)">${ICON_DOWNLOAD} 下载</a></div></div>`;
+        return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${escapeHtml(f.name)}">${codeChip}${escapeHtml(d)}${badge}</div><div class="pkg-meta">${mb} MB</div></div><div class="pkg-actions"><button type="button" class="pkg-action-btn secondary" title="复制跳板机 curl 下载命令" data-copy-cmd="${escapeHtml(f.name)}">${ICON_COPY}</button><a class="pkg-action-btn" href="/download-existing/${encodeURIComponent(f.name)}" onclick="return checkExistingFileDownload(event,this)">${ICON_DOWNLOAD} 下载</a></div></div>`;
     }).join('');
 }
 function updateFilesSummary(n){
@@ -1182,6 +1244,8 @@ function trapFocus(container,e){
    ================================================================ */
 function initEventListeners(){
     document.getElementById('modeToggle').addEventListener('change',handleModeChange);
+    const channelSelect=document.getElementById('channelSelect');
+    if(channelSelect)channelSelect.addEventListener('change',handleChannelChange);
     document.getElementById('v7ImageList').addEventListener('input',()=>{updateV7Preview();checkBuildBtnStatus()});
     document.getElementById('buildForm').addEventListener('submit',startBuildProcess);
     document.getElementById('v7BuildBtn').addEventListener('click',startBuildProcess);
