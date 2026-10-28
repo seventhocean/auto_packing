@@ -117,15 +117,17 @@ docker build -f dockerfile -t auto_packing:latest .
 |---|---|---|
 | `/` | GET | 工作台页面 |
 | `/health` | GET | 轻量健康检查（Redis ping） |
-| `/versions?series=v6` | GET | OSS 补丁版本列表（v7 返回 501） |
-| `/build` | POST | V6/V7 入队（JSON），返回 `task_id` |
+| `/channels` | GET | 支持的版本线（6.4.9/6.5.9/6.6.9/7.0.9/7.1.9） |
+| `/versions?channel=7.1.9` | GET | 指定版本线的 OSS 补丁列表；`series=v6` 兼容默认线 |
+| `/build` | POST | 入队（`mode=patch\|custom`），返回 `task_id` |
 | `/build?task_id=&since=` | GET | 订阅已有任务 SSE（重连不重复入队） |
 | `/build/<task_id>/cancel` | POST | 取消排队中/执行中的任务 |
 | `/task-status/<task_id>?since=` | GET | 查询状态与增量日志 |
 | `/tasks/overview` | GET | 任务中心：进行中/最近完成 + Worker/队列/磁盘状态 |
-| `/download/<task_id>` | GET | 下载本次构建产物（临时链接） |
-| `/existing-packages` | GET | 列出历史升级包 |
-| `/download-existing/<filename>` | GET | 下载历史包（路径校验） |
+| `/download/<task_id>` | GET | 下载本次构建产物（oss 后端为签名 URL 跳转） |
+| `/existing-packages` | GET | 列出历史升级包（合并本地与 OSS） |
+| `/download-existing/<filename>` | GET | 下载历史包（oss 后端为签名 URL 跳转） |
+| `/packages/cleanup` | POST | 手动按保留策略回收升级包 |
 
 ## 7. 前端
 
@@ -167,7 +169,27 @@ redis:
   download_ttl_seconds: 90
   max_logs: 2000
   max_concurrent_tasks: 1
+
+package_retention:          # 升级包回收：构建成功后按此策略删最旧的
+  enabled: true
+  max_count: 40             # 最多保留个数
+  max_total_gb: 60          # 总大小上限
+  min_keep: 3               # 至少保留最近 N 个
+  min_age_minutes: 30       # 这么新的包不删
+  dry_run: false
+
+package_storage:            # 产物存储后端
+  backend: oss              # local | oss
+  oss_bucket: publicshare-unsafe
+  oss_prefix: tmp/auto_packing/packages/
+  presign_seconds: 900      # 签名 URL 有效期
+  oss_timeout_seconds: 120
+  upload_timeout_seconds: 3600
 ```
+
+> `package_storage.backend=oss` 时：构建成功自动上传，`/download*` 走 OSS 签名 URL
+> 302 跳转，`/existing-packages` 合并本地与远端列表。上传失败只记 ERROR，
+> 不影响构建结果，本地文件仍可下载。这是 app 摆脱本机磁盘、走向多副本的前提。
 
 | 变量 | 用途 |
 |---|---|
@@ -196,7 +218,7 @@ bash -n bin/*.sh entrypoint.sh
 node --check static/app.js
 ```
 
-当前有 23 个后端单测，使用 FakeRedis，不依赖真实 Redis。没有 CI，改动后请手动执行上述检查；
+当前有 49 个后端单测，使用 FakeRedis，不依赖真实 Redis。没有 CI，改动后请手动执行上述检查；
 涉及前端时建议再用浏览器或 jsdom 做一次 smoke test。
 
 ## 11. 部署与发布
@@ -212,8 +234,11 @@ node --check static/app.js
   然后更新两个 Deployment 并等待 rollout。
 - Redis 使用 PVC + AOF；app/worker 挂载 `/app/upgrade_packages` 共享 PVC。
 - app/worker 默认 `CONTAINERD_NAMESPACE=k8s.io`；探针使用 `/health`。
-- 多节点集群下 hostPath + ReadWriteOnce 没有 nodeAffinity，存在挂载/调度风险；
-  当前按单节点部署理解。
+- 集群有 3 个节点（apk01/02/03），但 `upgrade_packages` 与 Redis 都是 local 存储型
+  PVC（绑定 apk01），所以三个 Deployment 都加了
+  `nodeSelector: kubernetes.io/hostname=deepflowapk01`。**动这个字段前先确认存储**，
+  否则 Pod 会漂到没有盘/没有镜像的节点上。
+- redis 用 `strategy: Recreate`：单实例 + RWO 卷，滚动更新会让两个 redis 同时写同一份 AOF。
 
 ## 12. 已知问题与修改建议
 
@@ -225,9 +250,11 @@ node --check static/app.js
 - `max_concurrent_tasks=1`，回收时必须清理失效 slot；不要删除
   `reclaim_stale_tasks()` 里的 slot 清理逻辑。
 - SSE 断连后前端会恢复可构建状态，旧任务可能仍在运行；改动前先确认任务中心状态。
-- 构建中切换 V6/V7 会被 SSE 强制拉回；这是已知体验问题，尚未修。
-- V7 校验暂不支持带端口的 registry（如 `registry:5000/image:tag`）。
-- 仓库凭据、升级包清理、多节点存储等按当前策略暂不处理。
+- 构建中切换模式会被 SSE 强制拉回；构建期间模式卡已被前端锁定，避免误点。
+- 自定义镜像校验暂不支持带端口的 registry（如 `registry:5000/image:tag`）。
+- 仓库凭据仍硬编码在 `pull_save.sh`，按当前策略不处理。
+- 保留策略只回收「本地文件 + 其 OSS 同名对象」；纯 OSS 上、本地没有的对象不会被回收，
+  后续若完全转 OSS 存储需要补一条按远端列表回收的逻辑。
 
 改动原则：
 
