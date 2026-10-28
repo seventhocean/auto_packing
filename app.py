@@ -29,12 +29,65 @@ LOG_DIR = os.path.join(BASE_DIR, 'logs')        # 日志目录
 OSS_FILE = os.path.join(BIN_DIR, 'ossutil')  # ossutil
 OSS_CONFIG = os.path.join(BIN_DIR, '.ossutilconfig')
 TRASH_DIR = os.path.join(BASE_DIR, '.trash') # 项目临时回收站
-OSS_VERSIONS_TMP_FILE = os.path.join(TRASH_DIR, 'oss_patch_version.txt')
 PATCH_LIST_SCRIPT_PATH = os.path.join(BIN_DIR, 'get_patch_image_tag_list.sh') # 生成patch_list.txt的脚本路径
 UPGRADE_SCRIPT_PATH = os.path.join(BIN_DIR, "deepflow_patch_upgrade.sh")
 APP_CONFIG_PATH = os.environ.get('APP_CONFIG_PATH', os.path.join(BASE_DIR, 'config.yaml'))
-# V6 升级包命名模板：作为唯一事实来源，同时下发给前端做"已有同名包"匹配
-PACKAGE_NAME_TEMPLATE = "deepflow_patch_v669_{current}_{target}.tar.gz"
+
+# -------------------------- 发布线（channel） --------------------------
+# 一条 channel = 「大版本 + 子版本」的一条发布序列，同时决定四件事：
+#   1) OSS 上补丁包的前缀   2) nuwa 里 make.sh 的目录
+#   3) grep 镜像用的 tag 前缀   4) 升级包命名
+# 新增版本线只需在 _CHANNEL_SEED 里加一行，构建流程无需改动。
+_CHANNEL_SEED = [
+    ("6.4.9", "6.4", "6.4.9"),
+    ("6.5.9", "6.5", "6.5.9"),
+    ("6.6.9", "6.6", "6.6.9"),
+    ("7.0.9", "7.0", "7.0.9"),
+    ("7.1.9", "7.1", "7.1.9"),
+]
+DEFAULT_CHANNEL = "6.6.9"
+
+CHANNELS = {}
+for _key, _series, _sub in _CHANNEL_SEED:
+    # 包名里的版本标识：6.6.9 -> 669，7.1.9 -> 719。
+    # 6.6.9 必须保持 "669"，否则续不上 upgrade_packages/ 里已有的历史包。
+    _code = _sub.replace('.', '')
+    CHANNELS[_key] = {
+        "key": _key,
+        "series": _series,
+        "sub": _sub,
+        "tag_prefix": "v{}".format(_series),
+        "oss_prefix": "oss://df-patch-no-delete/patch/{}/{}/".format(_series, _sub),
+        "nuwa_dir": "nuwa/{}/{}".format(_series, _sub),
+        "pkg_code": _code,
+        "package_template": "deepflow_patch_v{}_{{current}}_{{target}}.tar.gz".format(_code),
+    }
+del _key, _series, _sub, _code
+
+# 旧代码/旧接口遗留：默认版本线的包名模板
+PACKAGE_NAME_TEMPLATE = CHANNELS[DEFAULT_CHANNEL]["package_template"]
+# 默认版本线的 OSS 版本缓存文件（脚本单独运行时仍读这个路径）
+OSS_VERSIONS_TMP_FILE = os.path.join(TRASH_DIR, 'oss_patch_version.txt')
+
+
+def resolve_channel(channel_key):
+    """把入参归一化为合法的 channel key；未知版本线返回 None。"""
+    if not channel_key:
+        return DEFAULT_CHANNEL
+    key = str(channel_key).strip()
+    # 兼容旧前端/旧接口只传 series 的写法
+    if key in ('v6', 'v6.6', '6.6', '669', 'v669'):
+        return DEFAULT_CHANNEL
+    if key in CHANNELS:
+        return key
+    # 允许只传大版本号（如 7.1），只要它能唯一匹配到一条发布线
+    matched = [k for k, ch in CHANNELS.items() if ch["series"] == key]
+    return matched[0] if len(matched) == 1 else None
+
+
+def _oss_versions_tmp_path(channel_key):
+    """每个版本线独立的 OSS 版本缓存文件，避免并发构建互相覆盖。"""
+    return os.path.join(TRASH_DIR, 'oss_patch_version_{}.txt'.format(CHANNELS[channel_key]["pkg_code"]))
 
 # 构建超时配置（秒）。拉镜像是最容易卡住的步骤，必须有上限，否则任务会永久占用槽位。
 PULL_TIMEOUT_SECONDS = int(os.environ.get('PULL_TIMEOUT_SECONDS', 2 * 3600))
@@ -47,7 +100,8 @@ _VERSION_VALUE_RE = re.compile(r'^[0-9A-Za-z][0-9A-Za-z._-]*$')
 
 # /versions 页面加载允许使用短 TTL 缓存；构建任务仍强制刷新，保证镜像清单最新
 OSS_VERSIONS_CACHE_TTL_SECONDS = int(os.environ.get('OSS_VERSIONS_CACHE_TTL_SECONDS', 300))
-_OSS_VERSIONS_CACHE = {"versions": [], "expires_at": 0.0}
+# 按版本线缓存：{channel_key: {"versions": [...], "expires_at": float}}
+_OSS_VERSIONS_CACHE = {}
 
 
 class BuildCancelled(Exception):
@@ -347,30 +401,39 @@ def _create_build_task(task_id, task_type, payload, extra=None):
     return task_id
 
 
-def _create_v6_build_task(current_version, target_version):
+def _create_v6_build_task(current_version, target_version, channel_key=DEFAULT_CHANNEL):
+    """固定版本（按 patch 差异）构建任务。task_type 仍写 v6，保证旧前端/旧任务兼容。"""
+    channel = CHANNELS[channel_key]
     timestamp = int(time.time() * 1000)
     current_abbr = current_version[:8] if len(current_version) >= 8 else current_version
     target_abbr = target_version[:8] if len(target_version) >= 8 else target_version
-    task_id = f"build_{current_abbr}_to_{target_abbr}_{timestamp}_{uuid.uuid4().hex[:8]}"
+    task_id = f"build_{channel['pkg_code']}_{current_abbr}_to_{target_abbr}_{timestamp}_{uuid.uuid4().hex[:8]}"
     return _create_build_task(task_id, "v6", {
         "task_id": task_id,
         "task_type": "v6",
+        "mode": "patch",
+        "channel": channel_key,
         "current_version": current_version,
         "target_version": target_version
     }, extra={
+        "mode": "patch",
+        "channel": channel_key,
         "current_version": current_version,
         "target_version": target_version
     })
 
 
 def _create_v7_build_task(images):
+    """自定义镜像清单构建任务。"""
     timestamp = int(time.time() * 1000)
-    task_id = f"build_v7_{timestamp}_{uuid.uuid4().hex[:8]}"
+    task_id = f"build_custom_{timestamp}_{uuid.uuid4().hex[:8]}"
     return _create_build_task(task_id, "v7", {
         "task_id": task_id,
         "task_type": "v7",
+        "mode": "custom",
         "images": images
     }, extra={
+        "mode": "custom",
         "image_count": len(images)
     })
 
@@ -415,6 +478,8 @@ def get_tasks_overview(recent_limit=5):
         item = {
             "task_id": task_id,
             "task_type": status.get("task_type"),
+            "mode": status.get("mode"),
+            "channel": status.get("channel"),
             "current_version": status.get("current_version"),
             "target_version": status.get("target_version"),
             "image_count": status.get("image_count"),
@@ -598,13 +663,14 @@ def update_progress(task_id, new_percent, message, level="INFO"):
         })
         set_task_status(task_id, task_status)
 
-def _run_oss_ls():
-    """执行 ossutil ls，网络抖动时重试 3 次。"""
+def _run_oss_ls(channel_key=DEFAULT_CHANNEL):
+    """执行 ossutil ls，网络抖动时重试 3 次。按版本线取对应 OSS 前缀。"""
+    prefix = CHANNELS[channel_key]["oss_prefix"]
     last_error = None
     for attempt in range(3):
         try:
             return subprocess.run(
-                [OSS_FILE, "-c", OSS_CONFIG, "ls", "-d", "oss://df-patch-no-delete/patch/6.6/6.6.9/"],
+                [OSS_FILE, "-c", OSS_CONFIG, "ls", "-d", prefix],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
@@ -614,7 +680,7 @@ def _run_oss_ls():
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
             last_error = exc
             write_log(
-                f"OSS版本获取失败（第{attempt + 1}/3次）：{str(exc)}",
+                f"OSS版本获取失败[{channel_key}]（第{attempt + 1}/3次）：{str(exc)}",
                 level="WARNING"
             )
             if attempt < 2:
@@ -622,36 +688,41 @@ def _run_oss_ls():
     raise last_error
 
 
-def get_oss_versions(use_cache=False):
-    """从OSS获取x86_64架构的补丁版本列表（供前端下拉框用）
+def get_oss_versions(channel_key=DEFAULT_CHANNEL, use_cache=False):
+    """从OSS获取指定版本线 x86_64 架构的补丁版本列表（供前端下拉框用）
     按文件名前缀序号（01~16）排序，前端直接沿用此顺序
 
     use_cache=True 时使用 5 分钟进程内缓存（页面加载）；
     构建流程使用默认的 False，确保拿到最新版本列表。
     """
+    if channel_key not in CHANNELS:
+        write_log(f"未知版本线：{channel_key}", level="ERROR")
+        return []
+
+    channel = CHANNELS[channel_key]
+    cache = _OSS_VERSIONS_CACHE.setdefault(channel_key, {"versions": [], "expires_at": 0.0})
     now = time.time()
-    if use_cache and _OSS_VERSIONS_CACHE["versions"] and now < _OSS_VERSIONS_CACHE["expires_at"]:
-        return list(_OSS_VERSIONS_CACHE["versions"])
+    if use_cache and cache["versions"] and now < cache["expires_at"]:
+        return list(cache["versions"])
 
     try:
-        result = _run_oss_ls()
-        
+        result = _run_oss_ls(channel_key)
+
         versions = []
         seen_versions = set()
-        
+
         for line in result.stdout.split('\n'):
             line = line.strip()
             if line and ".tar.gz" in line and "x86_64" in line and not line.endswith('/'):
                 # 提取完整文件名（如"01-20250430-26798-BUG_x86_64.tar.gz"）
                 file_name = line.split('/')[-1]
-                #seq_match = re.search(r'^(\d{3})-', file_name)
                 seq_match = re.search(r'^(\d+)-', file_name)   #支持3位数以上patch
                 seq_num = int(seq_match.group(1)) if seq_match else 99  # 异常序号放最后
 
                 # 处理前端显示的版本名（去掉.tar.gz和_x86_64）
                 version_with_arch = file_name[:-len(".tar.gz")]
                 display_version = re.sub(r'_x86_64$', '', version_with_arch)
-                
+
                 if display_version not in seen_versions:
                     seen_versions.add(display_version)
                     date_match = re.search(r'(\d{8})', display_version)
@@ -661,38 +732,50 @@ def get_oss_versions(use_cache=False):
                         'seq_num': seq_num,
                         'date': date_match.group(1) if date_match else ""  # 仅存储，不排序
                     })
-        
+
         # 后端严格按序号升序排序，前端直接用此顺序
         versions.sort(key=lambda x: x['seq_num'])
-        write_log(f"OSS版本按序号排序完成，共{len(versions)}个版本")
-        
-        # 保留 OSS 获取的 PATCH 版本到临时文本，方便其他脚本使用。
+        write_log(f"OSS[{channel_key}]版本按序号排序完成，共{len(versions)}个版本")
+
+        # 保留 OSS 获取的 PATCH 版本到临时文本，方便 shell 脚本使用。
         # 先写临时文件再原子替换，避免脚本读到写了一半的版本列表。
-        tmp_versions_file = f"{OSS_VERSIONS_TMP_FILE}.{uuid.uuid4().hex[:8]}.tmp"
-        with open(tmp_versions_file, 'w', encoding='utf-8') as f:
+        tmp_versions_file = _oss_versions_tmp_path(channel_key)
+        write_tmp = f"{tmp_versions_file}.{uuid.uuid4().hex[:8]}.tmp"
+        with open(write_tmp, 'w', encoding='utf-8') as f:
             for ver in versions:
                 f.write(f"{ver['value']}\n")
-        os.replace(tmp_versions_file, OSS_VERSIONS_TMP_FILE)
-        _OSS_VERSIONS_CACHE["versions"] = list(versions)
-        _OSS_VERSIONS_CACHE["expires_at"] = time.time() + OSS_VERSIONS_CACHE_TTL_SECONDS
-        
-        write_log(f"OSS 获取的 PATCH 版本已经成功保存到临时文本：{OSS_VERSIONS_TMP_FILE}", level="INFO")
+        os.replace(write_tmp, tmp_versions_file)
+
+        # 默认版本线额外维护一份历史文件名，兼容单独执行的脚本和旧习惯
+        if channel_key == DEFAULT_CHANNEL:
+            legacy_tmp = f"{OSS_VERSIONS_TMP_FILE}.{uuid.uuid4().hex[:8]}.tmp"
+            with open(legacy_tmp, 'w', encoding='utf-8') as f:
+                for ver in versions:
+                    f.write(f"{ver['value']}\n")
+            os.replace(legacy_tmp, OSS_VERSIONS_TMP_FILE)
+
+        cache["versions"] = list(versions)
+        cache["expires_at"] = time.time() + OSS_VERSIONS_CACHE_TTL_SECONDS
+
+        write_log(f"OSS[{channel_key}] 获取的 PATCH 版本已经成功保存到临时文本：{tmp_versions_file}", level="INFO")
         return versions
-    
+
     except subprocess.TimeoutExpired:
         return _oss_versions_fallback(
             f"OSS版本获取超时（{OSS_QUERY_TIMEOUT_SECONDS}秒）",
-            use_cache
+            use_cache,
+            channel_key
         )
     except Exception as e:
-        return _oss_versions_fallback(f"OSS版本获取失败：{str(e)}", use_cache)
+        return _oss_versions_fallback(f"OSS版本获取失败：{str(e)}", use_cache, channel_key)
 
 
-def _oss_versions_fallback(error_msg, use_cache):
+def _oss_versions_fallback(error_msg, use_cache, channel_key=DEFAULT_CHANNEL):
     # 页面加载场景下，OSS 短暂不可用时继续使用上次成功获取的列表
-    if use_cache and _OSS_VERSIONS_CACHE["versions"]:
-        write_log(error_msg + "，返回上次缓存版本", level="WARNING")
-        return list(_OSS_VERSIONS_CACHE["versions"])
+    cache = _OSS_VERSIONS_CACHE.get(channel_key) or {"versions": []}
+    if use_cache and cache["versions"]:
+        write_log(error_msg + f"[{channel_key}]，返回上次缓存版本", level="WARNING")
+        return list(cache["versions"])
     write_log(error_msg, level="ERROR")
     return []
 
@@ -802,8 +885,49 @@ def _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path):
                 pass
 
 
-def run_build_task(task_id, current_version, target_version):
+def _prepare_upgrade_script(channel, target_version, task_image_dir, task_id):
+    """把升级脚本复制到任务目录，并把 upgrade_version 里的 patch 号替换为本次构建的实际值。
+
+    返回 (可打包的脚本路径, 填入的版本号或 None)。
+
+    注意：包内脚本必须保持原名 deepflow_patch_upgrade.sh，客户解压后直接执行。
+    匹配不到 upgrade_version 时回退到原始脚本，不影响构建。
+    """
+    target_seq = (target_version or '').split('-')[0]
+    if not target_seq.isdigit():
+        return UPGRADE_SCRIPT_PATH, None
+
+    try:
+        with open(UPGRADE_SCRIPT_PATH, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except OSError:
+        return UPGRADE_SCRIPT_PATH, None
+
+    filled = "DeepFlow-V{}-{}".format(channel["sub"], target_seq)
+    patched, count = re.subn(
+        r'^upgrade_version="[^"]*"',
+        'upgrade_version="{}"'.format(filled),
+        content,
+        count=1,
+        flags=re.MULTILINE
+    )
+    if count == 0:
+        return UPGRADE_SCRIPT_PATH, None
+
+    dst_dir = os.path.join(task_image_dir, "upgrade_script")
+    os.makedirs(dst_dir, exist_ok=True)
+    dst = os.path.join(dst_dir, os.path.basename(UPGRADE_SCRIPT_PATH))
+    with open(dst, 'w', encoding='utf-8') as f:
+        f.write(patched)
+    os.chmod(dst, 0o755)
+    return dst, filled
+
+
+def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT_CHANNEL):
     """核心构建任务：执行构建list脚本→拉取镜像→打包TAR.GZ格式升级包"""
+    if channel_key not in CHANNELS:
+        channel_key = DEFAULT_CHANNEL
+    channel = CHANNELS[channel_key]
     try:
         # 创建任务专属目录（用版本+任务ID命名，确保唯一性，避免文件冲突）
         task_dir_name = f"{current_version}_to_{target_version}_{task_id}"
@@ -820,7 +944,7 @@ def run_build_task(task_id, current_version, target_version):
         task_log_path = os.path.join(LOG_DIR, f"task_{task_id}.log")
 
         try:
-            write_log(f"任务[{task_id}]启动：版本升级 {current_version} → {target_version}", task_id=task_id)
+            write_log(f"任务[{task_id}]启动：版本线 {channel_key}，升级 {current_version} → {target_version}", task_id=task_id)
             time.sleep(1)  # 预留SSE状态推送时间，避免前端接收延迟
             _raise_if_cancelled(task_id)
 
@@ -842,12 +966,12 @@ def run_build_task(task_id, current_version, target_version):
 
             # 在 app / worker 分离部署后，worker Pod 不能依赖 app Pod 本地生成的
             # .trash/oss_patch_version.txt。这里在 worker 执行任务前主动刷新一份
-            # 当前 Pod 本地的 OSS 版本缓存，供 shell 脚本读取。
-            update_progress(task_id, 12, "刷新OSS补丁版本缓存")
-            oss_versions = get_oss_versions()
+            # 当前 Pod 本地、当前版本线专属的 OSS 版本缓存，供 shell 脚本读取。
+            update_progress(task_id, 12, f"刷新 {channel_key} 的 OSS 补丁版本缓存")
+            oss_versions = get_oss_versions(channel_key)
             if not oss_versions:
-                raise Exception("OSS版本缓存刷新失败，无法生成镜像列表")
-            write_log(f"OSS版本缓存刷新完成，共{len(oss_versions)}个版本", task_id=task_id)
+                raise Exception(f"{channel_key} 的 OSS版本缓存刷新失败，无法生成镜像列表")
+            write_log(f"OSS版本缓存刷新完成[{channel_key}]，共{len(oss_versions)}个版本", task_id=task_id)
             _raise_if_cancelled(task_id)
 
             # 执行get_patch_image_tag_list.sh，生成镜像拉取清单
@@ -855,11 +979,20 @@ def run_build_task(task_id, current_version, target_version):
             write_log(f"开始生成镜像列表，当前版本: {current_version}, 目标版本: {target_version}", task_id=task_id)
             
             # 调用Shell脚本，传递当前版本和目标版本参数
-            # 任务专属输出路径通过第3个参数传入，避免并发竞争
+            # 任务专属输出路径通过第3个参数传入，避免并发竞争；
+            # 版本线相关参数用环境变量传入，脚本本身早已支持这三个变量。
+            script_env = dict(os.environ)
+            script_env.update({
+                "NUWA_MAJOR": channel["series"],
+                "NUWA_MINOR": channel["sub"],
+                "IMAGE_TAG_PREFIX": channel["tag_prefix"],
+                "OSS_PATCH_LIST_FILE": _oss_versions_tmp_path(channel_key),
+            })
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 subprocess.run(
                     ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version, task_patch_list_path],
                     check=True,
+                    env=script_env,
                     stdout=f,  # 捕获标准输出
                     stderr=subprocess.STDOUT, # 标准错误合并到标准输出
                     universal_newlines=True,
@@ -879,6 +1012,14 @@ def run_build_task(task_id, current_version, target_version):
             with open(task_patch_list_path, 'r', encoding='utf-8') as f:
                 image_count = len([line for line in f if line.strip()])
             write_log(f"发现 {image_count} 个需要拉取的镜像", task_id=task_id)
+
+            # 区间内可能全部是"只改基础镜像/只发 agent"的 patch，清单会为空。
+            # 直接给出可读的失败原因，避免最后报"任务目录无任何 .tar"这种误导性错误。
+            if image_count == 0:
+                raise Exception(
+                    f"{current_version} → {target_version} 区间内没有需要打包的镜像变更"
+                    f"（版本线 {channel_key}）。该区间可能只包含基础镜像或空 patch。"
+                )
 
             # 执行pull_save.sh，拉取镜像到任务专属目录
             update_progress(task_id, 35, f"开始拉取 {image_count} 个镜像文件")
@@ -912,14 +1053,33 @@ def run_build_task(task_id, current_version, target_version):
             standard_list_path = os.path.join(task_image_dir, "patch_image_tag_list.txt")
             shutil.copy2(task_patch_list_path, standard_list_path)
 
-            files_to_pack = tar_files + [standard_list_path, UPGRADE_SCRIPT_PATH]
+            # 把包里那份升级脚本的 upgrade_version 末尾 patch 号替换成本次目标 patch，
+            # 省掉"交付前忘了改 -xx"这类事故。脚本其余内容（components/target_registry）
+            # 仍按交付方定制处理，不在这里改动。
+            packed_upgrade_script, filled_version = _prepare_upgrade_script(
+                channel, target_version, task_image_dir, task_id
+            )
+            if filled_version:
+                write_log(
+                    f"升级脚本版本号已自动填为 {filled_version}（原脚本为固定值）",
+                    task_id=task_id
+                )
+            if channel_key != DEFAULT_CHANNEL:
+                write_log(
+                    f"注意：包内升级脚本是 {DEFAULT_CHANNEL} 的定制件（components/target_registry 针对特定客户），"
+                    f"交付 {channel_key} 前请确认是否需要按现场调整",
+                    level="WARNING",
+                    task_id=task_id
+                )
+
+            files_to_pack = tar_files + [standard_list_path, packed_upgrade_script]
             write_log(f"准备打包 {len(files_to_pack)} 个文件", task_id=task_id)
 
             # 打包TAR.GZ升级包（仅包含当前任务的镜像+镜像列表）
             update_progress(task_id, 75, "开始打包TAR.GZ升级包")
             current_patch_version = current_version.split('-')[0]
             target_patch_version = target_version.split('-')[0]
-            upgrade_package = PACKAGE_NAME_TEMPLATE.format(
+            upgrade_package = channel["package_template"].format(
                 current=current_patch_version, target=target_patch_version
             )
             upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
@@ -1005,7 +1165,7 @@ def run_build_task(task_id, current_version, target_version):
         release_build_slot(task_id)
 
 def run_build_task_v7(task_id, images):
-    """V7构建任务：根据镜像列表生成patchlist→拉取镜像→打包TAR.GZ格式升级包"""
+    """自定义镜像构建任务：按用户给定镜像清单→拉取镜像→打包TAR.GZ格式升级包"""
     try:
         task_dir_name = f"v7_{task_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
@@ -1065,7 +1225,7 @@ def run_build_task_v7(task_id, images):
             files_to_pack = tar_files + [task_patch_list_path, UPGRADE_SCRIPT_PATH]
 
             update_progress(task_id, 75, "开始打包TAR.GZ升级包")
-            upgrade_package = f"deepflow_patch_v7_{task_id}.tar.gz"
+            upgrade_package = f"deepflow_patch_custom_{task_id}.tar.gz"
             upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
 
             _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path)
@@ -1239,31 +1399,60 @@ def api_download_existing(filename):
         abort(500, description=error_msg)
 
 
+# -------------------------- 版本线列表 --------------------------
+@app.route('/channels', methods=['GET'])
+def api_get_channels():
+    """返回支持的版本线，供前端渲染下拉。数据来自后端唯一事实来源 CHANNELS。"""
+    channels = []
+    for key, ch in CHANNELS.items():
+        channels.append({
+            "key": key,
+            "label": key,
+            "series": ch["series"],
+            "sub": ch["sub"],
+            "tag_prefix": ch["tag_prefix"],
+            "package_name_template": ch["package_template"],
+            "is_default": key == DEFAULT_CHANNEL,
+        })
+    return jsonify({
+        "success": True,
+        "channels": channels,
+        "default": DEFAULT_CHANNEL,
+        "message": f"共{len(channels)}条版本线"
+    })
+
+
 # -------------------------- 获取版本列表（兼容前端） --------------------------
 @app.route('/versions', methods=['GET'])
 def api_get_versions():
-    """原有接口：从OSS获取版本列表，供前端下拉框选择"""
-    series = request.args.get('series', 'v6')
-    if series != 'v6':
+    """从OSS获取指定版本线的补丁版本列表，供前端下拉框选择。
+
+    参数：?channel=7.1.9；不传时回退到默认版本线，`?series=v6` 等旧参数继续兼容。
+    """
+    raw = request.args.get('channel') or request.args.get('series')
+    channel_key = resolve_channel(raw)
+    if not channel_key:
         return jsonify({
             "success": False,
             "versions": [],
-            "message": f"{series} 版本列表尚未接入（占位逻辑）"
-        }), 501
+            "message": f"不支持的版本线：{raw}（可选：{', '.join(CHANNELS)}）"
+        }), 400
 
-    versions = get_oss_versions(use_cache=True)
+    versions = get_oss_versions(channel_key, use_cache=True)
     if versions:
         return jsonify({
             "success": True,
+            "channel": channel_key,
             "versions": versions,
-            "package_name_template": PACKAGE_NAME_TEMPLATE,
-            "message": f"成功获取{len(versions)}个版本"
+            "package_name_template": CHANNELS[channel_key]["package_template"],
+            "message": f"{channel_key} 成功获取{len(versions)}个版本"
         })
     else:
         return jsonify({
             "success": False,
+            "channel": channel_key,
             "versions": [],
-            "message": "未获取到有效版本（可能是OSS连接失败或无x86_64版本）"
+            "message": f"{channel_key} 未获取到有效版本（可能是OSS连接失败或无x86_64版本）"
         }), 500
 
 
@@ -1297,10 +1486,13 @@ def api_build_post():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         data = {}
-    series = data.get('series', 'v7')
+    # mode 是新的语义：patch=固定版本按 patch 差异打包，custom=自定义镜像清单。
+    # 兼容旧调用：只传 series（v6/v7）时按旧语义推断。
+    series = data.get('series')
+    mode = data.get('mode') or ('custom' if series == 'v7' else 'patch')
 
     try:
-        if series == 'v7':
+        if mode == 'custom':
             images = data.get('images', [])
             if not isinstance(images, list) or not images:
                 return jsonify({"success": False, "message": "缺少必要参数：images 不能为空"}), 400
@@ -1308,15 +1500,21 @@ def api_build_post():
             if not images:
                 return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
             task_id = _create_v7_build_task(images)
-        elif series == 'v6':
+        elif mode == 'patch':
+            channel_key = resolve_channel(data.get('channel') or series)
+            if not channel_key:
+                return jsonify({
+                    "success": False,
+                    "message": f"不支持的版本线：{data.get('channel') or series}"
+                }), 400
             current_version = (data.get('current') or '').strip()
             target_version = (data.get('target') or '').strip()
             error = _validate_v6_versions(current_version, target_version)
             if error:
                 return jsonify({"success": False, "message": error}), 400
-            task_id = _create_v6_build_task(current_version, target_version)
+            task_id = _create_v6_build_task(current_version, target_version, channel_key)
         else:
-            return jsonify({"success": False, "message": f"不支持的 series: {series}"}), 400
+            return jsonify({"success": False, "message": f"不支持的 mode: {mode}"}), 400
     except Exception as e:
         return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
 
@@ -1378,7 +1576,7 @@ def api_build():
                 yield f"data: {json.dumps({'status': 'error', 'percent': 0, 'message': f'推送异常: {str(e)}', 'logs': []})}\n\n"
         return Response(watch_sse(), mimetype='text/event-stream')
 
-    # 旧版 GET 入队流程（V6 + 兼容旧的 V7 GET 调用）
+    # 旧版 GET 入队流程（固定版本 + 兼容旧的自定义镜像 GET 调用）
     series = request.args.get('series', 'v6')
     current_version = request.args.get('current')
     target_version = request.args.get('target')
@@ -1393,10 +1591,16 @@ def api_build():
                 return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
             task_id = _create_v7_build_task(images)
         else:
+            channel_key = resolve_channel(request.args.get('channel') or series)
+            if not channel_key:
+                return jsonify({
+                    "success": False,
+                    "message": f"不支持的版本线：{request.args.get('channel') or series}"
+                }), 400
             error = _validate_v6_versions(current_version, target_version)
             if error:
                 return jsonify({"success": False, "message": error}), 400
-            task_id = _create_v6_build_task(current_version, target_version)
+            task_id = _create_v6_build_task(current_version, target_version, channel_key)
     except Exception as e:
         return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
 

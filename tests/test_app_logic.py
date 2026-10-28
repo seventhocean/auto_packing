@@ -173,7 +173,7 @@ class AppLogicTest(unittest.TestCase):
 
     def test_versions_response_exposes_package_template(self):
         original = ap.get_oss_versions
-        ap.get_oss_versions = lambda use_cache=True: [
+        ap.get_oss_versions = lambda channel_key=ap.DEFAULT_CHANNEL, use_cache=True: [
             {'display': 'v6.6.1', 'value': 'v6.6.1-20260101', 'seq_num': 1}
         ]
         self.addCleanup(lambda: setattr(ap, 'get_oss_versions', original))
@@ -182,6 +182,135 @@ class AppLogicTest(unittest.TestCase):
         data = client.get('/versions?series=v6').get_json()
         self.assertTrue(data['success'])
         self.assertEqual(data['package_name_template'], ap.PACKAGE_NAME_TEMPLATE)
+
+    def test_channel_registry_covers_supported_lines(self):
+        self.assertEqual(
+            list(ap.CHANNELS),
+            ['6.4.9', '6.5.9', '6.6.9', '7.0.9', '7.1.9']
+        )
+        self.assertEqual(ap.DEFAULT_CHANNEL, '6.6.9')
+        # 6.6.9 必须继续保持 v669，否则续不上已有历史包
+        self.assertEqual(
+            ap.CHANNELS['6.6.9']['package_template'].format(current='247', target='248'),
+            'deepflow_patch_v669_247_248.tar.gz'
+        )
+        self.assertEqual(
+            ap.CHANNELS['7.1.9']['package_template'].format(current='97', target='99'),
+            'deepflow_patch_v719_97_99.tar.gz'
+        )
+
+    def test_channel_oss_and_nuwa_prefixes(self):
+        ch = ap.CHANNELS['7.0.9']
+        self.assertEqual(ch['oss_prefix'], 'oss://df-patch-no-delete/patch/7.0/7.0.9/')
+        self.assertEqual(ch['nuwa_dir'], 'nuwa/7.0/7.0.9')
+        self.assertEqual(ch['tag_prefix'], 'v7.0')
+        self.assertEqual(ch['pkg_code'], '709')
+
+    def test_resolve_channel_accepts_legacy_series(self):
+        self.assertEqual(ap.resolve_channel(None), ap.DEFAULT_CHANNEL)
+        self.assertEqual(ap.resolve_channel('v6'), ap.DEFAULT_CHANNEL)
+        self.assertEqual(ap.resolve_channel('6.6.9'), '6.6.9')
+        self.assertEqual(ap.resolve_channel('7.1.9'), '7.1.9')
+        # 只传大版本时按唯一匹配归一
+        self.assertEqual(ap.resolve_channel('7.1'), '7.1.9')
+        self.assertEqual(ap.resolve_channel('6.4'), '6.4.9')
+        self.assertIsNone(ap.resolve_channel('9.9.9'))
+
+    def test_channels_endpoint_lists_all_lines(self):
+        client = ap.app.test_client()
+        data = client.get('/channels').get_json()
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['channels']), 5)
+        self.assertEqual(data['default'], ap.DEFAULT_CHANNEL)
+        self.assertEqual([c['key'] for c in data['channels']], list(ap.CHANNELS))
+
+    def test_versions_endpoint_passes_channel_through(self):
+        seen = {}
+        original = ap.get_oss_versions
+
+        def fake(channel_key=ap.DEFAULT_CHANNEL, use_cache=False):
+            seen['channel'] = channel_key
+            return [{'display': '97-x', 'value': '97-x', 'seq_num': 97}]
+
+        ap.get_oss_versions = fake
+        self.addCleanup(lambda: setattr(ap, 'get_oss_versions', original))
+
+        client = ap.app.test_client()
+        data = client.get('/versions?channel=7.1.9').get_json()
+        self.assertTrue(data['success'])
+        self.assertEqual(seen['channel'], '7.1.9')
+        self.assertEqual(data['channel'], '7.1.9')
+        self.assertEqual(data['package_name_template'], 'deepflow_patch_v719_{current}_{target}.tar.gz')
+
+    def test_versions_endpoint_rejects_unknown_channel(self):
+        client = ap.app.test_client()
+        resp = client.get('/versions?channel=9.9.9')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.get_json()['success'])
+
+    def test_post_build_patch_mode_carries_channel(self):
+        client = ap.app.test_client()
+        resp = client.post('/build', json={
+            'mode': 'patch',
+            'channel': '7.1.9',
+            'current': '97-20261021-0003-FEATURE',
+            'target': '99-20261022-7224-BUG'
+        })
+        self.assertEqual(resp.status_code, 200)
+        task_id = resp.get_json()['task_id']
+        status = ap.get_task_status(task_id)
+        self.assertEqual(status['channel'], '7.1.9')
+        self.assertEqual(status['mode'], 'patch')
+        queued = json.loads(ap.redis_client.lrange(ap.build_queue_key(), 0, -1)[0])
+        self.assertEqual(queued['channel'], '7.1.9')
+        self.assertEqual(queued['task_type'], 'v6')
+
+    def test_post_build_custom_mode_has_no_channel(self):
+        client = ap.app.test_client()
+        resp = client.post('/build', json={
+            'mode': 'custom',
+            'images': ['deepflow-agent:v7.1.1']
+        })
+        self.assertEqual(resp.status_code, 200)
+        task_id = resp.get_json()['task_id']
+        status = ap.get_task_status(task_id)
+        self.assertEqual(status['mode'], 'custom')
+        self.assertEqual(status['task_type'], 'v7')
+        self.assertTrue(task_id.startswith('build_custom_'))
+
+    def test_post_build_patch_mode_rejects_unknown_channel(self):
+        client = ap.app.test_client()
+        resp = client.post('/build', json={
+            'mode': 'patch',
+            'channel': '9.9.9',
+            'current': '01-a',
+            'target': '02-b'
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_prepare_upgrade_script_fills_target_patch(self):
+        tmpdir = tempfile.mkdtemp(prefix='autopacking-script-')
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        path, filled = ap._prepare_upgrade_script(
+            ap.CHANNELS['6.6.9'], '248-20261020-7239-BUG', tmpdir, 't1'
+        )
+        self.assertEqual(filled, 'DeepFlow-V6.6.9-248')
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertIn('upgrade_version="DeepFlow-V6.6.9-248"', content)
+        # 包内脚本必须保持原名，客户解压后可直接执行
+        self.assertEqual(os.path.basename(path), 'deepflow_patch_upgrade.sh')
+        # 其余定制项不应被改动
+        self.assertIn('target_registry="hubmgt-uat.paic.com.cn/deepflow"', content)
+
+    def test_prepare_upgrade_script_skips_non_numeric_patch(self):
+        tmpdir = tempfile.mkdtemp(prefix='autopacking-script-')
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        path, filled = ap._prepare_upgrade_script(
+            ap.CHANNELS['6.6.9'], 'abc-def', tmpdir, 't2'
+        )
+        self.assertEqual(path, ap.UPGRADE_SCRIPT_PATH)
+        self.assertIsNone(filled)
 
     def test_build_route_rejects_unsafe_version(self):
         client = ap.app.test_client()

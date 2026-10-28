@@ -7,6 +7,7 @@ import traceback
 import uuid
 
 from app import (
+    DEFAULT_CHANNEL,
     REDIS_CONFIG,
     build_processing_key,
     build_queue_key,
@@ -152,7 +153,13 @@ def process_task(payload):
         if task_type == "v7":
             run_build_task_v7(task_id, payload["images"])
         else:
-            run_build_task(task_id, payload["current_version"], payload["target_version"])
+            # 老任务（发布前入队）没有 channel 字段，回退到默认版本线
+            run_build_task(
+                task_id,
+                payload["current_version"],
+                payload["target_version"],
+                payload.get("channel") or DEFAULT_CHANNEL,
+            )
     finally:
         if not run_started:
             release_build_slot(task_id)

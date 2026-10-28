@@ -27,7 +27,9 @@ if [ ! -d "${TRASH}" ]; then
 fi
 
 # patch 列表（以 OSS 为准）
-OSS_PATCH_LIST="${TRASH}/oss_patch_version.txt"
+# 多版本线下由 app 通过 OSS_PATCH_LIST_FILE 传入该版本线专属的版本列表，
+# 未指定时沿用历史路径，保证脚本单独执行时行为不变。
+OSS_PATCH_LIST="${OSS_PATCH_LIST_FILE:-${TRASH}/oss_patch_version.txt}"
 
 # 如果 oss_patch_version.txt 文件不存在，则创建空文件
 if [ ! -f "${OSS_PATCH_LIST}" ]; then
