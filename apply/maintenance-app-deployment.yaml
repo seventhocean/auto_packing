@@ -179,7 +179,7 @@ spec:
       containers:
       # 真正的 maintenance-app 业务容器。
       - name: maintenance-app
-        image: auto_packing:20261028-b068f0e
+        image: auto_packing:20261028-9039081
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -327,7 +327,7 @@ spec:
       containers:
       # 真正的 worker 业务容器。
       - name: maintenance-worker
-        image: auto_packing:20261028-b068f0e
+        image: auto_packing:20261028-9039081
         imagePullPolicy: IfNotPresent
         args:
         - python
@@ -337,6 +337,9 @@ spec:
           value: "/app/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         - name: CONTAINERD_NAMESPACE
           value: "k8s.io"
+        # 用 skopeo 直接导出 docker-archive，不再依赖节点 containerd
+        - name: COPY_TOOL
+          value: "skopeo"
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: APP_CONFIG_PATH
@@ -364,8 +367,6 @@ spec:
         - name: gitlab-ssh-key
           mountPath: /root/.ssh
           readOnly: true
-        - name: containerd-sock
-          mountPath: /run/containerd/containerd.sock
         - mountPath: /app/upgrade_packages
           name: storage
         - name: app-config
@@ -384,10 +385,6 @@ spec:
         secret:
           secretName: gitlab-ssh-key
           defaultMode: 0400
-      - name: containerd-sock
-        hostPath:
-          path: /run/containerd/containerd.sock
-          type: Socket
       - name: storage
         persistentVolumeClaim:
           claimName: auto-pancking-pvc
