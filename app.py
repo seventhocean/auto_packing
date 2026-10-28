@@ -139,7 +139,10 @@ DEFAULT_CONFIG = {
         "oss_prefix": "tmp/auto_packing/packages/",
         "presign_seconds": 900,          # 签名 URL 有效期
         "oss_timeout_seconds": 120,      # 列举/签名超时
-        "upload_timeout_seconds": 3600   # 上传超时（大包可能几 GB）
+        "upload_timeout_seconds": 3600,  # 上传超时（大包可能几 GB）
+        # 上传成功后删除本地副本：worker 用 emptyDir 运行时必须开，
+        # 否则单个 Pod 长期存活会累积几十 GB；下载会自动走 OSS 签名 URL
+        "delete_local_after_upload": False
     }
 }
 
@@ -188,6 +191,7 @@ def load_app_config():
     storage['presign_seconds'] = int(storage['presign_seconds'])
     storage['oss_timeout_seconds'] = int(storage['oss_timeout_seconds'])
     storage['upload_timeout_seconds'] = int(storage['upload_timeout_seconds'])
+    storage['delete_local_after_upload'] = bool(storage.get('delete_local_after_upload', False))
     return config
 
 
@@ -1407,6 +1411,13 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
             if oss_enabled():
                 update_progress(task_id, 93, "上传升级包到 OSS")
                 oss_uri = upload_package_to_oss(upgrade_path, upgrade_package, task_id=task_id)
+                # 已确认上云后再删本地，保证任何时候都至少有一份可下载
+                if oss_uri and STORAGE_CONFIG.get('delete_local_after_upload'):
+                    try:
+                        os.remove(upgrade_path)
+                        write_log(f"本地副本已删除（已上传 OSS）：{upgrade_package}", task_id=task_id)
+                    except OSError as exc:
+                        write_log(f"删除本地副本失败：{exc}", level="WARNING", task_id=task_id)
 
             # 清理临时文件
             update_progress(task_id, 95, "清理临时文件")
@@ -1425,7 +1436,7 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
                 "package_name": upgrade_package,
                 "package_format": "tar.gz",  # 标记包格式，便于前端显示
                 "oss_uri": oss_uri,
-                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2),  # 包大小（MB）
+                "package_size_mb": round(package_size/1024/1024, 2),  # 包大小（MB）
                 "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
             })
             write_log(f"任务[{task_id}]完全结束：{current_version}→{target_version}升级包构建完成，请在90秒内下载升级包", task_id=task_id)
@@ -1563,6 +1574,13 @@ def run_build_task_v7(task_id, images):
             if oss_enabled():
                 update_progress(task_id, 93, "上传升级包到 OSS")
                 oss_uri = upload_package_to_oss(upgrade_path, upgrade_package, task_id=task_id)
+                # 已确认上云后再删本地，保证任何时候都至少有一份可下载
+                if oss_uri and STORAGE_CONFIG.get('delete_local_after_upload'):
+                    try:
+                        os.remove(upgrade_path)
+                        write_log(f"本地副本已删除（已上传 OSS）：{upgrade_package}", task_id=task_id)
+                    except OSError as exc:
+                        write_log(f"删除本地副本失败：{exc}", level="WARNING", task_id=task_id)
 
             update_progress(task_id, 95, "清理临时文件")
             write_log(f"临时文件清理完成", task_id=task_id)
@@ -1579,7 +1597,7 @@ def run_build_task_v7(task_id, images):
                 "package_name": upgrade_package,
                 "package_format": "tar.gz",
                 "oss_uri": oss_uri,
-                "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2),
+                "package_size_mb": round(package_size/1024/1024, 2),
                 "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
             })
             write_log(f"任务[{task_id}]完全结束：V7升级包构建完成，请在90秒内下载升级包", task_id=task_id)

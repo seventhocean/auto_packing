@@ -509,6 +509,9 @@ class AppLogicTest(unittest.TestCase):
         self.assertLess(time.time() - started, 5)
 
     def test_download_existing_package(self):
+        # 固定为本地后端：这个用例校验的是"本机有文件时直接下发"，
+        # 不能受部署配置里 backend=oss 的影响
+        self._patch_storage(backend='local')
         name = 'download-test.tar.gz'
         path = os.path.join(ap.UPGRADE_PACKAGE_DIR, name)
         with open(path, 'wb') as f:

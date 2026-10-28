@@ -179,7 +179,7 @@ spec:
       containers:
       # 真正的 maintenance-app 业务容器。
       - name: maintenance-app
-        image: auto_packing:20261028-5225567
+        image: auto_packing:20261028-ec76d04
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -294,7 +294,7 @@ metadata:
   labels:
     app: maintenance-worker
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: maintenance-worker
@@ -320,8 +320,6 @@ spec:
         - until redis-cli -h maintenance-redis -p 6379 -a "$REDIS_PASSWORD" ping | grep PONG; do echo "waiting for redis auth ready"; sleep 2; done
       # 升级包与 Redis 都是 local 存储型 PVC，绑定在 deepflowapk01；
       # 不钉节点的话 Pod 会漂到 apk02/03，拉不到镜像、挂不上盘。
-      nodeSelector:
-        kubernetes.io/hostname: deepflowapk01
       hostAliases:
       - ip: "10.1.0.14"
         hostnames:
@@ -330,7 +328,7 @@ spec:
       containers:
       # 真正的 worker 业务容器。
       - name: maintenance-worker
-        image: auto_packing:20261028-5225567
+        image: auto_packing:20261028-ec76d04
         imagePullPolicy: IfNotPresent
         args:
         - python
@@ -373,8 +371,9 @@ spec:
         - name: gitlab-ssh-key
           mountPath: /root/.ssh
           readOnly: true
+        # worker 不再共享 PVC：产物上传 OSS 后本地即删，各节点独立
         - mountPath: /app/upgrade_packages
-          name: storage
+          name: scratch
         - name: app-config
           mountPath: /app/config
           readOnly: true
@@ -387,15 +386,23 @@ spec:
           limits:
             memory: "4Gi"
             cpu: "2000m"
+      # 三副本铺到三个节点：尽量一个节点一个 worker
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: maintenance-worker
       restartPolicy: Always
       volumes:
       - name: gitlab-ssh-key
         secret:
           secretName: gitlab-ssh-key
           defaultMode: 0400
-      - name: storage
-        persistentVolumeClaim:
-          claimName: auto-pancking-pvc
+      - name: scratch
+        emptyDir:
+          sizeLimit: 20Gi
       - name: nuwa-cache
         hostPath:
           path: /var/local-storage/nuwa

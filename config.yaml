@@ -8,7 +8,7 @@ redis:
   failure_ttl_seconds: 3600
   download_ttl_seconds: 90
   max_logs: 2000
-  max_concurrent_tasks: 1
+  max_concurrent_tasks: 3   # worker 铺到 3 个节点后，允许 3 个构建并行
 
 # 升级包保留策略：每次构建成功后自动回收旧包，避免只增不删把盘吃满。
 # 三重保护：最近 min_keep 个、min_age_minutes 内的新包、本次刚构建的包，都不会被删。
@@ -30,3 +30,6 @@ package_storage:
   presign_seconds: 900          # 签名 URL 有效期（秒）
   oss_timeout_seconds: 120      # 列举/签名超时
   upload_timeout_seconds: 3600  # 上传超时（大包可能几 GB）
+  # worker 用 emptyDir 跑，上传成功后删本地副本，避免单 Pod 累积几十 GB；
+  # 下载会自动回落到 OSS 签名 URL
+  delete_local_after_upload: true
