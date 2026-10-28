@@ -119,6 +119,16 @@ DEFAULT_CONFIG = {
         "download_ttl_seconds": 90,
         "max_logs": 2000,
         "max_concurrent_tasks": 1
+    },
+    # 升级包保留策略：只增不删会把盘吃满，每次构建成功后按这个策略回收。
+    # 默认保守（数量/容量都留足余量），可用 config.yaml 的 package_retention 覆盖。
+    "retention": {
+        "enabled": True,
+        "max_count": 40,        # 最多保留多少个包
+        "max_total_gb": 60,     # 所有包总大小上限
+        "min_keep": 3,          # 无论超限与否，至少保留最近的 N 个
+        "min_age_minutes": 30,  # 这么新的包一律不删（防止删掉正在下载/刚交付的包）
+        "dry_run": False
     }
 }
 
@@ -133,6 +143,8 @@ def load_app_config():
             loaded = yaml.safe_load(f) or {}
         if isinstance(loaded.get('redis'), dict):
             config['redis'].update(loaded['redis'])
+        if isinstance(loaded.get('package_retention'), dict):
+            config['retention'].update(loaded['package_retention'])
 
     redis_password = os.environ.get('REDIS_PASSWORD')
     if redis_password is not None:
@@ -145,11 +157,20 @@ def load_app_config():
     config['redis']['download_ttl_seconds'] = int(config['redis']['download_ttl_seconds'])
     config['redis']['max_logs'] = int(config['redis']['max_logs'])
     config['redis']['max_concurrent_tasks'] = int(config['redis']['max_concurrent_tasks'])
+
+    retention = config['retention']
+    retention['enabled'] = bool(retention['enabled'])
+    retention['dry_run'] = bool(retention['dry_run'])
+    retention['max_count'] = int(retention['max_count'])
+    retention['max_total_gb'] = float(retention['max_total_gb'])
+    retention['min_keep'] = int(retention['min_keep'])
+    retention['min_age_minutes'] = int(retention['min_age_minutes'])
     return config
 
 
 APP_CONFIG = load_app_config()
 REDIS_CONFIG = APP_CONFIG['redis']
+RETENTION_CONFIG = APP_CONFIG['retention']
 redis_client = redis.Redis(
     host=REDIS_CONFIG['host'],
     port=REDIS_CONFIG['port'],
@@ -817,6 +838,109 @@ def get_existing_packages():
         return []
 
 
+def _format_gb(num_bytes):
+    try:
+        return float(num_bytes) / (1024 ** 3)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _package_entries():
+    """列出升级包（按 mtime 从新到旧）。"""
+    entries = []
+    for path in glob.glob(os.path.join(UPGRADE_PACKAGE_DIR, "*.tar.gz")):
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        entries.append({
+            "name": os.path.basename(path),
+            "path": path,
+            "size": st.st_size,
+            "mtime": st.st_mtime,
+        })
+    entries.sort(key=lambda e: e["mtime"], reverse=True)
+    return entries
+
+
+def cleanup_old_packages(keep_name=None):
+    """按保留策略回收升级包，避免只增不删把盘吃满。
+
+    从最旧的开始删，直到同时满足「数量 <= max_count」且「总大小 <= max_total_gb」。
+    三重保护：
+      1. 最近 min_keep 个永远保留；
+      2. 年龄小于 min_age_minutes 的一律不动（可能正在下载或刚交付）；
+      3. 本次刚构建的包（keep_name）永远不动。
+    """
+    cfg = RETENTION_CONFIG
+    summary = {
+        "enabled": cfg["enabled"],
+        "deleted": [],
+        "freed_bytes": 0,
+        "kept": 0,
+        "total_bytes": 0,
+        "reason": "",
+    }
+    if not cfg["enabled"]:
+        summary["reason"] = "保留策略未启用"
+        return summary
+
+    entries = _package_entries()
+    total = sum(e["size"] for e in entries)
+    summary["kept"] = len(entries)
+    summary["total_bytes"] = total
+
+    limit_bytes = int(cfg["max_total_gb"] * (1024 ** 3))
+    min_keep = max(int(cfg["min_keep"]), 1)
+    min_age_seconds = int(cfg["min_age_minutes"]) * 60
+    now = time.time()
+
+    remaining = len(entries)
+    for entry in reversed(entries):          # 最旧的先处理
+        if remaining <= min_keep:
+            break
+        if remaining <= cfg["max_count"] and total <= limit_bytes:
+            break
+        if keep_name and entry["name"] == keep_name:
+            continue
+        if now - entry["mtime"] < min_age_seconds:
+            continue
+
+        if cfg["dry_run"]:
+            summary["deleted"].append(entry["name"] + "（dry-run，未删除）")
+            total -= entry["size"]
+            remaining -= 1
+            continue
+
+        try:
+            os.remove(entry["path"])
+        except OSError as exc:
+            write_log(f"升级包清理失败：{entry['name']}（{exc}）", level="WARNING")
+            continue
+
+        summary["deleted"].append(entry["name"])
+        summary["freed_bytes"] += entry["size"]
+        total -= entry["size"]
+        remaining -= 1
+
+    summary["kept"] = remaining
+    summary["total_bytes"] = max(total, 0)
+
+    if summary["deleted"]:
+        write_log(
+            "升级包清理：删除 {} 个，释放 {:.2f} GB；剩余 {} 个 / {:.2f} GB".format(
+                len(summary["deleted"]),
+                _format_gb(summary["freed_bytes"]),
+                summary["kept"],
+                _format_gb(summary["total_bytes"]),
+            ),
+            level="INFO",
+        )
+    elif not summary["reason"]:
+        summary["reason"] = "未达到清理阈值"
+    return summary
+
+
 def _is_safe_version_value(value):
     """版本号会参与目录名/包名拼接，拒绝路径分隔符和 .. 等危险字符。"""
     if not value or '..' in value:
@@ -1114,6 +1238,13 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
                 "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
             })
             write_log(f"任务[{task_id}]完全结束：{current_version}→{target_version}升级包构建完成，请在90秒内下载升级包", task_id=task_id)
+
+            # 构建成功后再回收旧包：失败的构建不应该动历史产物
+            try:
+                cleanup_old_packages(keep_name=upgrade_package)
+            except Exception as cleanup_exc:
+                write_log(f"升级包清理异常（不影响本次构建）：{cleanup_exc}", level="WARNING")
+
             schedule_task_cleanup(task_id, REDIS_CONFIG['success_ttl_seconds'])
 
         except BuildCancelled:
@@ -1255,6 +1386,12 @@ def run_build_task_v7(task_id, images):
             })
             write_log(f"任务[{task_id}]完全结束：V7升级包构建完成，请在90秒内下载升级包", task_id=task_id)
 
+            # 构建成功后再回收旧包：失败的构建不应该动历史产物
+            try:
+                cleanup_old_packages(keep_name=upgrade_package)
+            except Exception as cleanup_exc:
+                write_log(f"升级包清理异常（不影响本次构建）：{cleanup_exc}", level="WARNING")
+
             schedule_task_cleanup(task_id, REDIS_CONFIG['success_ttl_seconds'])
 
         except BuildCancelled:
@@ -1334,6 +1471,19 @@ def api_existing_packages():
             "files": [],
             "message": error_msg
         }), 500
+
+
+# -------------------------- 手动触发升级包清理 --------------------------
+@app.route('/packages/cleanup', methods=['POST'])
+def api_cleanup_packages():
+    """运维用：立即按保留策略回收升级包（自动清理在每次构建成功后已经跑过一次）。"""
+    try:
+        summary = cleanup_old_packages()
+        return jsonify({"success": True, **summary})
+    except Exception as e:
+        error_msg = f"升级包清理失败：{str(e)}"
+        write_log(error_msg, level="ERROR")
+        return jsonify({"success": False, "message": error_msg}), 500
 
 
 # -------------------------- 任务中心总览 --------------------------

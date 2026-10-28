@@ -9,3 +9,13 @@ redis:
   download_ttl_seconds: 90
   max_logs: 2000
   max_concurrent_tasks: 1
+
+# 升级包保留策略：每次构建成功后自动回收旧包，避免只增不删把盘吃满。
+# 三重保护：最近 min_keep 个、min_age_minutes 内的新包、本次刚构建的包，都不会被删。
+package_retention:
+  enabled: true
+  max_count: 40          # 最多保留多少个包
+  max_total_gb: 60       # 所有包总大小上限
+  min_keep: 3            # 至少保留最近 N 个
+  min_age_minutes: 30    # 这么新的包不删（可能在下载或刚交付）
+  dry_run: false         # true 时只记录不真删

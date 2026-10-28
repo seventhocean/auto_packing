@@ -5,6 +5,7 @@
     python -m unittest tests.test_app_logic -v
 """
 import fnmatch
+import glob
 import json
 import os
 import shutil
@@ -563,6 +564,109 @@ class AppLogicTest(unittest.TestCase):
                 timeout=1
             )
         self.assertLess(time.time() - started, 3)
+
+
+    # ---------------- 升级包保留策略 ----------------
+
+    def _make_packages(self, count, age_minutes=120):
+        """造 count 个包，索引越大越新。"""
+        d = tempfile.mkdtemp(prefix='autopacking-pkg-')
+        self.addCleanup(shutil.rmtree, d, True)
+        now = time.time()
+        for i in range(count):
+            path = os.path.join(d, 'deepflow_patch_v669_%02d_%02d.tar.gz' % (i, i + 1))
+            with open(path, 'wb') as f:
+                f.write(b'x' * 1024)
+            ts = now - (count - i) * age_minutes * 60
+            os.utime(path, (ts, ts))
+        return d
+
+    def _patch_retention(self, package_dir, **overrides):
+        original_dir = ap.UPGRADE_PACKAGE_DIR
+        original_cfg = dict(ap.RETENTION_CONFIG)
+        ap.UPGRADE_PACKAGE_DIR = package_dir
+        ap.RETENTION_CONFIG.update({
+            'enabled': True, 'max_count': 40, 'max_total_gb': 60.0,
+            'min_keep': 3, 'min_age_minutes': 0, 'dry_run': False,
+        })
+        ap.RETENTION_CONFIG.update(overrides)
+
+        def restore():
+            ap.UPGRADE_PACKAGE_DIR = original_dir
+            ap.RETENTION_CONFIG.clear()
+            ap.RETENTION_CONFIG.update(original_cfg)
+
+        self.addCleanup(restore)
+
+    def test_cleanup_trims_to_max_count(self):
+        d = self._make_packages(5)
+        self._patch_retention(d, max_count=3, min_keep=1)
+
+        summary = ap.cleanup_old_packages()
+
+        self.assertEqual(len(summary['deleted']), 2)
+        self.assertEqual(summary['kept'], 3)
+        # 删的必须是最旧的两个
+        self.assertIn('deepflow_patch_v669_00_01.tar.gz', summary['deleted'])
+        self.assertIn('deepflow_patch_v669_01_02.tar.gz', summary['deleted'])
+        self.assertEqual(len(glob.glob(os.path.join(d, '*.tar.gz'))), 3)
+        self.assertGreater(summary['freed_bytes'], 0)
+
+    def test_cleanup_never_below_min_keep(self):
+        d = self._make_packages(5)
+        self._patch_retention(d, max_count=0, min_keep=3)
+
+        summary = ap.cleanup_old_packages()
+
+        self.assertEqual(summary['kept'], 3)
+        self.assertEqual(len(glob.glob(os.path.join(d, '*.tar.gz'))), 3)
+
+    def test_cleanup_skips_fresh_packages(self):
+        d = self._make_packages(5, age_minutes=1)
+        self._patch_retention(d, max_count=1, min_keep=1, min_age_minutes=600)
+
+        summary = ap.cleanup_old_packages()
+
+        self.assertEqual(summary['deleted'], [])
+        self.assertEqual(len(glob.glob(os.path.join(d, '*.tar.gz'))), 5)
+
+    def test_cleanup_protects_current_package(self):
+        d = self._make_packages(4)
+        self._patch_retention(d, max_count=1, min_keep=1)
+        keep = 'deepflow_patch_v669_00_01.tar.gz'   # 最旧，本来会被删
+
+        summary = ap.cleanup_old_packages(keep_name=keep)
+
+        self.assertNotIn(keep, summary['deleted'])
+        self.assertTrue(os.path.exists(os.path.join(d, keep)))
+
+    def test_cleanup_disabled_is_noop(self):
+        d = self._make_packages(5)
+        self._patch_retention(d, enabled=False, max_count=1)
+
+        summary = ap.cleanup_old_packages()
+
+        self.assertFalse(summary['enabled'])
+        self.assertEqual(summary['deleted'], [])
+        self.assertEqual(len(glob.glob(os.path.join(d, '*.tar.gz'))), 5)
+
+    def test_cleanup_dry_run_keeps_files(self):
+        d = self._make_packages(5)
+        self._patch_retention(d, max_count=2, min_keep=1, dry_run=True)
+
+        summary = ap.cleanup_old_packages()
+
+        self.assertTrue(summary['deleted'])
+        self.assertEqual(len(glob.glob(os.path.join(d, '*.tar.gz'))), 5)
+
+    def test_cleanup_respects_total_size_cap(self):
+        d = self._make_packages(4)          # 每个 1KB
+        self._patch_retention(d, max_count=99, min_keep=1, max_total_gb=0.000002)
+
+        summary = ap.cleanup_old_packages()
+
+        self.assertTrue(len(summary['deleted']) >= 2)
+        self.assertLessEqual(summary['total_bytes'], 2 * 1024)
 
 
 if __name__ == '__main__':
