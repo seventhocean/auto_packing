@@ -669,5 +669,119 @@ class AppLogicTest(unittest.TestCase):
         self.assertLessEqual(summary['total_bytes'], 2 * 1024)
 
 
+    # ---------------- OSS 存储后端 ----------------
+
+    def _patch_storage(self, **overrides):
+        original = dict(ap.STORAGE_CONFIG)
+        ap.STORAGE_CONFIG.update({
+            'backend': 'oss',
+            'oss_bucket': 'publicshare-unsafe',
+            'oss_prefix': 'tmp/auto_packing/packages/',
+            'presign_seconds': 900,
+            'oss_timeout_seconds': 120,
+            'upload_timeout_seconds': 3600,
+        })
+        ap.STORAGE_CONFIG.update(overrides)
+
+        def restore():
+            ap.STORAGE_CONFIG.clear()
+            ap.STORAGE_CONFIG.update(original)
+
+        self.addCleanup(restore)
+
+    def test_package_oss_uri_builds_full_path(self):
+        self._patch_storage()
+        self.assertEqual(
+            ap.package_oss_uri('a.tar.gz'),
+            'oss://publicshare-unsafe/tmp/auto_packing/packages/a.tar.gz')
+        self.assertEqual(
+            ap.package_oss_uri(''),
+            'oss://publicshare-unsafe/tmp/auto_packing/packages/')
+
+    def test_package_oss_uri_without_prefix(self):
+        self._patch_storage(oss_prefix='')
+        self.assertEqual(ap.package_oss_uri('a.tar.gz'),
+                         'oss://publicshare-unsafe/a.tar.gz')
+
+    def test_oss_ls_line_parsing(self):
+        line = ('2026-10-28 11:09:56 +0000 UTC            5         Standard   '
+                'D8E8FCA2DC0F896FD7CB4CB0031BA249      '
+                'oss://publicshare-unsafe/tmp/auto_packing/packages/x.tar.gz')
+        m = ap._OSS_LS_LINE_RE.match(line.strip())
+        self.assertIsNotNone(m)
+        self.assertEqual(m.group('size'), '5')
+        self.assertTrue(m.group('uri').endswith('/x.tar.gz'))
+
+    def test_oss_helpers_are_noop_when_backend_local(self):
+        self._patch_storage(backend='local')
+        self.assertFalse(ap.oss_enabled())
+        self.assertIsNone(ap.upload_package_to_oss('/tmp/whatever', 'x.tar.gz'))
+        self.assertEqual(ap.list_oss_packages(), [])
+        self.assertIsNone(ap.presign_package_url('x.tar.gz'))
+        self.assertFalse(ap.delete_oss_package('x.tar.gz'))
+
+    def test_presign_returns_url_from_ossutil(self):
+        self._patch_storage()
+        original = ap._run_ossutil
+        ap._run_ossutil = lambda args, timeout: type('R', (), {
+            'returncode': 0, 'stdout': 'https://example.com/x?sig=1\n0.001s elapsed\n'})()
+        self.addCleanup(lambda: setattr(ap, '_run_ossutil', original))
+
+        self.assertEqual(ap.presign_package_url('x.tar.gz'),
+                         'https://example.com/x?sig=1')
+
+    def test_list_oss_packages_parses_objects(self):
+        self._patch_storage()
+        output = (
+            'LastModifiedTime                   Size(B)     StorageClass   ETAG   ObjectName\n'
+            '2026-10-28 11:09:56 +0000 UTC            5         Standard   ABC   '
+            'oss://publicshare-unsafe/tmp/auto_packing/packages/a.tar.gz\n'
+            'Object Number is: 1\n'
+        )
+        original = ap._run_ossutil
+        ap._run_ossutil = lambda args, timeout: type('R', (), {
+            'returncode': 0, 'stdout': output})()
+        self.addCleanup(lambda: setattr(ap, '_run_ossutil', original))
+
+        packages = ap.list_oss_packages()
+        self.assertEqual(len(packages), 1)
+        self.assertEqual(packages[0]['name'], 'a.tar.gz')
+        self.assertEqual(packages[0]['size'], 5)
+        self.assertEqual(packages[0]['source'], 'oss')
+        self.assertGreater(packages[0]['mtime'], 0)
+
+    def test_existing_packages_merges_oss_and_local(self):
+        self._patch_storage()
+        import time as _t
+        original_local = ap.get_existing_packages
+        original_remote = ap.list_oss_packages
+        ap.get_existing_packages = lambda: [
+            {'name': 'local.tar.gz', 'size': 10, 'mtime': _t.time(), 'source': 'local'}]
+        ap.list_oss_packages = lambda: [
+            {'name': 'remote.tar.gz', 'size': 20, 'mtime': _t.time() - 60, 'source': 'oss'},
+            {'name': 'local.tar.gz', 'size': 10, 'mtime': _t.time(), 'source': 'oss'}]
+        self.addCleanup(lambda: setattr(ap, 'get_existing_packages', original_local))
+        self.addCleanup(lambda: setattr(ap, 'list_oss_packages', original_remote))
+
+        data = ap.app.test_client().get('/existing-packages').get_json()
+        names = [f['name'] for f in data['files']]
+        self.assertEqual(sorted(names), ['local.tar.gz', 'remote.tar.gz'])
+        self.assertEqual(data['storage_backend'], 'oss')
+
+    def test_cleanup_deletes_oss_object_for_removed_package(self):
+        d = self._make_packages(3)
+        self._patch_retention(d, max_count=1, min_keep=1)
+        self._patch_storage()
+        removed = []
+        original_delete = ap.delete_oss_package
+        ap.delete_oss_package = lambda name: removed.append(name) or True
+        self.addCleanup(lambda: setattr(ap, 'delete_oss_package', original_delete))
+
+        summary = ap.cleanup_old_packages()
+
+        self.assertEqual(len(summary['deleted']), 2)
+        self.assertEqual(sorted(removed), sorted(summary['deleted']))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -19,3 +19,14 @@ package_retention:
   min_keep: 3            # 至少保留最近 N 个
   min_age_minutes: 30    # 这么新的包不删（可能在下载或刚交付）
   dry_run: false         # true 时只记录不真删
+
+# 升级包存储后端
+#   local = 只落本机盘（原来的行为）
+#   oss   = 构建成功后自动上传，下载走 OSS 签名 URL；app 不再强依赖本机磁盘
+package_storage:
+  backend: oss
+  oss_bucket: publicshare-unsafe
+  oss_prefix: tmp/auto_packing/packages/
+  presign_seconds: 900          # 签名 URL 有效期（秒）
+  oss_timeout_seconds: 120      # 列举/签名超时
+  upload_timeout_seconds: 3600  # 上传超时（大包可能几 GB）

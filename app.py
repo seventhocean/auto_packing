@@ -9,7 +9,8 @@ import shutil
 import signal
 import threading
 import uuid
-from flask import Flask, request, Response, jsonify, send_file, abort, render_template # type: ignore
+import calendar
+from flask import Flask, request, Response, jsonify, send_file, abort, render_template, redirect # type: ignore
 import traceback
 from urllib.parse import quote, unquote
 import yaml # type: ignore
@@ -129,6 +130,16 @@ DEFAULT_CONFIG = {
         "min_keep": 3,          # 无论超限与否，至少保留最近的 N 个
         "min_age_minutes": 30,  # 这么新的包一律不删（防止删掉正在下载/刚交付的包）
         "dry_run": False
+    },
+    # 升级包存储后端：local=只落本地盘；oss=构建成功后上传 OSS，下载走签名 URL。
+    # 换成 oss 后 app 不再强依赖本机磁盘，是多副本/多节点的前置条件。
+    "package_storage": {
+        "backend": "local",
+        "oss_bucket": "publicshare-unsafe",
+        "oss_prefix": "tmp/auto_packing/packages/",
+        "presign_seconds": 900,          # 签名 URL 有效期
+        "oss_timeout_seconds": 120,      # 列举/签名超时
+        "upload_timeout_seconds": 3600   # 上传超时（大包可能几 GB）
     }
 }
 
@@ -145,6 +156,8 @@ def load_app_config():
             config['redis'].update(loaded['redis'])
         if isinstance(loaded.get('package_retention'), dict):
             config['retention'].update(loaded['package_retention'])
+        if isinstance(loaded.get('package_storage'), dict):
+            config['package_storage'].update(loaded['package_storage'])
 
     redis_password = os.environ.get('REDIS_PASSWORD')
     if redis_password is not None:
@@ -165,12 +178,23 @@ def load_app_config():
     retention['max_total_gb'] = float(retention['max_total_gb'])
     retention['min_keep'] = int(retention['min_keep'])
     retention['min_age_minutes'] = int(retention['min_age_minutes'])
+
+    storage = config['package_storage']
+    storage['backend'] = str(storage['backend']).strip().lower()
+    if storage['backend'] not in ('local', 'oss'):
+        storage['backend'] = 'local'
+    storage['oss_bucket'] = str(storage['oss_bucket']).strip()
+    storage['oss_prefix'] = str(storage['oss_prefix']).strip()
+    storage['presign_seconds'] = int(storage['presign_seconds'])
+    storage['oss_timeout_seconds'] = int(storage['oss_timeout_seconds'])
+    storage['upload_timeout_seconds'] = int(storage['upload_timeout_seconds'])
     return config
 
 
 APP_CONFIG = load_app_config()
 REDIS_CONFIG = APP_CONFIG['redis']
 RETENTION_CONFIG = APP_CONFIG['retention']
+STORAGE_CONFIG = APP_CONFIG['package_storage']
 redis_client = redis.Redis(
     host=REDIS_CONFIG['host'],
     port=REDIS_CONFIG['port'],
@@ -803,35 +827,32 @@ def _oss_versions_fallback(error_msg, use_cache, channel_key=DEFAULT_CHANNEL):
     return []
 
 def get_existing_packages():
-    """新增：获取UPGRADE_PACKAGE_DIR目录下的所有tar.gz升级包列表
-    返回格式：[{name: 文件名, size: 文件大小(字节)}, ...]
+    """获取本地 UPGRADE_PACKAGE_DIR 下的升级包列表
+
+    返回格式：[{name, size, mtime, source}, ...]，按 mtime 倒序
     """
     try:
-        # 筛选目录下所有.tar.gz文件
         package_pattern = os.path.join(UPGRADE_PACKAGE_DIR, "*.tar.gz")
         package_files = glob.glob(package_pattern)
-        
+
         packages = []
         for file_path in package_files:
             if os.path.isfile(file_path):
-                file_name = os.path.basename(file_path)
-                file_size = os.path.getsize(file_path)
+                try:
+                    st = os.stat(file_path)
+                except OSError:
+                    continue
                 packages.append({
-                    "name": file_name,
-                    "size": file_size
+                    "name": os.path.basename(file_path),
+                    "size": st.st_size,
+                    "mtime": st.st_mtime,
+                    "source": "local",
                 })
-        
-        # 按文件修改时间降序排序（最新生成的包排在前面）
-        # 防御性处理：glob 和 getmtime 之间文件可能被删除
-        def _safe_mtime(pkg):
-            try:
-                return os.path.getmtime(os.path.join(UPGRADE_PACKAGE_DIR, pkg["name"]))
-            except FileNotFoundError:
-                return 0
-        packages.sort(key=_safe_mtime, reverse=True)
+
+        packages.sort(key=lambda p: p["mtime"], reverse=True)
         write_log(f"获取已有升级包成功，共{len(packages)}个有效包")
         return packages
-    
+
     except Exception as e:
         error_msg = f"获取已有升级包列表失败：{str(e)}"
         write_log(error_msg, level="ERROR")
@@ -918,6 +939,10 @@ def cleanup_old_packages(keep_name=None):
             write_log(f"升级包清理失败：{entry['name']}（{exc}）", level="WARNING")
             continue
 
+        # 本地删掉后同步清 OSS 上的同名对象，避免"本地没了远端还占着"
+        if oss_enabled():
+            delete_oss_package(entry["name"])
+
         summary["deleted"].append(entry["name"])
         summary["freed_bytes"] += entry["size"]
         total -= entry["size"]
@@ -939,6 +964,165 @@ def cleanup_old_packages(keep_name=None):
     elif not summary["reason"]:
         summary["reason"] = "未达到清理阈值"
     return summary
+
+
+# -------------------------- 升级包存储后端（local / OSS） --------------------------
+def oss_enabled():
+    return STORAGE_CONFIG.get('backend') == 'oss'
+
+
+def _oss_prefix_normalized():
+    return str(STORAGE_CONFIG.get('oss_prefix') or '').strip('/')
+
+
+def package_oss_uri(package_name):
+    """拼出对象完整 URI；package_name 为空时返回前缀 URI（用于列举）。"""
+    bucket = STORAGE_CONFIG['oss_bucket']
+    prefix = _oss_prefix_normalized()
+    if package_name:
+        return "oss://{}/{}/{}".format(bucket, prefix, package_name) if prefix else "oss://{}/{}".format(bucket, package_name)
+    return "oss://{}/{}/".format(bucket, prefix) if prefix else "oss://{}/".format(bucket)
+
+
+def _run_ossutil(args, timeout_seconds):
+    """执行 ossutil 子进程（复用 entrypoint 生成的 .ossutilconfig）。"""
+    return subprocess.run(
+        [OSS_FILE, "-c", OSS_CONFIG] + list(args),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        timeout=timeout_seconds,
+    )
+
+
+def upload_package_to_oss(local_path, package_name, task_id=None):
+    """上传升级包到 OSS，成功返回 URI；失败返回 None。
+
+    上传失败不抛异常：本地文件仍在，构建结果不受影响，只在日志里记 ERROR。
+    """
+    if not oss_enabled():
+        return None
+    if not os.path.exists(local_path):
+        write_log(f"OSS 上传跳过：本地文件不存在 {local_path}", level="WARNING", task_id=task_id)
+        return None
+
+    uri = package_oss_uri(package_name)
+    started = time.time()
+    try:
+        result = _run_ossutil(["cp", "-f", local_path, uri], STORAGE_CONFIG['upload_timeout_seconds'])
+    except subprocess.TimeoutExpired:
+        write_log(f"OSS 上传超时（{STORAGE_CONFIG['upload_timeout_seconds']}s）：{package_name}",
+                  level="ERROR", task_id=task_id)
+        return None
+    except Exception as exc:
+        write_log(f"OSS 上传异常：{package_name}（{exc}）", level="ERROR", task_id=task_id)
+        return None
+
+    if result.returncode != 0:
+        write_log("OSS 上传失败：{}，输出：{}".format(package_name, (result.stdout or '')[-400:]),
+                  level="ERROR", task_id=task_id)
+        return None
+
+    write_log("OSS 上传完成：{}（{:.1f}s）→ {}".format(package_name, time.time() - started, uri),
+              task_id=task_id)
+    return uri
+
+
+# ossutil ls 输出形如：
+# 2026-10-28 11:09:56 +0000 UTC            5   Standard   D8E8...   oss://bucket/prefix/x.tar.gz
+_OSS_LS_LINE_RE = re.compile(
+    r'^(?P<date>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*?\s(?P<size>\d+)\s+\S+\s+\S+\s+(?P<uri>oss://\S+)$'
+)
+
+
+def _oss_time_to_epoch(text):
+    try:
+        return calendar.timegm(time.strptime(text, "%Y-%m-%d %H:%M:%S"))
+    except (ValueError, TypeError):
+        return 0
+
+
+def list_oss_packages():
+    """列举 OSS 上的升级包；任何失败都返回空列表（不影响本地列表展示）。"""
+    if not oss_enabled():
+        return []
+    base_uri = package_oss_uri("")
+    try:
+        result = _run_ossutil(["ls", base_uri], STORAGE_CONFIG['oss_timeout_seconds'])
+    except subprocess.TimeoutExpired:
+        write_log("OSS 列举超时", level="WARNING")
+        return []
+    except Exception as exc:
+        write_log(f"OSS 列举异常：{exc}", level="WARNING")
+        return []
+
+    if result.returncode != 0:
+        write_log("OSS 列举失败：" + (result.stdout or '')[-300:], level="WARNING")
+        return []
+
+    packages = []
+    for line in (result.stdout or '').splitlines():
+        match = _OSS_LS_LINE_RE.match(line.strip())
+        if not match:
+            continue
+        name = match.group('uri').rsplit('/', 1)[-1]
+        if not name.endswith('.tar.gz'):
+            continue
+        packages.append({
+            "name": name,
+            "size": int(match.group('size')),
+            "mtime": _oss_time_to_epoch(match.group('date')),
+            "source": "oss",
+            "oss_uri": match.group('uri'),
+        })
+    return packages
+
+
+def presign_package_url(package_name, expires_seconds=None):
+    """生成 OSS 预签名下载 URL；失败返回 None。"""
+    if not oss_enabled() or not package_name:
+        return None
+    seconds = int(expires_seconds or STORAGE_CONFIG['presign_seconds'])
+    uri = package_oss_uri(package_name)
+    try:
+        result = _run_ossutil(
+            ["presign", uri, "--expires-duration", "{}s".format(seconds)],
+            STORAGE_CONFIG['oss_timeout_seconds'],
+        )
+    except subprocess.TimeoutExpired:
+        write_log(f"OSS 签名超时：{package_name}", level="WARNING")
+        return None
+    except Exception as exc:
+        write_log(f"OSS 签名异常：{package_name}（{exc}）", level="WARNING")
+        return None
+
+    if result.returncode != 0:
+        write_log("OSS 签名失败：{}，输出：{}".format(package_name, (result.stdout or '')[-300:]),
+                  level="WARNING")
+        return None
+
+    for line in (result.stdout or '').splitlines():
+        line = line.strip()
+        if line.startswith('http'):
+            return line
+    return None
+
+
+def delete_oss_package(package_name):
+    """删除 OSS 上的包（保留策略用），失败只告警。"""
+    if not oss_enabled() or not package_name:
+        return False
+    uri = package_oss_uri(package_name)
+    try:
+        result = _run_ossutil(["rm", uri], STORAGE_CONFIG['oss_timeout_seconds'])
+    except Exception as exc:
+        write_log(f"OSS 删除异常：{package_name}（{exc}）", level="WARNING")
+        return False
+    if result.returncode != 0:
+        write_log("OSS 删除失败：{}，输出：{}".format(package_name, (result.stdout or '')[-300:]),
+                  level="WARNING")
+        return False
+    return True
 
 
 def _is_safe_version_value(value):
@@ -1218,6 +1402,12 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
             package_size = os.path.getsize(upgrade_path)
             write_log(f"升级包大小：{package_size/1024/1024:.2f}MB", task_id=task_id)
 
+            # 上传到 OSS（仅 backend=oss）：失败不影响构建结果，本地文件仍可下载
+            oss_uri = None
+            if oss_enabled():
+                update_progress(task_id, 93, "上传升级包到 OSS")
+                oss_uri = upload_package_to_oss(upgrade_path, upgrade_package, task_id=task_id)
+
             # 清理临时文件
             update_progress(task_id, 95, "清理临时文件")
             write_log(f"临时文件清理完成", task_id=task_id)
@@ -1234,6 +1424,7 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
                 "package_path": upgrade_path,
                 "package_name": upgrade_package,
                 "package_format": "tar.gz",  # 标记包格式，便于前端显示
+                "oss_uri": oss_uri,
                 "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2),  # 包大小（MB）
                 "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
             })
@@ -1367,6 +1558,12 @@ def run_build_task_v7(task_id, images):
             package_size = os.path.getsize(upgrade_path)
             write_log(f"升级包大小：{package_size/1024/1024:.2f}MB", task_id=task_id)
 
+            # 上传到 OSS（仅 backend=oss）：失败不影响构建结果，本地文件仍可下载
+            oss_uri = None
+            if oss_enabled():
+                update_progress(task_id, 93, "上传升级包到 OSS")
+                oss_uri = upload_package_to_oss(upgrade_path, upgrade_package, task_id=task_id)
+
             update_progress(task_id, 95, "清理临时文件")
             write_log(f"临时文件清理完成", task_id=task_id)
 
@@ -1381,6 +1578,7 @@ def run_build_task_v7(task_id, images):
                 "package_path": upgrade_path,
                 "package_name": upgrade_package,
                 "package_format": "tar.gz",
+                "oss_uri": oss_uri,
                 "package_size_mb": round(os.path.getsize(upgrade_path)/1024/1024, 2),
                 "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
             })
@@ -1458,9 +1656,22 @@ def api_existing_packages():
     try:
         # 调用工具函数获取文件列表
         packages = get_existing_packages()
+
+        # OSS 后端：合并远端列表（本地同名的以本地为准，避免重复）
+        if oss_enabled():
+            try:
+                local_names = {p["name"] for p in packages}
+                remote = [p for p in list_oss_packages() if p["name"] not in local_names]
+                if remote:
+                    packages = packages + remote
+                    packages.sort(key=lambda p: p.get("mtime") or 0, reverse=True)
+            except Exception as exc:
+                write_log(f"合并 OSS 升级包列表失败（仅返回本地）：{exc}", level="WARNING")
+
         return jsonify({
             "success": True,
             "files": packages,
+            "storage_backend": STORAGE_CONFIG['backend'],
             "message": f"共获取到{len(packages)}个已生成的升级包"
         })
     except Exception as e:
@@ -1526,7 +1737,21 @@ def api_download_existing(filename):
         write_log(error_msg, level="ERROR")
         abort(400, description=error_msg)
 
-    # 执行安全校验
+    # 先做纯文件名校验：OSS 上的包本地可能没有，不能一上来就要求文件存在
+    if (not filename or '..' in filename or '/' in filename or '\\' in filename
+            or not filename.endswith('.tar.gz')):
+        error_msg = f"文件下载校验失败：非法文件名 {filename}"
+        write_log(error_msg, level="WARNING")
+        abort(403, description=error_msg)
+
+    # OSS 后端：优先用签名 URL 直接跳转（本地没有该文件也能下载）
+    if oss_enabled():
+        url = presign_package_url(filename)
+        if url:
+            write_log(f"已有升级包下载（OSS 签名跳转）：文件名={filename}")
+            return redirect(url, code=302)
+
+    # 回退本地文件
     valid, result = validate_package_filename(filename)
     if not valid:
         error_msg = f"文件下载校验失败：{result}"
@@ -1825,6 +2050,13 @@ def api_download(task_id):
         error_msg = f"任务{task_id}的下载链接已过期，请重新构建或从已有升级包列表下载"
         write_log(error_msg, level="WARNING")
         return jsonify({"success": False, "message": error_msg}), 410
+
+    # OSS 后端：优先签名 URL 跳转，避免依赖本机文件
+    if oss_enabled():
+        url = presign_package_url(task_status['package_name'])
+        if url:
+            write_log(f"新构建包下载（OSS 签名跳转）：任务ID={task_id}，文件名={task_status['package_name']}")
+            return redirect(url, code=302)
 
     # 校验包路径合法性
     package_path = task_status['package_path']
