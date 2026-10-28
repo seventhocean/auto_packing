@@ -14,6 +14,7 @@ RUN set -eux; \
         git \
         openssh-client \
         unzip \
+        skopeo \
         && rm -rf /var/lib/apt/lists/*; \
     # 安装 ossutil 到 /app/bin/
     mkdir -p /app/bin; \

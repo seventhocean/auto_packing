@@ -24,6 +24,17 @@ LOG_FILE="$BASE_DIR/../logs/app.log"
 # 用数组保存，避免 "nerdctl -n k8s.io" 被当成一个可执行文件名
 #container_cmd=(docker)
 container_cmd=(nerdctl -n k8s.io)
+
+# 镜像获取方式：
+#   archive = 老流程，容器工具 pull + save（依赖节点 containerd.sock）
+#   skopeo  = 直接用 skopeo 导出 docker-archive，不依赖节点 containerd
+copy_tool="${COPY_TOOL:-archive}"
+# 仓库凭据（repo_login 与 skopeo 共用）
+REGISTRY_HOST="hub.deepflow.yunshan.net"
+REGISTRY_USER="acrpush@yunshan"
+REGISTRY_PASSWORD="35lRrgBcLhF"
+# skopeo 对内网仓库的 TLS 校验，遇到自签证书可设 SKOPEO_TLS_VERIFY=false
+skopeo_tls_verify="${SKOPEO_TLS_VERIFY:-true}"
 # 镜像仓库前缀（默认DeepFlow仓库）
 repo="hub.deepflow.yunshan.net/dev/"
 # 镜像保存目录（默认空，需通过--dir指定）
@@ -83,7 +94,7 @@ repo_login() {
     # 执行登录（密码通过管道传递，避免明文暴露），网络抖动时重试 3 次
     local login_ok=0
     for attempt in 1 2 3; do
-        if echo "35lRrgBcLhF" | "${container_cmd[@]}" login --username=acrpush@yunshan --password-stdin hub.deepflow.yunshan.net; then
+        if echo "${REGISTRY_PASSWORD}" | "${container_cmd[@]}" login --username="${REGISTRY_USER}" --password-stdin "${REGISTRY_HOST}"; then
             login_ok=1
             break
         fi
@@ -97,10 +108,68 @@ repo_login() {
     log "${GREEN}仓库登录成功${NC}"
 }
 
+##由完整镜像名推导 tar 文件名（deepflow-server:v6.6.5550 -> deepflow-server_v6.6.5550.tar）
+image_tar_name() {
+    local full_image_name="$1"
+    local image_name=$(echo "$full_image_name" | awk -F':' '{print $1}' | awk -F'/' '{print $NF}' | sed 's/[^a-zA-Z0-9_-]//g')
+    local image_tag=$(echo "$full_image_name" | awk -F':' '{print $2}' | sed 's/[^a-zA-Z0-9._-]//g')
+    echo "${image_name}_${image_tag}.tar"
+}
+
+##用 skopeo 直接导出 docker-archive（不经过节点 containerd，产物可直接 docker load）
+skopeo_copy_single() {
+    local full_image_name="$1"
+    local save_file="$2"
+    local tls_args=()
+    if [ "${skopeo_tls_verify}" != "true" ]; then
+        tls_args=(--src-tls-verify=false)
+    fi
+
+    if [ -f "$save_file" ]; then
+        log "${YELLOW}警告：$save_file 已存在（可能名称冲突），跳过${NC}"
+        return 0
+    fi
+
+    log "${GREEN}开始导出镜像（skopeo）：$full_image_name${NC}"
+    local ok=0
+    for attempt in 1 2 3; do
+        local tmp_file="${save_file}.part"
+        rm -f "$tmp_file"
+        if skopeo copy \
+              --override-os linux --override-arch amd64 \
+              --src-creds "${REGISTRY_USER}:${REGISTRY_PASSWORD}" \
+              "${tls_args[@]}" \
+              "docker://${full_image_name}" "docker-archive:${tmp_file}:${full_image_name}"; then
+            mv -f "$tmp_file" "$save_file"
+            ok=1
+            break
+        fi
+        rm -f "$tmp_file"
+        log "${YELLOW}导出失败（第 ${attempt}/3 次），5 秒后重试${NC}"
+        sleep 5
+    done
+    if [ "$ok" -ne 1 ]; then
+        log "${RED}错误：镜像导出失败：$full_image_name${NC}"
+        exit 1
+    fi
+    log "${GREEN}镜像保存成功：$save_file${NC}"
+}
+
 ##拉取并保存单个镜像
 pull_and_save_single() {
     local full_image_name="$1"
-    
+    local save_file="$save_dir/$(image_tar_name "$full_image_name")"
+
+    # skopeo 模式：一步导出，不依赖节点 containerd
+    if [ "$copy_tool" = "skopeo" ]; then
+        if ! command -v skopeo &> /dev/null; then
+            log "${RED}错误：COPY_TOOL=skopeo 但容器内没有 skopeo${NC}"
+            exit 1
+        fi
+        skopeo_copy_single "$full_image_name" "$save_file"
+        return 0
+    fi
+
     # 1. 拉取镜像（网络抖动时重试 3 次）
     log "${GREEN}开始拉取镜像：$full_image_name${NC}"
     local pull_ok=0
@@ -118,13 +187,7 @@ pull_and_save_single() {
     fi
     log "${GREEN}镜像拉取成功：$full_image_name${NC}"
 
-    # 2. 提取镜像名和标签（处理特殊字符，避免文件名异常）
-    # 示例：hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5550 → 提取为 deepflow-server_v6.6.5550.tar
-    local image_name=$(echo "$full_image_name" | awk -F':' '{print $1}' | awk -F'/' '{print $NF}' | sed 's/[^a-zA-Z0-9_-]//g')
-    local image_tag=$(echo "$full_image_name" | awk -F':' '{print $2}' | sed 's/[^a-zA-Z0-9._-]//g')
-    local save_file="$save_dir/${image_name}_${image_tag}.tar"
-
-    # 3. 保存镜像为tar文件
+    # 2. 保存镜像为tar文件
     if [ -f "$save_file" ]; then
         log "${YELLOW}警告：$save_file 已存在（可能名称冲突），跳过${NC}"
         return 0
@@ -142,7 +205,6 @@ pull_and_save_single() {
     done
     if [ "$save_ok" -ne 1 ]; then
         log "${RED}错误：保存镜像失败：$full_image_name${NC}"
-        # 清理失败的空文件
         if [ -f "$save_file" ]; then
             rm -f "$save_file"
             log "${YELLOW}已清理无效文件：$save_file${NC}"
@@ -257,8 +319,12 @@ if [ -z "$save_dir" ]; then
     exit 1
 fi
 
-# 登录仓库（所有拉取流程的前置操作）
-repo_login
+# 登录仓库（archive 模式才需要；skopeo 用 --src-creds 直接带凭据）
+if [ "$copy_tool" = "skopeo" ]; then
+    log "${YELLOW}COPY_TOOL=skopeo：跳过容器工具登录，直接导出 docker-archive${NC}"
+else
+    repo_login
+fi
 
 # 分支逻辑：按不同模式执行拉取
 if [ $# -eq 0 ]; then
