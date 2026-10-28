@@ -171,12 +171,6 @@
                             <div class="task-empty" id="recentTaskEmpty">暂无构建记录</div>
                         </section>
                     </div>
-                    <div class="system-strip" id="systemStrip">
-                        <span class="system-item"><span class="status-dot" id="workerDot"></span><span id="workerText">Worker 状态未知</span></span>
-                        <span class="system-item">队列 <b id="queueLength">-</b></span>
-                        <span class="system-item">并发 <b id="activeSlots">-</b>/<b id="maxSlots">-</b></span>
-                        <span class="system-item">磁盘剩余 <b id="diskFree">-</b></span>
-                    </div>
                 </div>
                 <div class="build-running">
                     <!-- PIPELINE STEPPER (CHIP STYLE) -->
@@ -254,6 +248,13 @@
                         </div>
                         <div class="build-log" id="buildLog"></div>
                     </div>
+                </div>
+                <!-- 状态条常驻：构建进行中也能看到队列/并发/磁盘，不再被构建视图顶掉 -->
+                <div class="system-strip" id="systemStrip">
+                    <span class="system-item"><span class="status-dot" id="workerDot"></span><span id="workerText">Worker 状态未知</span></span>
+                    <span class="system-item">队列 <b id="queueLength">-</b></span>
+                    <span class="system-item">并发 <b id="activeSlots">-</b>/<b id="maxSlots">-</b></span>
+                    <span class="system-item">磁盘剩余 <b id="diskFree">-</b></span>
                 </div>
             </div>
         </main>

@@ -19,9 +19,9 @@
     --danger: #f85149;
     --danger-text: #ff7b72;
     --danger-bg: rgba(248,81,73,0.12);
-    --success: #3fb950;
-    --success-text: #56d364;
-    --success-bg: rgba(63,185,80,0.12);
+    --success: #2dd4bf;
+    --success-text: #5eead4;
+    --success-bg: rgba(45,212,191,0.12);
     --warning: #d29922;
     --warning-bg: rgba(210,153,34,0.12);
     --radius-sm: 4px;
@@ -57,9 +57,9 @@ body[data-mode="v7"] {
     --danger: #f6465d;
     --danger-text: #ff6b7e;
     --danger-bg: rgba(246,70,93,0.12);
-    --success: #0ecb81;
-    --success-text: #2ee29b;
-    --success-bg: rgba(14,203,129,0.12);
+    --success: #2dd4bf;
+    --success-text: #5eead4;
+    --success-bg: rgba(45,212,191,0.12);
     --warning: #f0b90b;
     --warning-bg: rgba(240,185,11,0.12);
     --radius-sm: 4px;
@@ -556,7 +556,7 @@ body{
 }
 .task-status.complete{
     color:var(--success-text);background:var(--success-bg);
-    border-color:rgba(63,185,80,0.3);
+    border-color:rgba(45,212,191,0.3);
 }
 .task-status.error{
     color:var(--danger-text);background:var(--danger-bg);
@@ -588,7 +588,7 @@ body{
 }
 .status-dot.online{
     background:var(--success);
-    box-shadow:0 0 0 0 rgba(63,185,80,0.6);
+    box-shadow:0 0 0 0 rgba(45,212,191,0.6);
     animation:pulse-green 2.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
 }
 .status-dot.offline{
@@ -596,9 +596,9 @@ body{
     box-shadow:0 0 6px var(--danger);
 }
 @keyframes pulse-green{
-    0%{box-shadow:0 0 0 0 rgba(63,185,80,0.6)}
-    70%{box-shadow:0 0 0 6px rgba(63,185,80,0)}
-    100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}
+    0%{box-shadow:0 0 0 0 rgba(45,212,191,0.6)}
+    70%{box-shadow:0 0 0 6px rgba(45,212,191,0)}
+    100%{box-shadow:0 0 0 0 rgba(45,212,191,0)}
 }
 
 /* ============================================================
@@ -674,7 +674,7 @@ body{
 }
 .step-connector.completed{
     background:var(--success);
-    box-shadow:0 0 6px rgba(63,185,80,0.4);
+    box-shadow:0 0 6px rgba(45,212,191,0.4);
 }
 .step-connector.error{
     background:var(--danger);
@@ -1021,6 +1021,8 @@ body[data-mode="v7"] .progress-fill{
 
 /* 空闲态不再撑满整屏：任务中心跟着内容走，构建时才占满 */
 .build-card:not(.active){flex:0 0 auto}
+/* 空态与 1~2 条任务时高度不要跳变 */
+.task-overview{min-height:168px}
 
 /* 构建进行中锁住模式切换：避免误点后被 SSE 强行拉回 */
 body.is-building .mode-card{pointer-events:none}

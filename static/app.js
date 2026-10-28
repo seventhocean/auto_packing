@@ -980,7 +980,10 @@ function renderExistingFiles(files){
     fl.innerHTML=files.map(f=>{
         const m=f.name.match(/deepflow_patch_v(\d+)_(.+)_(.+)\.tar\.gz/);
         const custom=f.name.match(/deepflow_patch_custom_(.+)\.tar\.gz/);
-        const d=m?m[2]+' → '+m[3].replace(/_/g,'-'):(custom?'自定义 · '+custom[1]:f.name.replace('deepflow_patch_','').replace('.tar.gz',''));
+        let d;
+        if(m)d=m[2]+' → '+m[3].replace(/_/g,'-');
+        else if(custom)d='自定义镜像包'+customTimeLabel(custom[1]);
+        else d=f.name.replace('deepflow_patch_','').replace('.tar.gz','');
         const code=m?'v'+m[1]:(custom?'custom':'');
         const codeChip=code?`<span class="pkg-code">${code}</span>`:'';
         const mb=(f.size/1048576).toFixed(1);
@@ -988,6 +991,17 @@ function renderExistingFiles(files){
         return`<div class="pkg-item"><div class="pkg-info"><div class="pkg-name" title="${escapeHtml(f.name)}">${codeChip}${escapeHtml(d)}${badge}</div><div class="pkg-meta">${mb} MB</div></div><div class="pkg-actions"><button type="button" class="pkg-action-btn secondary" title="复制跳板机 curl 下载命令" data-copy-cmd="${escapeHtml(f.name)}">${ICON_COPY}</button><a class="pkg-action-btn" href="/download-existing/${encodeURIComponent(f.name)}" onclick="return checkExistingFileDownload(event,this)">${ICON_DOWNLOAD} 下载</a></div></div>`;
     }).join('');
 }
+
+// 自定义包的 task_id 里带着毫秒时间戳，抽出来当"人看的时间"，别把机器 ID 甩到界面上
+function customTimeLabel(taskId){
+    const hit=String(taskId||'').match(/_(\d{12,13})_/);
+    if(!hit)return '';
+    const raw=hit[1];
+    const seconds=raw.length>=13?Number(raw)/1000:Number(raw);
+    const label=formatClock(seconds);
+    return label&&label!=='-'?` · ${label}`:'';
+}
+
 function updateFilesSummary(n){
     const s=document.getElementById('filesSummary');
     if(s)s.textContent=n+' 个包';
