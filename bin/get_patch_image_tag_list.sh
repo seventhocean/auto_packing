@@ -21,6 +21,12 @@ DEFAULT_PATCH_IMAGE_TAG_LIST_FILE="${CURRENT_DIRECTORY}/../latest_image_list/pat
 # 临时回收站
 TRASH="${CURRENT_DIRECTORY}/../.trash"
 
+# nuwa 仓库目录：与 entrypoint.sh 的 NUWA_DIR 保持一致
+# 生产上指向 hostPath 缓存（每节点一份），Pod 重建不必重复克隆
+NUWA_ROOT="${NUWA_DIR:-${CURRENT_DIRECTORY}/../nuwa}"
+# 与 entrypoint 的克隆锁共用，防止克隆与 pull 并发
+NUWA_LOCK="${NUWA_ROOT%/*}/.nuwa-clone.lock"
+
 # 如果 .trash 目录不存在，则创建它
 if [ ! -d "${TRASH}" ]; then
   mkdir -p "${TRASH}"
@@ -86,7 +92,7 @@ trap cleanup EXIT
 
 # 拉取最新项目内容
 function pull_nuwa_project() {
-    local nuwa_dir="${CURRENT_DIRECTORY}/../nuwa"
+    local nuwa_dir="${NUWA_ROOT}"
     if [ ! -d "${nuwa_dir}/.git" ]; then
         errorlog "nuwa 仓库不存在或不是 git 仓库：${nuwa_dir}，请检查挂载/克隆是否成功"
         return 1
@@ -98,7 +104,8 @@ function pull_nuwa_project() {
     infolog "开始 git pull "
     local pull_ok=0
     for attempt in 1 2 3; do
-        if git pull --ff-only >> "${LOG_FILE}" 2>&1; then
+        # 同一节点可能有多个 worker 共用这份缓存，pull 用文件锁串行化
+        if flock -w 300 "${NUWA_LOCK}" git pull --ff-only >> "${LOG_FILE}" 2>&1; then
             pull_ok=1
             break
         fi
@@ -158,7 +165,7 @@ function get_patch_image_tag_list() {
     # 生成需要更新 Patch 的镜像列表集
     rm -f ${PATCH_IMAGE_TAG_LIST_FILE}
     for patch in ${DIFF_PATCH_LIST[@]}; do
-        make_file="${CURRENT_DIRECTORY}/../nuwa/$1/$2/$patch/make.sh"
+        make_file="${NUWA_ROOT}/$1/$2/$patch/make.sh"
         if [ -f "$make_file" ]; then
             grep ":${IMAGE_TAG_PREFIX}" "$make_file" >> ${TMP_PATCH_IMAGE_TAG_LIST_FILE} 2>/dev/null || true
         fi

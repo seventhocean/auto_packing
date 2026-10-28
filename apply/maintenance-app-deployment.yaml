@@ -179,7 +179,7 @@ spec:
       containers:
       # 真正的 maintenance-app 业务容器。
       - name: maintenance-app
-        image: auto_packing:20261028-9039081
+        image: auto_packing:20261028-5225567
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -189,6 +189,9 @@ spec:
           value: "/app/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         - name: CONTAINERD_NAMESPACE
           value: "k8s.io"
+        # app 只读 OSS 版本列表和本地产物，不需要 nuwa 仓库
+        - name: SKIP_NUWA
+          value: "1"
         - name: FLASK_APP
           value: "app.py"
         - name: FLASK_ENV
@@ -327,7 +330,7 @@ spec:
       containers:
       # 真正的 worker 业务容器。
       - name: maintenance-worker
-        image: auto_packing:20261028-9039081
+        image: auto_packing:20261028-5225567
         imagePullPolicy: IfNotPresent
         args:
         - python
@@ -340,6 +343,9 @@ spec:
         # 用 skopeo 直接导出 docker-archive，不再依赖节点 containerd
         - name: COPY_TOOL
           value: "skopeo"
+        # nuwa 落到节点本地缓存目录：Pod 重建不再重复克隆（全量 446MB）
+        - name: NUWA_DIR
+          value: "/var/local-storage/nuwa/cache"
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: APP_CONFIG_PATH
@@ -372,6 +378,8 @@ spec:
         - name: app-config
           mountPath: /app/config
           readOnly: true
+        - name: nuwa-cache
+          mountPath: /var/local-storage/nuwa
         resources:
           requests:
             memory: "2Gi"
@@ -388,6 +396,10 @@ spec:
       - name: storage
         persistentVolumeClaim:
           claimName: auto-pancking-pvc
+      - name: nuwa-cache
+        hostPath:
+          path: /var/local-storage/nuwa
+          type: DirectoryOrCreate
       - name: app-config
         configMap:
           name: maintenance-app-config
