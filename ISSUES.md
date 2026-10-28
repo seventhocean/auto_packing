@@ -5,13 +5,12 @@
 
 ## P1：优先关注
 
-> **2026-10-28 新发现（最高优先级）**：节点上 `redis:7.2-alpine` 这个 tag 的镜像内容实际是
-> **Redis 7.0.12**，而 PVC 里的 AOF 是 7.2 写的新格式（RDB version 11），7.0.12 读不了：
-> `Can't handle RDB format version 11 ... AOF loading aborted` → 容器 CrashLoop。
-> 现在能跑只是因为旧 Pod 从 6 天前起没重建过。
-> **任何重建 redis Pod 的操作（改 Pod 模板 / 驱逐 / 节点维护）都会让打包服务彻底不可用**，
-> 因为 AOF 已被 7.2 写成新格式，回退到 7.0.12 也读不回来。
-> 处理方式：先导入一份真正的 Redis ≥7.2 镜像并覆盖该 tag，再考虑给 redis 加 nodeSelector。
+> **2026-10-28 已处理**：节点上 `redis:7.2-alpine` 这个 tag 的镜像内容原本是 Redis **7.0.12**，
+> 而 PVC 里的 AOF 由 **7.2.5** 写入（RDB version 11），所以重建 redis Pod 会 CrashLoop：
+> `Can't handle RDB format version 11 ... AOF loading aborted`。
+> 已导入真正的 Redis **7.2.17** 覆盖该 tag，并先用数据副本验证可正常加载后才切换；
+> 同时给 redis 加了 `strategy: Recreate`（单实例 + RWO 卷，绝不能新旧 Pod 并写）
+> 和 nodeSelector 钉到 apk01。切换前数据备份在 apk01 的 `/root/redis-data-backup-*.tar.gz`。
 
 **1. containerd 跨 namespace 历史残留**
 - `default` namespace 的历史镜像可能导致 `nerdctl -n k8s.io save` 报

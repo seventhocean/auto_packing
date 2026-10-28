@@ -61,6 +61,10 @@ metadata:
     app: maintenance-redis
 spec:
   replicas: 1
+  # 单实例 + local RWO 卷：滚动更新会让两个 redis 同时写同一份 AOF，
+  # 必须用 Recreate，先停旧再起新。
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: maintenance-redis
@@ -116,10 +120,9 @@ spec:
         volumeMounts:
         - name: redis-data
           mountPath: /data
-      # TODO: Redis 数据同样落在 apk01 的 local PV 上，本应钉住节点；
-      # 但节点上 redis:7.2-alpine 这个 tag 的镜像内容实际是 7.0.12，
-      # 读不了现有 AOF（RDB format version 11），任何重建都会 CrashLoop。
-      # 先换正确镜像再启用 nodeSelector，否则不要动这个 Pod 模板。
+      # Redis 数据同样落在 apk01 的 local PV 上，必须钉住节点
+      nodeSelector:
+        kubernetes.io/hostname: deepflowapk01
       restartPolicy: Always
       volumes:
       - name: redis-data
