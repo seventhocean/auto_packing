@@ -277,6 +277,8 @@ class AppLogicTest(unittest.TestCase):
         self.assertEqual(status['mode'], 'custom')
         self.assertEqual(status['task_type'], 'v7')
         self.assertTrue(task_id.startswith('build_custom_'))
+        # 自定义清单要留在 meta 里，"重试"才能回填
+        self.assertEqual(status['images'], ['deepflow-agent:v7.1.1'])
 
     def test_post_build_patch_mode_rejects_unknown_channel(self):
         client = ap.app.test_client()

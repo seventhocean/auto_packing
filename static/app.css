@@ -1027,8 +1027,36 @@ body.is-building .mode-card{pointer-events:none}
 body.is-building .mode-card input:not(:checked) + .mode-card-body{opacity:.42}
 body.is-building .mode-card input:checked + .mode-card-body{cursor:default}
 
+/* 任务行内的进度条：进度是构建中最重要的信息，不能只靠一行灰字 */
+.task-progress{
+    height:3px;border-radius:2px;margin-top:7px;
+    background:var(--inset);overflow:hidden;
+}
+.task-progress > i{
+    display:block;height:100%;width:0;border-radius:2px;
+    background:var(--brand);transition:width .35s ease;
+}
+.task-item:has(.task-status.error) .task-progress > i{background:var(--danger)}
+
+/* 批量导入弹窗的实时校验 */
+.modal-invalid{
+    display:flex;flex-wrap:wrap;align-items:center;gap:4px;
+    margin-top:8px;padding:8px 10px;
+    border-radius:var(--radius-sm);
+    background:var(--danger-bg);border:1px solid rgba(248,81,73,.35);
+    font-size:11px;line-height:1.5;color:var(--danger-text);
+    font-family:var(--font-mono);
+}
+.modal-invalid-title{font-family:inherit;font-weight:700}
+.modal-counter-text.has-error{color:var(--danger-text);font-weight:700}
+.btn-modal-confirm:disabled{opacity:.45;cursor:not-allowed}
+.btn-modal-confirm:disabled:hover{filter:none}
+
 @media(max-width:760px){
     .mode-switch{grid-template-columns:1fr}
     .mode-card-desc{white-space:normal}
     .channel-picker{flex:1 1 100%;justify-content:flex-end}
+    /* 窄屏下操作按钮另起一行，否则会把版本号挤成 "247 → …" */
+    .task-item{flex-direction:column;align-items:stretch;gap:8px}
+    .task-actions{justify-content:flex-end;flex-wrap:wrap}
 }

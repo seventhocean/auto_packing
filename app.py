@@ -434,7 +434,9 @@ def _create_v7_build_task(images):
         "images": images
     }, extra={
         "mode": "custom",
-        "image_count": len(images)
+        "image_count": len(images),
+        # 存一份原始清单，任务结束后"重试"才能回填（overview 不返回该字段，避免轮询变重）
+        "images": images
     })
 
 

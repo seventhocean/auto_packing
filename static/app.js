@@ -222,6 +222,12 @@ function createVersionPicker(cfg){
     return {
         getValue(){return selected?selected.value:''},
         getSelected(){return selected},
+        chooseByValue(value){
+            const hit=options.find(o=>o.value===value);
+            if(!hit)return false;
+            choose(hit);
+            return true;
+        },
         setOptions(opts,placeholder){
             options=Array.isArray(opts)?opts:[];
             selected=null;input.value='';
@@ -767,12 +773,24 @@ function taskRowHtml(t,isActive,serverTime){
         ?`${duration?duration+' · ':''}${percent}%${t.message?' · '+t.message:''}`
         :`${formatClock(updated)}${duration?' · '+duration:''}${t.message?' · '+t.message:''}`;
     const meta=escapeHtml(plainMeta);
-    const actions=isActive
-        ?`<button type="button" class="btn-sm" data-action="view" data-task-id="${id}">查看</button>`
-         +`<button type="button" class="btn-sm danger" data-action="cancel" data-task-id="${id}">取消</button>`
-        :(t.package_name
-            ?`<a class="btn-sm" href="/download-existing/${encodeURIComponent(t.package_name)}" data-download="1">下载</a>`
-            :'');
+
+    // 已结束的任务也要能回看日志：失败时这是唯一的排查入口
+    let actions='';
+    if(isActive){
+        actions=`<button type="button" class="btn-sm" data-action="view" data-task-id="${id}">查看</button>`
+               +`<button type="button" class="btn-sm danger" data-action="cancel" data-task-id="${id}">取消</button>`;
+    }else{
+        const parts=[];
+        if(t.package_name)parts.push(`<a class="btn-sm" href="/download-existing/${encodeURIComponent(t.package_name)}" data-download="1">下载</a>`);
+        parts.push(`<button type="button" class="btn-sm" data-action="view" data-task-id="${id}" title="查看本次构建日志">日志</button>`);
+        if(!t.cancelled)parts.push(`<button type="button" class="btn-sm" data-action="retry" data-task-id="${id}" title="用相同参数再构建一次">重试</button>`);
+        actions=parts.join('');
+    }
+
+    const progress=isActive
+        ?`<div class="task-progress" role="progressbar" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100" aria-label="构建进度"><i style="width:${percent}%"></i></div>`
+        :'';
+
     const chipText=t.channel||((t.mode==='custom'||t.task_type==='v7')?'自定义':'');
     const chip=chipText?`<span class="task-channel">${escapeHtml(chipText)}</span>`:'';
     return `<div class="task-item">`
@@ -780,6 +798,7 @@ function taskRowHtml(t,isActive,serverTime){
         +`<div class="task-line">${chip}<span class="task-label" title="${label}">${label}</span>`
         +`<span class="task-status ${status.cls}">${status.text}</span></div>`
         +`<div class="task-message" title="${meta}">${meta}</div>`
+        +progress
         +`</div><div class="task-actions">${actions}</div></div>`;
 }
 
@@ -832,7 +851,61 @@ function handleActiveTaskClick(e){
 
 function handleRecentTaskClick(e){
     const link=e.target.closest('[data-download]');
-    if(link)checkExistingFileDownload(e,link);
+    if(link){checkExistingFileDownload(e,link);return}
+    const btn=e.target.closest('[data-action]');
+    if(!btn)return;
+    if(btn.dataset.action==='view')viewTaskFromOverview(btn.dataset.taskId);
+    else if(btn.dataset.action==='retry')retryTaskFromOverview(btn.dataset.taskId);
+}
+
+// 用上一次的参数重新填好表单（不直接提交，让人确认一眼再点开始构建）
+async function retryTaskFromOverview(taskId){
+    if(!taskId)return;
+    try{
+        const r=await fetch(`/task-status/${encodeURIComponent(taskId)}`,{cache:'no-store'});
+        let d={};
+        try{d=await r.json()}catch(e){}
+        if(!r.ok||!d.success||!d.status)throw new Error(d.message||'任务信息已过期，无法重试');
+        const s=d.status;
+        const isCustom=(s.mode==='custom'||(!s.mode&&s.task_type==='v7'));
+        if(isCustom){
+            const images=Array.isArray(s.images)?s.images:[];
+            if(!images.length)throw new Error('该任务没有记录镜像清单，无法自动重试');
+            setMode('v7');
+            applyV7Images(images);
+        }else{
+            setMode('v6');
+            if(s.channel&&s.channel!==currentChannel){
+                currentChannel=s.channel;
+                const sel=document.getElementById('channelSelect');
+                if(sel)sel.value=s.channel;
+                await fetchVersions(s.channel);
+            }
+            if(!selectVersionsByValue(s.current_version,s.target_version)){
+                throw new Error('版本列表已变化，找不到原版本，请手动选择');
+            }
+        }
+        showTaskCenter();
+        showToast('已回填上次的构建参数，确认后点“开始构建”','success');
+    }catch(err){
+        showToast(err.message||'重试失败','error');
+    }
+}
+
+function applyV7Images(images){
+    v7Tags=[];
+    (images||[]).forEach(t=>{
+        const v=String(t||'').trim();
+        if(v&&!v7Tags.includes(v))v7Tags.push(v);
+    });
+    renderV7Tags();
+}
+
+function selectVersionsByValue(currentValue,targetValue){
+    if(!currentPicker||!currentValue)return false;
+    if(!currentPicker.chooseByValue(currentValue))return false;
+    if(targetValue&&targetPicker)targetPicker.chooseByValue(targetValue);
+    return true;
 }
 
 function viewTaskFromOverview(taskId){
@@ -1085,19 +1158,63 @@ function closeBatchModal(){
     lastFocusBeforeModal=null;
 }
 
-function updateBatchModalCounter(){
+function batchModalValidation(){
     const textarea=document.getElementById('batchModalTextarea');
+    const raw=textarea?textarea.value:'';
+    const tokens=String(raw).split(/[,，;\n\r\s]+/).map(s=>s.trim()).filter(Boolean);
+    const valid=[],invalid=[],seen=new Set();
+    let duplicates=0;
+    tokens.forEach(t=>{
+        if(!V7_IMAGE_RE.test(t)){invalid.push(t);return}
+        if(seen.has(t)){duplicates++;return}
+        seen.add(t);valid.push(t);
+    });
+    return {valid,invalid,duplicates};
+}
+
+function updateBatchModalCounter(){
     const counter=document.getElementById('batchModalCounter');
-    if(!textarea||!counter)return;
-    const count=String(textarea.value).split(/[,，;\n\r\s]+/).map(s=>s.trim()).filter(Boolean).length;
-    counter.textContent=`共 ${count} 个镜像`;
+    const hint=document.getElementById('batchModalInvalid');
+    const confirmBtn=document.getElementById('btnConfirmBatchModal');
+    if(!counter)return;
+
+    const {valid,invalid,duplicates}=batchModalValidation();
+    counter.classList.toggle('has-error',invalid.length>0);
+    if(!valid.length&&!invalid.length){
+        counter.textContent='共 0 个镜像';
+    }else if(invalid.length){
+        counter.textContent=`${valid.length} 有效 / ${invalid.length} 无效`;
+    }else{
+        counter.textContent=`共 ${valid.length} 个镜像${duplicates?`（重复 ${duplicates} 项已忽略）`:''}`;
+    }
+
+    if(hint){
+        if(invalid.length){
+            const shown=invalid.slice(0,4).map(x=>`「${escapeHtml(x)}」`).join(' ');
+            hint.innerHTML=`<span class="modal-invalid-title">格式无效，需为 name:tag：</span>${shown}`
+                +(invalid.length>4?` 等 ${invalid.length} 项`:'');
+            hint.hidden=false;
+        }else{
+            hint.hidden=true;hint.innerHTML='';
+        }
+    }
+
+    // 有非法行时直接挡住确认，避免"导入了才发现错"
+    if(confirmBtn)confirmBtn.disabled=invalid.length>0||valid.length===0;
 }
 
 function confirmBatchModal(){
     const textarea=document.getElementById('batchModalTextarea');
     if(!textarea)return;
+    const {valid,invalid}=batchModalValidation();
+    if(invalid.length){
+        updateBatchModalCounter();
+        showToast(`有 ${invalid.length} 行格式无效，请修正后再导入`,'error');
+        return;
+    }
+    if(!valid.length){showToast('请至少输入一个镜像','error');return}
     v7Tags=[];
-    addV7Tokens(textarea.value);
+    addV7Tokens(valid.join('\n'));
     closeBatchModal();
     showToast(`已同步 ${v7Tags.length} 个镜像胶囊`,'success');
 }
