@@ -158,6 +158,10 @@ spec:
         - /bin/sh
         - -c
         - until redis-cli -h maintenance-redis -p 6379 -a "$REDIS_PASSWORD" ping | grep PONG; do echo "waiting for redis auth ready"; sleep 2; done
+      # 升级包与 Redis 都是 local 存储型 PVC，绑定在 deepflowapk01；
+      # 不钉节点的话 Pod 会漂到 apk02/03，拉不到镜像、挂不上盘。
+      nodeSelector:
+        kubernetes.io/hostname: deepflowapk01
       # 解析GitLab
       hostAliases:
       - ip: "10.1.0.14"
@@ -168,7 +172,7 @@ spec:
       containers:
       # 真正的 maintenance-app 业务容器。
       - name: maintenance-app
-        image: auto_packing:20261026-dd1a042
+        image: auto_packing:20261028-b068f0e
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -304,6 +308,10 @@ spec:
         - /bin/sh
         - -c
         - until redis-cli -h maintenance-redis -p 6379 -a "$REDIS_PASSWORD" ping | grep PONG; do echo "waiting for redis auth ready"; sleep 2; done
+      # 升级包与 Redis 都是 local 存储型 PVC，绑定在 deepflowapk01；
+      # 不钉节点的话 Pod 会漂到 apk02/03，拉不到镜像、挂不上盘。
+      nodeSelector:
+        kubernetes.io/hostname: deepflowapk01
       hostAliases:
       - ip: "10.1.0.14"
         hostnames:
@@ -312,7 +320,7 @@ spec:
       containers:
       # 真正的 worker 业务容器。
       - name: maintenance-worker
-        image: auto_packing:20261026-dd1a042
+        image: auto_packing:20261028-b068f0e
         imagePullPolicy: IfNotPresent
         args:
         - python
