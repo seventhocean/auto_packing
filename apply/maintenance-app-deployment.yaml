@@ -116,6 +116,10 @@ spec:
         volumeMounts:
         - name: redis-data
           mountPath: /data
+      # TODO: Redis 数据同样落在 apk01 的 local PV 上，本应钉住节点；
+      # 但节点上 redis:7.2-alpine 这个 tag 的镜像内容实际是 7.0.12，
+      # 读不了现有 AOF（RDB format version 11），任何重建都会 CrashLoop。
+      # 先换正确镜像再启用 nodeSelector，否则不要动这个 Pod 模板。
       restartPolicy: Always
       volumes:
       - name: redis-data
