@@ -23,74 +23,28 @@ sys.path.insert(0, str(ROOT))
 import redis  # noqa: E402
 
 
-class FakeRedis:
-    """只实现 app.py 用到的最小 Redis 接口。"""
+from unittest.mock import patch
+from tests.fake_redis import FakeRedis
 
-    def __init__(self, *args, **kwargs):
-        self.store = {}
-
-    def ping(self):
-        return True
-
-    def set(self, name, value, nx=False, ex=None):
-        if nx and name in self.store:
-            return None
-        self.store[name] = value
-        return True
-
-    def get(self, name):
-        return self.store.get(name)
-
-    def delete(self, name):
-        return 1 if self.store.pop(name, None) is not None else 0
-
-    def exists(self, name):
-        return 1 if name in self.store else 0
-
-    def scan_iter(self, match=None):
-        for key in list(self.store):
-            if fnmatch.fnmatch(key, match or '*'):
-                yield key
-
-    def lpush(self, name, value):
-        self.store.setdefault(name, []).insert(0, value)
-
-    def rpush(self, name, value):
-        self.store.setdefault(name, []).append(value)
-
-    def lrange(self, name, start, end):
-        return self.store.get(name, [])[start:]
-
-    def ltrim(self, name, start, end):
-        return True
-
-    def llen(self, name):
-        return len(self.store.get(name, []))
-
-    def lrem(self, name, count, value):
-        return 0
-
-    def expire(self, name, seconds):
-        return name in self.store
-
-    def incr(self, name):
-        self.store[name] = int(self.store.get(name, 0)) + 1
-        return self.store[name]
-
-    def decr(self, name):
-        self.store[name] = int(self.store.get(name, 0)) - 1
-        return self.store[name]
-
-
-redis.Redis = FakeRedis
-
-import app as ap  # noqa: E402
+# 仅在导入时替换连接工厂，避免污染其他模块的真实 Redis 集成测试。
+with patch.object(redis, 'Redis', FakeRedis):
+    import app as ap  # noqa: E402
 
 
 class AppLogicTest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix='autopacking-test-')
         self.old_log_dir = ap.LOG_DIR
+        self._external_guard = patch.object(
+            ap, '_run_ossutil', side_effect=AssertionError('测试禁止未模拟的 OSS 调用'))
+        self.external_calls = self._external_guard.start()
+        self.addCleanup(self._external_guard.stop)
+        self._storage_patch = patch.dict(ap.STORAGE_CONFIG, backend='local')
+        self._storage_patch.start()
+        self.addCleanup(self._storage_patch.stop)
+        self._package_patch = patch.object(ap, 'UPGRADE_PACKAGE_DIR', self.tmpdir)
+        self._package_patch.start()
+        self.addCleanup(self._package_patch.stop)
         ap.LOG_DIR = self.tmpdir
         with open(os.path.join(self.tmpdir, 'app.log'), 'w', encoding='utf-8') as f:
             f.write('')
@@ -100,6 +54,7 @@ class AppLogicTest(unittest.TestCase):
                 ap.redis_client.delete(key)
 
     def tearDown(self):
+        self.external_calls.assert_not_called()
         ap.LOG_DIR = self.old_log_dir
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
@@ -279,7 +234,7 @@ class AppLogicTest(unittest.TestCase):
         self.assertEqual(status['task_type'], 'v7')
         self.assertTrue(task_id.startswith('build_custom_'))
         # 自定义清单要留在 meta 里，"重试"才能回填
-        self.assertEqual(status['images'], ['deepflow-agent:v7.1.1'])
+        self.assertEqual(status['images'], ['hub.deepflow.yunshan.net/dev/deepflow-agent:v7.1.1'])
 
     def test_post_build_patch_mode_rejects_unknown_channel(self):
         client = ap.app.test_client()
@@ -775,6 +730,10 @@ class AppLogicTest(unittest.TestCase):
         d = self._make_packages(3)
         self._patch_retention(d, max_count=1, min_keep=1)
         self._patch_storage()
+        remote = [dict(e, source='oss') for e in ap._package_entries()]
+        remote_mock = patch.object(ap, 'list_oss_packages', return_value=remote)
+        remote_mock.start()
+        self.addCleanup(remote_mock.stop)
         removed = []
         original_delete = ap.delete_oss_package
         ap.delete_oss_package = lambda name: removed.append(name) or True

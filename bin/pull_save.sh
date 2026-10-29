@@ -19,6 +19,9 @@ BASE_DIR=$(cd "$(dirname "$0")" && pwd)
 DEFAULT_IMAGE_LIST="$BASE_DIR/../latest_image_list/patch_image_tag_list.txt"
 # 日志文件（统一存储到项目logs目录）
 LOG_FILE="$BASE_DIR/../logs/app.log"
+mkdir -p "$(dirname "$LOG_FILE")"
+PYTHON="${PYTHON:-python3}"
+IMAGE_REFS_HELPER="$BASE_DIR/../image_refs.py"
 
 # 容器工具（默认nerdctl，支持通过--cmd切换为docker）
 # 用数组保存，避免 "nerdctl -n k8s.io" 被当成一个可执行文件名
@@ -35,8 +38,7 @@ REGISTRY_USER="acrpush@yunshan"
 REGISTRY_PASSWORD="35lRrgBcLhF"
 # skopeo 对内网仓库的 TLS 校验，遇到自签证书可设 SKOPEO_TLS_VERIFY=false
 skopeo_tls_verify="${SKOPEO_TLS_VERIFY:-true}"
-# 镜像仓库前缀（默认DeepFlow仓库）
-repo="hub.deepflow.yunshan.net/dev/"
+# 镜像引用解析及默认仓库统一由 image_refs.py 维护。
 # 镜像保存目录（默认空，需通过--dir指定）
 save_dir=""
 
@@ -108,14 +110,6 @@ repo_login() {
     log "${GREEN}仓库登录成功${NC}"
 }
 
-##由完整镜像名推导 tar 文件名（deepflow-server:v6.6.5550 -> deepflow-server_v6.6.5550.tar）
-image_tar_name() {
-    local full_image_name="$1"
-    local image_name=$(echo "$full_image_name" | awk -F':' '{print $1}' | awk -F'/' '{print $NF}' | sed 's/[^a-zA-Z0-9_-]//g')
-    local image_tag=$(echo "$full_image_name" | awk -F':' '{print $2}' | sed 's/[^a-zA-Z0-9._-]//g')
-    echo "${image_name}_${image_tag}.tar"
-}
-
 ##用 skopeo 直接导出 docker-archive（不经过节点 containerd，产物可直接 docker load）
 skopeo_copy_single() {
     local full_image_name="$1"
@@ -125,24 +119,25 @@ skopeo_copy_single() {
         tls_args=(--src-tls-verify=false)
     fi
 
-    if [ -f "$save_file" ]; then
-        log "${YELLOW}警告：$save_file 已存在（可能名称冲突），跳过${NC}"
-        return 0
-    fi
-
     log "${GREEN}开始导出镜像（skopeo）：$full_image_name${NC}"
+    local creds_args=()
+    if [ "${full_image_name%%/*}" = "$REGISTRY_HOST" ]; then
+        creds_args=(--src-creds "${REGISTRY_USER}:${REGISTRY_PASSWORD}")
+    fi
     local ok=0
     for attempt in 1 2 3; do
         local tmp_file="${save_file}.part"
         rm -f "$tmp_file"
         if skopeo copy \
               --override-os linux --override-arch amd64 \
-              --src-creds "${REGISTRY_USER}:${REGISTRY_PASSWORD}" \
-              "${tls_args[@]}" \
+              ${creds_args[@]+"${creds_args[@]}"} \
+              ${tls_args[@]+"${tls_args[@]}"} \
               "docker://${full_image_name}" "docker-archive:${tmp_file}:${full_image_name}"; then
-            mv -f "$tmp_file" "$save_file"
-            ok=1
-            break
+            if [ -s "$tmp_file" ]; then
+                mv -f "$tmp_file" "$save_file"
+                ok=1
+                break
+            fi
         fi
         rm -f "$tmp_file"
         log "${YELLOW}导出失败（第 ${attempt}/3 次），5 秒后重试${NC}"
@@ -158,7 +153,11 @@ skopeo_copy_single() {
 ##拉取并保存单个镜像
 pull_and_save_single() {
     local full_image_name="$1"
-    local save_file="$save_dir/$(image_tar_name "$full_image_name")"
+    local save_file="$2"
+    if [ -e "$save_file" ]; then
+        log "${RED}错误：导出文件已存在，拒绝跳过或覆盖：$save_file${NC}"
+        exit 1
+    fi
 
     # skopeo 模式：一步导出，不依赖节点 containerd
     if [ "$copy_tool" = "skopeo" ]; then
@@ -188,78 +187,29 @@ pull_and_save_single() {
     log "${GREEN}镜像拉取成功：$full_image_name${NC}"
 
     # 2. 保存镜像为tar文件
-    if [ -f "$save_file" ]; then
-        log "${YELLOW}警告：$save_file 已存在（可能名称冲突），跳过${NC}"
-        return 0
-    fi
     log "${GREEN}开始保存镜像到：$save_file${NC}"
     local save_ok=0
+    local tmp_file="${save_file}.part"
     for attempt in 1 2 3; do
-        if "${container_cmd[@]}" save -o "$save_file" "$full_image_name"; then
-            save_ok=1
-            break
+        rm -f "$tmp_file"
+        if "${container_cmd[@]}" save -o "$tmp_file" "$full_image_name"; then
+            if [ -s "$tmp_file" ]; then
+                mv -f "$tmp_file" "$save_file"
+                save_ok=1
+                break
+            fi
         fi
         log "${YELLOW}保存失败（第 ${attempt}/3 次），清理后重试${NC}"
-        [ -f "$save_file" ] && rm -f "$save_file"
+        rm -f "$tmp_file"
         sleep 3
     done
     if [ "$save_ok" -ne 1 ]; then
         log "${RED}错误：保存镜像失败：$full_image_name${NC}"
-        if [ -f "$save_file" ]; then
-            rm -f "$save_file"
-            log "${YELLOW}已清理无效文件：$save_file${NC}"
-        fi
+        rm -f "$tmp_file"
         exit 1
     fi
     log "${GREEN}镜像保存成功：$save_file${NC}"
 }
-
-##从列表文件拉取镜像（支持两种格式：name: tag / name_tag: tag）
-pull_from_file() {
-    local image_list_path="$1"
-    
-    # 检查列表文件是否存在
-    if [ ! -f "$image_list_path" ]; then
-        log "${RED}错误：镜像列表文件不存在：$image_list_path${NC}"
-        exit 1
-    fi
-    log "${YELLOW}开始从列表文件拉取镜像：$image_list_path${NC}"
-    log "${YELLOW}镜像保存目录：$save_dir${NC}"
-
-    # 逐行处理列表文件
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        # 跳过空行和注释（支持开头带空格的注释）
-        if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
-            continue
-        fi
-
-        # 解析镜像名和标签（兼容两种格式）
-        if [[ "$line" =~ _tag:[[:space:]]* ]]; then
-            # 格式1：name_tag: vx.x.x → 提取为 name: vx.x.x
-            image_name=$(echo "$line" | sed 's/_tag:[[:space:]]*v[0-9].*//' | xargs)
-            # 用 sed 替代 grep -oP，兼容非 GNU 环境
-            image_tag=$(echo "$line" | sed -n 's/.*_tag:[[:space:]]*\(v\?[0-9][0-9.]*\).*/\1/p' | xargs)
-        else
-            # 格式2：name: vx.x.x → 直接分割
-            image_name=$(echo "$line" | awk -F':' '{print $1}' | xargs)
-            image_tag=$(echo "$line" | awk -F':' '{print $2}' | xargs)
-        fi
-
-        # 校验解析结果（跳过格式错误的行）
-        if [[ -z "$image_name" || -z "$image_tag" ]]; then
-            log "${YELLOW}警告：跳过无效行（格式错误）：$line${NC}"
-            continue
-        fi
-
-        # 构建完整镜像名（去掉 _tag 后缀，添加仓库前缀）
-        clean_image_name=$(echo "$image_name" | sed 's/_tag$//')
-        full_image_name="${repo}${clean_image_name}:${image_tag}"
-
-        # 调用单镜像处理函数
-        pull_and_save_single "$full_image_name"
-    done < "$image_list_path"
-}
-
 
 # ------------------------------ 主逻辑（参数解析+流程控制） ------------------------------
 # 初始化默认参数
@@ -319,6 +269,32 @@ if [ -z "$save_dir" ]; then
     exit 1
 fi
 
+# 校验全部输入后再访问仓库，非法项不能在成功包中被静默丢弃。
+plan_file=$(mktemp "$save_dir/.image-plan.XXXXXX")
+exports_file="$save_dir/image_exports.tsv"
+exports_tmp=$(mktemp "$save_dir/.image-exports.XXXXXX")
+cleanup_export_plan() {
+    local exit_status=$?
+    rm -f "$plan_file" "$exports_tmp"
+    return "$exit_status"
+}
+trap cleanup_export_plan EXIT
+if [ $# -eq 0 ]; then
+    "$PYTHON" "$IMAGE_REFS_HELPER" --file "$local_image_list" > "$plan_file"
+else
+    "$PYTHON" "$IMAGE_REFS_HELPER" -- "$@" > "$plan_file"
+fi
+if [ -e "$exports_file" ]; then
+    log "${RED}错误：目录中已有镜像导出清单，请使用新的任务目录${NC}"
+    exit 1
+fi
+while IFS=$'\t' read -r full_image tar_name; do
+    if [ -e "$save_dir/$tar_name" ]; then
+        log "${RED}错误：目录中已有导出文件：${tar_name}，请使用新的任务目录${NC}"
+        exit 1
+    fi
+done < "$plan_file"
+
 # 登录仓库（archive 模式才需要；skopeo 用 --src-creds 直接带凭据）
 if [ "$copy_tool" = "skopeo" ]; then
     log "${YELLOW}COPY_TOOL=skopeo：跳过容器工具登录，直接导出 docker-archive${NC}"
@@ -326,27 +302,16 @@ else
     repo_login
 fi
 
-# 分支逻辑：按不同模式执行拉取
-if [ $# -eq 0 ]; then
-    # 模式1：无额外参数 → 从列表文件拉取（默认或指定-f的文件）
-    pull_from_file "$local_image_list"
-else
-    # 模式2：有额外参数 → 按指定镜像拉取（自动补仓库前缀）
-    log "${YELLOW}开始处理指定镜像列表：$*${NC}"
-    for image in "$@"; do
-        # 若镜像名不含仓库地址，自动添加默认前缀
-        if [[ ! "$image" =~ ^hub\.deepflow\.yunshan\.net ]]; then
-            full_image="${repo}${image}"
-            log "${YELLOW}自动添加仓库前缀：$image → $full_image${NC}"
-        else
-            full_image="$image"
-        fi
-        # 调用单镜像处理函数
-        pull_and_save_single "$full_image"
-    done
-fi
+export_count=0
+while IFS=$'\t' read -r full_image tar_name; do
+    pull_and_save_single "$full_image" "$save_dir/$tar_name"
+    printf '%s\t%s\n' "$full_image" "$tar_name" >> "$exports_tmp"
+    export_count=$((export_count + 1))
+done < "$plan_file"
+mv -f "$exports_tmp" "$exports_file"
 
 # 流程结束
+log "${GREEN}IMAGE_EXPORT_COUNT=$export_count${NC}"
 log "${GREEN}===== 所有镜像处理完成！=====${NC}"
 log "${WHITE}镜像保存目录：${CYAN}$save_dir${NC}"
 log "${WHITE}日志文件路径：${CYAN}$LOG_FILE${NC}"

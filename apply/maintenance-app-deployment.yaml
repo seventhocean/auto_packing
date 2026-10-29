@@ -3,8 +3,8 @@ kind: Namespace
 metadata:
   name: getpatch
 ---
-# 应用运行配置。这里只放业务应用读取的 Redis 参数，
-# 实际密码仍由 Secret 注入到容器环境变量 REDIS_PASSWORD。
+# 应用配置从 config.yaml 生成，修改后运行 python bin/sync_manifest.py。
+# python bin/sync_manifest.py --check 可离线检查漂移；密码仍由 Secret 注入。
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -22,7 +22,31 @@ data:
       failure_ttl_seconds: 3600
       download_ttl_seconds: 90
       max_logs: 2000
-      max_concurrent_tasks: 1
+      max_concurrent_tasks: 3   # worker 铺到 3 个节点后，允许 3 个构建并行
+
+    # 升级包保留策略：每次构建成功后自动回收旧包，避免只增不删把盘吃满。
+    # 三重保护：最近 min_keep 个、min_age_minutes 内的新包、本次刚构建的包，都不会被删。
+    package_retention:
+      enabled: true
+      max_count: 40          # 最多保留多少个包
+      max_total_gb: 60       # 所有包总大小上限
+      min_keep: 3            # 至少保留最近 N 个
+      min_age_minutes: 30    # 这么新的包不删（可能在下载或刚交付）
+      dry_run: false         # true 时只记录不真删
+
+    # 升级包存储后端
+    #   local = 只落本机盘（原来的行为）
+    #   oss   = 构建成功后自动上传，下载走 OSS 签名 URL；app 不再强依赖本机磁盘
+    package_storage:
+      backend: oss
+      oss_bucket: publicshare-unsafe
+      oss_prefix: tmp/auto_packing/packages/
+      presign_seconds: 900          # 签名 URL 有效期（秒）
+      oss_timeout_seconds: 120      # 列举/签名超时
+      upload_timeout_seconds: 3600  # 上传超时（大包可能几 GB）
+      # worker 用 emptyDir 跑，上传成功后删本地副本，避免单 Pod 累积几十 GB；
+      # 下载会自动回落到 OSS 签名 URL
+      delete_local_after_upload: true
 ---
 apiVersion: v1
 kind: Secret
@@ -294,6 +318,9 @@ metadata:
   labels:
     app: maintenance-worker
 spec:
+  # 执行所有权协议升级时不允许新旧 worker 混跑。
+  strategy:
+    type: Recreate
   replicas: 3
   selector:
     matchLabels:
@@ -318,8 +345,7 @@ spec:
         - /bin/sh
         - -c
         - until redis-cli -h maintenance-redis -p 6379 -a "$REDIS_PASSWORD" ping | grep PONG; do echo "waiting for redis auth ready"; sleep 2; done
-      # 升级包与 Redis 都是 local 存储型 PVC，绑定在 deepflowapk01；
-      # 不钉节点的话 Pod 会漂到 apk02/03，拉不到镜像、挂不上盘。
+      # worker 只用独立临时目录和 OSS，允许调度到任意有可拉取业务镜像的节点。
       hostAliases:
       - ip: "10.1.0.14"
         hostnames:
@@ -341,6 +367,9 @@ spec:
         # 用 skopeo 直接导出 docker-archive，不再依赖节点 containerd
         - name: COPY_TOOL
           value: "skopeo"
+        # emptyDir 产物不能由 app 读取，启动时禁止错误回退到 local 存储。
+        - name: REQUIRE_OSS_STORAGE
+          value: "1"
         # nuwa 落到节点本地缓存目录：Pod 重建不再重复克隆（全量 446MB）
         - name: NUWA_DIR
           value: "/var/local-storage/nuwa/cache"

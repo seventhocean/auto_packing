@@ -6,8 +6,10 @@ let versionData=[],packageNameTemplate='',eventSource=null,currentSeries='v6',is
 let channelList=[],currentChannel='';
 let existingFilesData=[],logExpanded=false,lastLogSeq=0,currentTaskId='',sseRetries=0;
 let overviewTimer=null,overviewLoading=false;
+let streamRetryTimer=null,taskRecoveryTimer=null,taskRecoveryController=null,taskRecoveryGeneration=0;
 let lastFocusBeforeDrawer=null,lastFocusBeforeModal=null;
 const OVERVIEW_POLL_MS=5000;
+const REQUEST_TIMEOUT_MS=10000;
 const TASK_QUERY_KEY='task_id';
 const ICON_DOWNLOAD='<svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M7.25 1h1.5v7.1l2.6-2.6 1.05 1.05L8 11.5 3.6 7.1 4.65 6.05l2.6 2.6V1ZM2 13h12v2H2v-2Z"/></svg>';
 const ICON_COPY='<svg class="icon icon-sm" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v2H4V2zm10 4v9H2V6h3V4h6v2h3zm-2 2H4v5h8V8z"/></svg>';
@@ -19,6 +21,25 @@ const BUILD_BTN_IDLE='<svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><
 function beforeUnloadHandler(e){e.preventDefault();e.returnValue='构建任务正在进行中，离开页面将丢失进度。';return e.returnValue}
 function debounce(fn,d){let t=null;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),d)}}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+async function fetchJsonWithTimeout(url,options={},timeout=REQUEST_TIMEOUT_MS){
+    const controller=new AbortController(),externalSignal=options.signal;
+    const abort=()=>controller.abort();
+    if(externalSignal){
+        if(externalSignal.aborted)abort();
+        else externalSignal.addEventListener('abort',abort,{once:true});
+    }
+    const timer=setTimeout(abort,timeout);
+    try{
+        const response=await fetch(url,{...options,signal:controller.signal});
+        // Keep the deadline active while reading the response body as well.
+        const data=await response.json();
+        return {response,data};
+    }finally{
+        clearTimeout(timer);
+        if(externalSignal)externalSignal.removeEventListener('abort',abort);
+    }
+}
 
 function setTaskInUrl(taskId){
     const url=new URL(location.href);
@@ -105,6 +126,7 @@ async function loadChannels(preferred){
 }
 
 function handleChannelChange(e){
+    if(isBuilding){e.target.value=currentChannel;return}
     const v=e.target.value;
     if(!v||v===currentChannel)return;
     currentChannel=v;
@@ -121,9 +143,12 @@ function updateStepperLabels(m){
 function setModeLocked(locked){
     document.body.classList.toggle('is-building',!!locked);
     document.querySelectorAll('#modeToggle input[name="buildMode"]').forEach(i=>{i.disabled=!!locked});
+    const channel=document.getElementById('channelSelect');
+    if(channel)channel.disabled=!!locked;
 }
 
 function handleModeChange(e){
+    if(isBuilding)return;
     const m=e.target&&e.target.value;
     if(e.target.name!=='buildMode'||!m||m===currentSeries)return;
     setMode(m);
@@ -425,7 +450,7 @@ function requestNotificationPermission(){
 
 function copyCurlCommand(fileName){
     const url=`${window.location.origin}/download-existing/${encodeURIComponent(fileName)}`;
-    const cmd=`curl -O "${url}"`;
+    const cmd=`curl -fLO "${url}"`;
     copyTextToClipboard(cmd,'已复制 curl 下载命令');
 }
 function currentProgressPercent(){
@@ -433,9 +458,9 @@ function currentProgressPercent(){
     return Number.isFinite(w)?w:0;
 }
 function finishBuild(){
+    stopBuildObservation();
     isBuilding=false;setModeLocked(false);
     window.removeEventListener('beforeunload',beforeUnloadHandler);
-    if(eventSource){eventSource.close();eventSource=null}
     resetBuildButtons();
     setTaskInUrl('');
     currentTaskId='';
@@ -463,6 +488,7 @@ function startBuildProcess(e){
         payload={mode:'patch',channel:currentChannel,current:cv,target:tv};
     }
 
+    stopBuildObservation();
     isBuilding=true;sseRetries=0;updateStepperLabels(currentSeries);setModeLocked(true);window.addEventListener('beforeunload',beforeUnloadHandler);
     requestNotificationPermission();
     currentTaskId='';showCancelButton(true,false);setBuildButtonsBusy();hideCompletionActions();
@@ -502,6 +528,7 @@ function startBuildProcess(e){
 }
 
 function resumeBuildTask(taskId){
+    stopBuildObservation();
     currentTaskId=taskId;isBuilding=true;sseRetries=0;setModeLocked(true);
     window.addEventListener('beforeunload',beforeUnloadHandler);
     requestNotificationPermission();
@@ -517,19 +544,34 @@ function resumeBuildTask(taskId){
 }
 
 function connectBuildStream(url){
+    stopTaskRecovery();
+    clearTimeout(streamRetryTimer);streamRetryTimer=null;
     if(eventSource){eventSource.close();eventSource=null}
     const sep=url.includes('?')?'&':'?';
-    eventSource=new EventSource(url+sep+'since='+encodeURIComponent(lastLogSeq));
-    eventSource.onmessage=function(ev){
+    const watchedTaskId=currentTaskId;
+    const source=new EventSource(url+sep+'since='+encodeURIComponent(lastLogSeq));
+    eventSource=source;
+    source.onmessage=function(ev){
+        if(eventSource!==source||!isBuilding||currentTaskId!==watchedTaskId)return;
         sseRetries=0;
-        try{handleBuildStatus(JSON.parse(ev.data))}catch(e){}
+        try{
+            const status=JSON.parse(ev.data);
+            // A stream failure is not evidence that the build itself failed.
+            if(status.status==='error'&&!status.complete){
+                source.close();eventSource=null;handleStreamLost();return;
+            }
+            handleBuildStatus(status);
+        }catch(e){}
     };
-    eventSource.onerror=function(){
-        if(eventSource){eventSource.close();eventSource=null}
+    source.onerror=function(){
+        if(eventSource!==source||currentTaskId!==watchedTaskId)return;
+        source.close();eventSource=null;
         if(!isBuilding)return;
         if(sseRetries<3){
             sseRetries++;
-            setTimeout(()=>{if(isBuilding)connectBuildStream(url)},Math.min(1000*Math.pow(2,sseRetries),8000));
+            streamRetryTimer=setTimeout(()=>{
+                if(isBuilding&&currentTaskId===watchedTaskId)connectBuildStream(url);
+            },Math.min(1000*Math.pow(2,sseRetries),8000));
         }else{
             handleStreamLost();
         }
@@ -537,16 +579,58 @@ function connectBuildStream(url){
 }
 
 function handleStreamLost(){
-    isBuilding=false;setModeLocked(false);
-    window.removeEventListener('beforeunload',beforeUnloadHandler);
-    resetBuildButtons();checkBuildBtnStatus();
-    document.getElementById('taskStateText').textContent='连接中断';
-    document.getElementById('taskMessageText').textContent='任务可能仍在运行，可返回任务中心查看或刷新页面恢复';
-    setCompletionActions('');
-    showToast('与构建服务的连接中断，刷新页面可恢复任务状态','error');
+    if(!currentTaskId||!isBuilding)return;
+    isBuilding=true;setModeLocked(true);setBuildButtonsBusy();
+    document.getElementById('taskStateText').textContent='恢复任务中';
+    document.getElementById('taskMessageText').textContent='暂时无法确认任务状态，任务可能仍在运行，正在重试';
+    hideCompletionActions();
+    showToast('连接中断，正在恢复当前任务状态','error');
+    stopTaskRecovery();
+    recoverTaskStatus(currentTaskId,taskRecoveryGeneration);
+}
+
+function stopTaskRecovery(){
+    taskRecoveryGeneration++;
+    clearTimeout(taskRecoveryTimer);taskRecoveryTimer=null;
+    if(taskRecoveryController){taskRecoveryController.abort();taskRecoveryController=null}
+}
+
+function stopBuildObservation(){
+    clearTimeout(streamRetryTimer);streamRetryTimer=null;
+    stopTaskRecovery();
+    if(eventSource){eventSource.close();eventSource=null}
+}
+
+async function recoverTaskStatus(taskId,generation){
+    if(generation!==taskRecoveryGeneration||!isBuilding||currentTaskId!==taskId)return;
+    const controller=new AbortController();
+    taskRecoveryController=controller;
+    try{
+        const {response,data}=await fetchJsonWithTimeout(
+            `/task-status/${encodeURIComponent(taskId)}?since=${encodeURIComponent(lastLogSeq)}`,
+            {cache:'no-store',signal:controller.signal}
+        );
+        if(generation!==taskRecoveryGeneration||!isBuilding||currentTaskId!==taskId)return;
+        if(response.status===404){
+            handleBuildStatus({status:'error',task_type:currentSeries,complete:true,error:true,message:data.message||'任务不存在或已过期，请从任务中心确认'});
+            return;
+        }
+        if(!response.ok||!data.success||!data.status)throw new Error('恢复任务失败');
+        handleBuildStatus(data.status);
+    }catch(e){
+        if(generation!==taskRecoveryGeneration||!isBuilding||currentTaskId!==taskId)return;
+        document.getElementById('taskStateText').textContent='恢复任务中';
+        document.getElementById('taskMessageText').textContent='暂时无法确认任务状态，任务可能仍在运行，正在重试';
+    }finally{
+        if(taskRecoveryController===controller)taskRecoveryController=null;
+        if(generation===taskRecoveryGeneration&&isBuilding&&currentTaskId===taskId){
+            taskRecoveryTimer=setTimeout(()=>recoverTaskStatus(taskId,generation),OVERVIEW_POLL_MS);
+        }
+    }
 }
 
 function resetBuildState(){
+    stopBuildObservation();
     resetBuildButtons();
     isBuilding=false;setModeLocked(false);window.removeEventListener('beforeunload',beforeUnloadHandler);
     lastLogSeq=0;sseRetries=0;currentTaskId='';showCancelButton(false);
@@ -592,10 +676,10 @@ function handleBuildStatus(d){
         case'progress':st.textContent='构建中';updateProgressBar(d.percent,'');mt.textContent=d.message||'';break;
         case'complete':
             st.textContent='已完成';updateProgressBar(100,'success');mt.textContent='构建完成，升级包已生成';
-            newPackageName=d.package_name||'';
+            newPackageName=d.oss_object_name||d.package_name||'';
             showCancelButton(false);
             finishBuild();
-            setCompletionActions(d.package_name||'');
+            setCompletionActions(newPackageName);
             fetchExistingFiles();
             notifyBuildComplete('🎉 DeepFlow 升级包构建完成', d.package_name ? `升级包 ${d.package_name} 已就绪` : '升级包构建成功，已可下载');
             break;
@@ -716,9 +800,7 @@ async function refreshTaskOverview(){
     if(overviewLoading)return;
     overviewLoading=true;
     try{
-        const r=await fetch('/tasks/overview',{cache:'no-store'});
-        let d={};
-        try{d=await r.json()}catch(e){}
+        const {response:r,data:d}=await fetchJsonWithTimeout('/tasks/overview',{cache:'no-store'});
         if(!r.ok||!d.success)throw new Error(d.message||'获取任务状态失败');
         renderTaskOverview(d);
     }catch(e){
@@ -781,9 +863,9 @@ function taskRowHtml(t,isActive,serverTime){
                +`<button type="button" class="btn-sm danger" data-action="cancel" data-task-id="${id}">取消</button>`;
     }else{
         const parts=[];
-        if(t.package_name)parts.push(`<a class="btn-sm" href="/download-existing/${encodeURIComponent(t.package_name)}" data-download="1">下载</a>`);
+        if(t.package_name&&!t.error&&!t.upload_failed)parts.push(`<a class="btn-sm" href="/download-existing/${encodeURIComponent(t.oss_object_name||t.package_name)}" data-download="1">下载</a>`);
         parts.push(`<button type="button" class="btn-sm" data-action="view" data-task-id="${id}" title="查看本次构建日志">日志</button>`);
-        if(!t.cancelled)parts.push(`<button type="button" class="btn-sm" data-action="retry" data-task-id="${id}" title="用相同参数再构建一次">重试</button>`);
+        if(!t.cancelled)parts.push(`<button type="button" class="btn-sm" data-action="retry" data-task-id="${id}" title="${t.upload_retry_available?'重试上传已生成的升级包':'用相同参数再构建一次'}">${t.upload_retry_available?'重试上传':'重试'}</button>`);
         actions=parts.join('');
     }
 
@@ -861,12 +943,24 @@ function handleRecentTaskClick(e){
 // 用上一次的参数重新填好表单（不直接提交，让人确认一眼再点开始构建）
 async function retryTaskFromOverview(taskId){
     if(!taskId)return;
+    if(isBuilding){showToast('当前任务仍在运行，请等待任务结束后重试','error');return}
     try{
-        const r=await fetch(`/task-status/${encodeURIComponent(taskId)}`,{cache:'no-store'});
-        let d={};
-        try{d=await r.json()}catch(e){}
+        const {response:r,data:d}=await fetchJsonWithTimeout(`/task-status/${encodeURIComponent(taskId)}`,{cache:'no-store'});
         if(!r.ok||!d.success||!d.status)throw new Error(d.message||'任务信息已过期，无法重试');
+        if(isBuilding)throw new Error('当前任务仍在运行，请等待任务结束后重试');
         const s=d.status;
+        if(s.upload_failed&&s.upload_retry_available){
+            const {response:retry,data:result}=await fetchJsonWithTimeout(
+                `/build/${encodeURIComponent(taskId)}/retry-upload`,{method:'POST'}
+            );
+            if(!retry.ok||!result.success)throw new Error(result.message||'重试上传失败，请重新构建');
+            if(isBuilding){
+                refreshTaskOverview();showToast('上传重试已提交，可在任务中心查看');return;
+            }
+            resumeBuildTask(result.task_id||taskId);
+            showToast('正在重试上传已生成的升级包');
+            return;
+        }
         const isCustom=(s.mode==='custom'||(!s.mode&&s.task_type==='v7'));
         if(isCustom){
             const images=Array.isArray(s.images)?s.images:[];
@@ -978,8 +1072,10 @@ function renderExistingFiles(files){
     if(!files||files.length===0){nf.style.display='flex';fl.innerHTML='';return}
     nf.style.display='none';
     fl.innerHTML=files.map(f=>{
-        const m=f.name.match(/deepflow_patch_v(\d+)_(.+)_(.+)\.tar\.gz/);
-        const custom=f.name.match(/deepflow_patch_custom_(.+)\.tar\.gz/);
+        // OSS objects have a per-artifact suffix; keep the displayed patch range readable.
+        const displayName=f.name.replace(/_[0-9a-f]{12}(?=\.tar\.gz$)/,'');
+        const m=displayName.match(/deepflow_patch_v(\d+)_(.+)_(.+)\.tar\.gz/);
+        const custom=displayName.match(/deepflow_patch_custom_(.+)\.tar\.gz/);
         let d;
         if(m)d=m[2]+' → '+m[3].replace(/_/g,'-');
         else if(custom)d='自定义镜像包'+customTimeLabel(custom[1]);
@@ -1047,20 +1143,34 @@ function filterExistingFiles(){
     const q=document.getElementById('fileSearchInput').value.toLowerCase();
     renderExistingFiles(q?existingFilesData.filter(f=>f.name.toLowerCase().includes(q)):existingFilesData);
 }
-async function checkExistingFileDownload(e,el){
+function checkExistingFileDownload(e,el){
+    if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button>0)return true;
     e.preventDefault();
-    try{
-        const r=await fetch(el.href,{method:'HEAD'});
-        if(r.ok){window.location.href=el.href;return false}
-        fetchExistingFiles();
-        showToast('文件已不存在，列表已刷新','error');
-    }catch(err){
-        showToast('下载失败，请检查网络','error');
-    }
+    // Download navigation may follow an OSS redirect without requiring CORS/HEAD access.
+    window.location.href=el.href;
     return false;
 }
 
-const V7_IMAGE_RE=/^[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const IMAGE_PATH_COMPONENT='[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*';
+const IMAGE_PATH_RE=new RegExp(`^${IMAGE_PATH_COMPONENT}(?:/${IMAGE_PATH_COMPONENT})*$`);
+function isValidImageReference(value){
+    if(typeof value!=='string'||/\s|@/.test(value))return false;
+    const colon=value.lastIndexOf(':');
+    if(colon<1)return false;
+    const name=value.slice(0,colon),tag=value.slice(colon+1);
+    if(!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(tag))return false;
+    const slash=name.indexOf('/'),first=slash<0?name:name.slice(0,slash);
+    const isRegistry=slash>0&&(first.includes('.')||first.includes(':')||first==='localhost');
+    let imagePath=name;
+    if(isRegistry){
+        const parts=first.split(':');
+        if(parts.length>2||!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(parts[0]))return false;
+        if(parts.length===2&&(!/^[0-9]+$/.test(parts[1])||Number(parts[1])<1||Number(parts[1])>65535))return false;
+        imagePath=name.slice(slash+1);
+    }
+    const fullName=isRegistry?name:'hub.deepflow.yunshan.net/dev/'+name;
+    return fullName.length<=255&&IMAGE_PATH_RE.test(imagePath);
+}
 
 /* ================================================================
    V7 TAGS & BATCH MODAL
@@ -1075,7 +1185,7 @@ function renderV7Tags(){
     if(!listEl)return;
 
     listEl.innerHTML=v7Tags.map((tag,idx)=>{
-        const isValid=V7_IMAGE_RE.test(tag);
+        const isValid=isValidImageReference(tag);
         if(isValid){
             const colonIdx=tag.lastIndexOf(':');
             const name=tag.slice(0,colonIdx);
@@ -1179,7 +1289,7 @@ function batchModalValidation(){
     const valid=[],invalid=[],seen=new Set();
     let duplicates=0;
     tokens.forEach(t=>{
-        if(!V7_IMAGE_RE.test(t)){invalid.push(t);return}
+        if(!isValidImageReference(t)){invalid.push(t);return}
         if(seen.has(t)){duplicates++;return}
         seen.add(t);valid.push(t);
     });
@@ -1237,7 +1347,7 @@ function parseV7Images(raw){
     const tokens=String(raw||'').split(/[,，;\n\r]+/).map(s=>s.trim()).filter(Boolean);
     const valid=[],invalid=[],seen=new Set();let duplicates=0;
     tokens.forEach(t=>{
-        if(!V7_IMAGE_RE.test(t)){invalid.push(t);return}
+        if(!isValidImageReference(t)){invalid.push(t);return}
         if(seen.has(t)){duplicates++;return}
         seen.add(t);valid.push(t);
     });

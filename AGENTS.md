@@ -1,297 +1,250 @@
 # AGENTS.md
 
 本文件面向所有 AI 编程助手和开发者，不绑定特定工具。修改代码前请先阅读本文件和
-[`ISSUES.md`](./ISSUES.md)；containerd 相关问题另外参考
+[`ISSUES.md`](./ISSUES.md)；使用 containerd 回退流程时另读
 [`docs/CONTAINERD_RUNBOOK.md`](./docs/CONTAINERD_RUNBOOK.md)。
 
 ## 1. 项目概览
 
-DeepFlow 补丁包构建与分发工具。当前架构：
+DeepFlow 补丁包构建与分发工具，当前规模为 1~2 个用户，**稳定优先**。
+没有明确需求时，不大改构建主链路、队列模型或前端结构。
 
-- `app.py`：Flask Web/API、任务入队、SSE 状态流、任务中心、下载接口。
-- `worker.py`：独立 Redis 队列消费者，执行镜像拉取、保存和打包。
-- `templates/index.html` + `static/app.css` + `static/app.js`：单页工作台。
-- Redis：任务状态、日志、队列、槽位、worker 心跳。
-- Shell 脚本：版本差异计算、镜像拉取、部署端升级脚本。
+- `app.py`：Flask Web/API、任务入队、SSE、任务中心、归档与 OSS 交付逻辑。
+- `worker.py`：独立 Redis 队列消费者，执行构建、心跳、回收和原 worker 上传重试。
+- `image_refs.py`：后端与 Shell 共用的镜像引用校验、归一化与导出文件命名。
+- `templates/index.html`、`static/app.css`、`static/app.js`：单页工作台。
+- Redis：任务状态、日志、队列、执行者槽位与心跳。
+- `config.yaml`：业务配置真源；部署清单中的 ConfigMap 由同步工具生成。
 
-两种构建模式：
-
-- **V6**：选择起止补丁版本，自动计算中间 patch 的镜像差异并打包。
-- **V7**：手工输入镜像清单，校验、去重后直接打包。
-
-当前使用规模为 1~2 个用户，**稳定优先**。没有明确需求时，不要大改构建主链路、
-队列模型或前端结构。
+两种模式：`mode=patch` 按版本差异打包，支持 6.4.9/6.5.9/6.6.9/7.0.9/7.1.9；
+`mode=custom` 按手工镜像清单打包。内部 `task_type=v6/v7` 为历史兼容字段，
+分别对应 patch/custom，不应把它们等同于产品大版本。
 
 ## 2. 快速运行
 
 ```bash
-# 本地开发（Python 3.12 + Redis）
-python3.12 -m venv venv && source venv/bin/activate
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# Terminal 1: Web API，0.0.0.0:8000
-python app.py
-
-# Terminal 2: 构建 worker
-python worker.py
+# 两个终端都应设置同一 APP_CONFIG_PATH，开发配置需指向本地 Redis。
+APP_CONFIG_PATH=/tmp/auto-packing-local.yaml python app.py
+APP_CONFIG_PATH=/tmp/auto-packing-local.yaml python worker.py
 ```
 
-生产使用 gunicorn（见 Dockerfile CMD）：
+本地配置示例、外部工具要求见 README。只启动 app 会正常入队，但不会执行任务。
+自动化测试不需要业务 Redis、OSS 或镜像仓库凭据。
+
+容器构建与默认 Web 启动：
 
 ```bash
+docker build -f dockerfile -t auto_packing:latest .
 gunicorn --workers 2 --threads 4 --worker-class gthread \
   --bind 0.0.0.0:8000 --timeout 0 app:app
 ```
 
-Docker 构建：
-
-```bash
-docker build -f dockerfile -t auto_packing:latest .
-```
-
-只启动 `app.py` 不启动 `worker.py` 时，页面和入队正常，但任务不会执行。
-
 ## 3. 架构与并发
 
 ```text
-浏览器 ──SSE──▶ app.py (Flask/gunicorn) ──LPUSH──▶ Redis build:queue
-                    │                                  │ BRPOPLPUSH
-                    │                                  ▼
-                    │                           worker.py (独立进程)
-                    ▼                                  │
-             Redis 状态/日志/槽位                pull/build/package
+浏览器 → Flask/app → Redis build:queue → worker → skopeo → tar.gz → OSS
+          ↑ SSE/状态          ↑ 心跳/processing/slot             ↓ 签名下载
 ```
 
-关键设计：
-
-- Web 进程只负责入队、状态查询和展示，不执行构建。
-- 每个 worker 进程串行处理任务，实际并发上限 =
-  `min(max_concurrent_tasks, worker 副本数)`。
-- 当前 `max_concurrent_tasks: 1`，单节点同一时刻只跑一个构建，避免并行拉镜像
-  打满磁盘和网络。
-- 槽位以 `task:<id>:slot` 为准：`SET NX` 抢占后统计 slot 数量，超限则释放重试。
-- worker 心跳间隔 10s，TTL 60s；失活任务每 30s 回收一次。
-- 回收流程带 `build:reclaim:lock`（120s TTL）互斥锁，回收前会删除失效 worker
-  对应任务的 slot。这个清理不能删掉，否则单并发下旧 slot 会阻塞后续任务。
+- Web 只入队和观察，worker 单进程串行执行。实际并发为配置与可用 worker 数的较小值。
+- 仓库配置 `max_concurrent_tasks=3`，部署清单为三个 worker；调度仅尽量分散到各节点。
+- slot 存放 `worker_id:attempt_token`。Lua 原子检查容量并获得执行权，只有同 token 的
+  重试幂等；重复消息不能共用执行权。
+- 运行中的状态、日志和 slot 释放带执行者校验，旧尝试失去执行权后不得覆盖新状态。
+- 心跳默认每 10s 写入、60s TTL；在线展示与 TTL 对齐，回收默认每 30s 扫描。
+- 回收锁默认 120s；Lua 在同一次操作中检查失活、删除属于旧 worker 的 slot、移动
+  processing 消息。**不能删除失活 slot 清理逻辑**，否则旧槽位仍可能阻塞构建。
+- 等待槽位不再因为固定 10 分钟而失败；取消仍可终止排队任务。
+- 临时目录和日志包含独立 attempt，避免恢复时旧执行者清掉新执行者的文件。
 
 ## 4. Redis key 设计
 
-| Key | 类型 | 用途 | TTL |
-|---|---|---|---|
-| `auto_packing:task:<id>:meta` | string(JSON) | 任务状态、进度、包信息 | 成功 7200s / 失败 3600s |
-| `auto_packing:task:<id>:logs` | list(JSON) | 前端日志，最多 `max_logs` 条 | 同 meta |
-| `auto_packing:task:<id>:log_seq` | string(int) | 日志增量游标 | 同 meta |
-| `auto_packing:task:<id>:cancel` | string | 取消标记 | 失败 TTL |
-| `auto_packing:task:<id>:slot` | string | 构建槽位 | 6h |
-| `auto_packing:builds:active` | string(int) | 活跃构建数观测值 | 永久 |
-| `auto_packing:build:queue` | list | 待消费任务 | 永久 |
-| `auto_packing:build:processing:<worker>` | list | worker 正在处理的任务 | 跟随 worker |
-| `auto_packing:worker:<worker>:heartbeat` | string(int) | 最后心跳时间戳 | 60s |
-| `auto_packing:build:reclaim:lock` | string | 回收互斥锁 | 120s |
+以下 key 均带配置的 `key_prefix`，默认 `auto_packing`：
 
-## 5. 构建流程
+| 后缀 | 类型 | 用途 |
+|---|---|---|
+| `task:<id>:meta` | JSON string | 状态、参数、逻辑包名、OSS 对象名、上传重试信息 |
+| `task:<id>:logs` / `log_seq` | list / int | 有界日志和增量序号，日志追加与序号分配为原子操作 |
+| `task:<id>:cancel` | string | 取消标记 |
+| `task:<id>:slot` | string | 当前执行者 token，默认 6h 兜底 TTL |
+| `build:queue` | list | 普通待消费任务 |
+| `build:processing:<worker>` | list | 该 worker 正在处理的消息 |
+| `build:upload:<worker>` | list | 仅原 worker 能处理的上传重试消息 |
+| `worker:<worker>:heartbeat` | string | 心跳，默认 60s TTL |
+| `build:reclaim:lock` | string | 失活回收锁 |
+| `packages:cleanup:lock` | string | 本地/OSS 保留策略互斥锁 |
+| `builds:active` | int | 观测值，不作为执行权依据 |
 
-### V6
+成功状态默认保留 7200s、失败状态 3600s，日志跟随状态过期。上传失败的可重试窗口
+默认也是 3600s；它依赖原 worker 在线且本地保留文件仍在，不能跨 Pod 重建恢复。
 
-1. `POST /build` 入队，返回 `task_id`；前端订阅 `GET /build?task_id=...&since=...`。
-2. worker 创建任务目录，刷新 OSS 版本缓存。
-3. `bin/get_patch_image_tag_list.sh` 计算 patch 差集并生成镜像清单。
-4. `bin/pull_save.sh` 登录仓库、拉取镜像、保存为 `.tar`。
-5. 打包镜像 + 清单 + `deepflow_patch_upgrade.sh`，产物：
-   `upgrade_packages/deepflow_patch_v669_<from>_<to>.tar.gz`。
-6. 清理临时目录，更新任务状态。
+## 5. 构建与交付流程
 
-### V7
+1. `POST /build` 校验并入队，前端拿 task_id 后订阅 SSE；刷新按 task_id 恢复。
+2. patch 模式刷新对应 OSS 版本列表，再从 nuwa 的对应版本线生成镜像差异清单。
+   custom 模式直接使用已校验、归一化、去重后的清单。
+3. `pull_save.sh` 先校验完整清单，再通过 skopeo 导出每个镜像的 docker-archive。
+   默认仓库单组件保留旧 tar 文件名，其他路径/仓库追加完整引用哈希以防重名。
+4. 脚本全部成功后原子写入 `image_exports.tsv`。后端核对引用、文件名、文件数量及
+   非空 tar，缺项/重名/非法项不得生成成功包。
+5. 归档使用临时文件和 `os.replace`，顶层目录与逻辑包名一致。
+6. OSS 模式在任务/attempt 专属 `.pending` 目录归档，上传到独立 `oss_object_name`；
+   `package_name` 仍是客户可识别的逻辑包名。同版本对不会覆盖其他任务的远端对象。
+7. 只有交付成功才公布完成状态和下载入口；随后可删除本地副本并按保留策略回收旧包。
 
-1. 前端校验、去重镜像清单，`POST /build` 入队。
-2. worker 直接写入任务专属 `patch_image_tag_list.txt`。
-3. 后续拉取、保存、打包与 V6 一致，产物：
-   `upgrade_packages/deepflow_patch_v7_<task_id>.tar.gz`。
+patch 包名为 `deepflow_patch_v<版本线代码>_<起始序号>_<目标序号>.tar.gz`；
+custom 包名为 `deepflow_patch_custom_<task_id>.tar.gz`。
 
-打包使用临时文件 + `os.replace` 原子替换；拉取超时默认 2h、打包超时 30min。
-不要在未测试的情况下改变这些超时或原子写入逻辑。
+上传失败会自动有限重试，仍失败则标记错误、不给下载入口、保留已完成归档。
+任务中心“重试上传”调用专用接口，由原 worker 只上传归档，不再拉镜像或重新打包。
+原 worker 离线、任务已过期或本地文件丢失时，需要重新构建。
+
+默认拉取超时 2h、归档超时 30min、单次上传超时 1h；拉取、归档和上传都受取消与
+执行权检查保护。修改这些上限或原子写入逻辑必须有对应回归。
 
 ## 6. API
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/` | GET | 工作台页面 |
-| `/health` | GET | 轻量健康检查（Redis ping） |
-| `/channels` | GET | 支持的版本线（6.4.9/6.5.9/6.6.9/7.0.9/7.1.9） |
-| `/versions?channel=7.1.9` | GET | 指定版本线的 OSS 补丁列表；`series=v6` 兼容默认线 |
-| `/build` | POST | 入队（`mode=patch\|custom`），返回 `task_id` |
-| `/build?task_id=&since=` | GET | 订阅已有任务 SSE（重连不重复入队） |
-| `/build/<task_id>/cancel` | POST | 取消排队中/执行中的任务 |
-| `/task-status/<task_id>?since=` | GET | 查询状态与增量日志 |
-| `/tasks/overview` | GET | 任务中心：进行中/最近完成 + Worker/队列/磁盘状态 |
-| `/download/<task_id>` | GET | 下载本次构建产物（oss 后端为签名 URL 跳转） |
-| `/existing-packages` | GET | 列出历史升级包（合并本地与 OSS） |
-| `/download-existing/<filename>` | GET | 下载历史包（oss 后端为签名 URL 跳转） |
-| `/packages/cleanup` | POST | 手动按保留策略回收升级包 |
+| `/` / `/health` | GET | 工作台 / Redis 健康检查 |
+| `/channels` / `/versions?channel=7.1.9` | GET | 版本线 / 对应 OSS patch 列表 |
+| `/build` | POST | `mode=patch` 或 `custom` 入队，返回 task_id |
+| `/build?task_id=&since=` | GET | SSE 观察已有任务 |
+| `/task-status/<id>?since=` | GET | 状态与增量日志 |
+| `/build/<id>/cancel` | POST | 取消任务 |
+| `/build/<id>/retry-upload` | POST | 仅重试已保留归档的 OSS 上传 |
+| `/tasks/overview` | GET | 进行中、最近完成任务和运行状态 |
+| `/download/<id>` | GET | 下载本次成功交付的产物，检查短期下载窗口 |
+| `/existing-packages` | GET | 合并本地与 OSS 历史产物 |
+| `/download-existing/<filename>` | GET | 下载历史对象或本地包 |
+| `/packages/cleanup` | POST | 按当前策略回收旧包 |
+
+保留了旧 GET 入队兼容逻辑，新功能统一使用 POST 创建和 GET 观察。
 
 ## 7. 前端
 
-- 模板只保留 DOM；样式在 `static/app.css`，逻辑在 `static/app.js`（`defer`）。
-- 顶部 `h1` + V6/V7 radiogroup，切换写入 `?series=`。
-- V6：双列可搜索版本选择器，目标版本按 `seq_num` 过滤，显示跨越 patch 数和同名包提示。
-- V7：镜像胶囊流 + 批量编辑弹窗；实时校验 `name:tag`，去重并提示非法项。
-- 构建卡：流水线步骤条、进度、可折叠日志、取消、下载/返回任务中心。
-- 构建统一 `POST /build` 拿 `task_id`，再用 `EventSource` 订阅；`task_id` 写入 URL，
-  刷新后可恢复。
-- 日志按 `lastLogSeq` 增量追加，仅接近底部时自动跟随。
-- 任务中心每 5 秒轮询 `/tasks/overview`，支持查看/取消进行中任务。
+- 模板保留 DOM，样式和行为分别在 app.css/app.js，不引入前端框架。
+- 模式与版本线选择在构建和恢复观察期间锁定；任务 id 写入 URL。
+- SSE 重试失败后继续保持当前任务，通过有超时的状态查询恢复，不能把连接失败当成任务结束。
+- 任务中心默认 5s 轮询，请求有超时，失败后后续轮询仍可继续。
+- 日志按实际返回序号推进游标，接近底部才自动跟随。
+- 下载直接导航到应用入口，不以跨域 HEAD 成功作为前提；复制 curl 带重定向和 HTTP 错误检测。
+- 镜像输入支持带端口 registry；后端的 image_refs.py 为最终格式校验依据，不支持 digest 引用。
 
-## 8. Shell 脚本
+## 8. Shell 与辅助工具
 
-| 脚本 | 作用 |
+| 文件 | 职责 |
 |---|---|
-| `bin/get_patch_image_tag_list.sh` | V6：从 nuwa 计算镜像差异；`git pull` 重试 3 次 |
-| `bin/pull_save.sh` | 登录仓库 → pull → save；容器命令用数组保存，失败重试 3 次 |
-| `bin/deepflow_patch_upgrade.sh` | 部署端升级脚本（打进包内，目标环境写死） |
-| `bin/redeploy.sh` | 唯一 tag 构建、可选推送/导入、同步 ConfigMap/YAML tag、滚动更新 |
-| `bin/check_containerd.py` | 只读巡检 default 残留与镜像 layer 完整性 |
+| `bin/get_patch_image_tag_list.sh` | 按版本线从 nuwa 生成差异清单；git pull 有锁与重试 |
+| `bin/pull_save.sh` | 校验/去重清单，skopeo 导出；`COPY_TOOL=archive` 保留旧回退 |
+| `image_refs.py` | 镜像名、端口、tag、默认仓库和唯一文件命名规则 |
+| `bin/deepflow_patch_upgrade.sh` | 客户部署端脚本，目标现场配置仍为定制件 |
+| `bin/sync_manifest.py` | 配置与两个业务容器镜像同步；`--check` 只读检查漂移 |
+| `bin/redeploy.sh` | 构建、分发、同步配置/镜像、滚动更新 |
+| `bin/check.sh` | 本地与 CI 共用检查入口 |
+| `bin/check_containerd.py` | 旧 containerd 回退流程的只读巡检 |
 
-`pull_save.sh` 中仍有硬编码仓库凭据，内网环境暂不处理。
+仓库凭据仍按当前内部工具策略保留，不在无明确需求时调整。
 
 ## 9. 配置与环境变量
 
-`config.yaml`（可通过 `APP_CONFIG_PATH` 覆盖）：
+配置真源是 `config.yaml`。修改后同步并检查：
 
-```yaml
-redis:
-  host: maintenance-redis.getpatch.svc.cluster.local
-  port: 6379
-  db: 0
-  password: ""
-  key_prefix: auto_packing
-  success_ttl_seconds: 7200
-  failure_ttl_seconds: 3600
-  download_ttl_seconds: 90
-  max_logs: 2000
-  max_concurrent_tasks: 1
-
-package_retention:          # 升级包回收：构建成功后按此策略删最旧的
-  enabled: true
-  max_count: 40             # 最多保留个数
-  max_total_gb: 60          # 总大小上限
-  min_keep: 3               # 至少保留最近 N 个
-  min_age_minutes: 30       # 这么新的包不删
-  dry_run: false
-
-package_storage:            # 产物存储后端
-  backend: oss              # local | oss
-  oss_bucket: publicshare-unsafe
-  oss_prefix: tmp/auto_packing/packages/
-  presign_seconds: 900      # 签名 URL 有效期
-  oss_timeout_seconds: 120
-  upload_timeout_seconds: 3600
+```bash
+python bin/sync_manifest.py
+python bin/sync_manifest.py --check
 ```
 
-> `package_storage.backend=oss` 时：构建成功自动上传，`/download*` 走 OSS 签名 URL
-> 302 跳转，`/existing-packages` 合并本地与远端列表。上传失败只记 ERROR，
-> 不影响构建结果，本地文件仍可下载。这是 app 摆脱本机磁盘、走向多副本的前提。
+同步工具需要 Python 3 与 requirements 中的 PyYAML，不访问集群。不要手工维护部署
+ConfigMap 的另一份参数；当前独立 worker 部署必须 `package_storage.backend=oss`。
 
-| 变量 | 用途 |
+- Redis：并发 3、成功 TTL 7200s、失败 TTL 3600s、下载入口窗口 90s、最多 2000 条日志。
+- 存储：OSS 后端，签名有效期 900s，上传成功后删除本地副本。
+- 保留策略：最多 40 个 / 60GiB，保留最近至少 3 个、30 分钟内的新包和本次产物；
+  候选包括纯 OSS 对象。远端列表获取失败时停止回收，不能拿不完整列表计算保护数量。
+- `dry_run=true` 只报告候选，不删除；过期的失败上传副本随后续回收处理。
+
+| 环境变量 | 用途 |
 |---|---|
-| `REDIS_PASSWORD` | Redis 密码，覆盖 config.yaml |
-| `APP_CONFIG_PATH` | config.yaml 路径，默认 `/app/config.yaml` |
-| `OSS_ACCESS_KEY_ID/SECRET/ENDPOINT` | entrypoint 生成 ossutil 配置 |
-| `OSS_REGION` | OSS 区域，默认 cn-beijing |
-| `GUNICORN_WORKERS/THREADS` | gunicorn 配置 |
-| `PULL_TIMEOUT_SECONDS` | 镜像拉取超时，默认 7200s |
-| `ARCHIVE_TIMEOUT_SECONDS` | 打包超时，默认 1800s |
-| `OSS_QUERY_TIMEOUT_SECONDS` | `ossutil ls` 超时，默认 120s |
-| `OSS_VERSIONS_CACHE_TTL_SECONDS` | `/versions` 缓存，默认 300s |
-| `SLOT_TTL_SECONDS` | 槽位兜底 TTL，默认 21600s |
-| `WORKER_HEARTBEAT_INTERVAL_SECONDS` | 心跳间隔，默认 10s |
-| `WORKER_HEARTBEAT_TTL_SECONDS` | 心跳 TTL，默认 60s |
-| `WORKER_RECLAIM_INTERVAL_SECONDS` | 回收扫描间隔，默认 30s |
-| `CONTAINERD_NAMESPACE` | nerdctl 默认 namespace，镜像内为 `k8s.io` |
-| `FLASK_DEBUG` | 设为 `1` 才启用 debug |
+| `APP_CONFIG_PATH` / `REDIS_PASSWORD` | 覆盖配置路径 / Redis 密码 |
+| `REQUIRE_OSS_STORAGE=1` | worker 独立目录部署启动校验；非 OSS 后端拒绝启动 |
+| `COPY_TOOL` | `skopeo` 或 `archive` |
+| `NUWA_DIR` / `SKIP_NUWA` | 仓库缓存路径 / app 跳过 nuwa 克隆 |
+| `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` / `OSS_ENDPOINT` / `OSS_REGION` | entrypoint 生成 ossutil 配置 |
+| `PULL_TIMEOUT_SECONDS` / `ARCHIVE_TIMEOUT_SECONDS` | 拉取 / 归档超时 |
+| `OSS_QUERY_TIMEOUT_SECONDS` / `OSS_VERSIONS_CACHE_TTL_SECONDS` | 版本查询超时 / 页面版本缓存 TTL |
+| `SLOT_TTL_SECONDS` | 槽位兜底 TTL |
+| `WORKER_HEARTBEAT_INTERVAL_SECONDS` / `WORKER_HEARTBEAT_TTL_SECONDS` / `WORKER_RECLAIM_INTERVAL_SECONDS` | 心跳 / 回收周期 |
+| `GUNICORN_WORKERS` / `GUNICORN_THREADS` / `FLASK_DEBUG` | Web 进程、线程与开发 debug |
+| `CONTAINERD_NAMESPACE` | archive 回退默认 namespace，生产为 k8s.io |
 
 ## 10. 测试与检查
 
 ```bash
-python -m unittest tests.test_app_logic -v
-python -m py_compile app.py worker.py bin/check_containerd.py
-bash -n bin/*.sh entrypoint.sh
-node --check static/app.js
+bash bin/check.sh
+# 可选：只连接可丢弃的本机 Redis，验证真实 Lua、TTL 和队列协议。
+TEST_REDIS_URL=redis://127.0.0.1:6379/15 bash bin/check.sh
 ```
 
-当前有 49 个后端单测，使用 FakeRedis，不依赖真实 Redis。没有 CI，改动后请手动执行上述检查；
-涉及前端时建议再用浏览器或 jsdom 做一次 smoke test。
+普通回归使用临时目录、FakeRedis 和外部工具替身，未模拟 OSS 调用会直接失败。
+真实 Redis 测试仅接受 localhost/回环地址，使用随机 key 前缀清理自身数据，不使用 flushdb。
+不要给 TEST_REDIS_URL 设置业务 Redis。
+
+check.sh 执行 Python 回归、Python 编译、逐个 Shell 语法检查、Node 前端状态回归及
+部署配置漂移检查。GitHub Actions 在 Linux 上运行相同入口、临时 Redis 集成测试和镜像构建。
+真实 registry/OSS/客户 Docker 的端到端验收独立进行，普通单测不得依赖业务凭据。
 
 ## 11. 部署与发布
 
-- `apply/maintenance-app-deployment.yaml` 包含 app/worker/redis/service。
-- app/worker 使用同一镜像，tag 固化在清单中；发布建议使用 `bin/redeploy.sh`：
-  ```bash
-  NERDCTL_IMPORT=1 ./bin/redeploy.sh
-  # 或
-  REGISTRY=registry.example.com ./bin/redeploy.sh
-  ```
-- 脚本会构建唯一 tag、可选推送/导入本机 containerd、同步 ConfigMap 和 YAML tag，
-  然后更新两个 Deployment 并等待 rollout。
-- Redis 使用 PVC + AOF；app/worker 挂载 `/app/upgrade_packages` 共享 PVC。
-- app/worker 默认 `CONTAINERD_NAMESPACE=k8s.io`；探针使用 `/health`。
-- 集群有 3 个节点（apk01/02/03），但 `upgrade_packages` 与 Redis 都是 local 存储型
-  PVC（绑定 apk01），所以三个 Deployment 都加了
-  `nodeSelector: kubernetes.io/hostname=deepflowapk01`。**动这个字段前先确认存储**，
-  否则 Pod 会漂到没有盘/没有镜像的节点上。
-- redis 用 `strategy: Recreate`：单实例 + RWO 卷，滚动更新会让两个 redis 同时写同一份 AOF。
+发布机需要 Python 3/PyYAML、Docker、kubectl 和对应访问权限。多节点推荐：
 
-## 12. 已知问题与修改建议
+```bash
+REGISTRY=registry.example.com/team ./bin/redeploy.sh
+```
 
-当前问题见 [`ISSUES.md`](./ISSUES.md)；镜像交付与多节点方案见
-[`docs/ARTIFACT_DELIVERY.md`](./docs/ARTIFACT_DELIVERY.md)。重点注意：
+脚本构建唯一 tag、推仓库、同步 ConfigMap 和 app/worker 镜像并等待 rollout。
+连续发布使用容器名称定位镜像，不能按旧仓库前缀做字符串替换。
 
-- containerd `default` namespace 历史残留可能导致 `nerdctl save` 报
-  `content digest not found`；先跑 `bin/check_containerd.py`，不要盲目重试 save。
-- `max_concurrent_tasks=1`，回收时必须清理失效 slot；不要删除
-  `reclaim_stale_tasks()` 里的 slot 清理逻辑。
-- SSE 断连后前端会恢复可构建状态，旧任务可能仍在运行；改动前先确认任务中心状态。
-- 构建中切换模式会被 SSE 强制拉回；构建期间模式卡已被前端锁定，避免误点。
-- 自定义镜像校验暂不支持带端口的 registry（如 `registry:5000/image:tag`）。
-- 仓库凭据仍硬编码在 `pull_save.sh`，按当前策略不处理。
-- 保留策略只回收「本地文件 + 其 OSS 同名对象」；纯 OSS 上、本地没有的对象不会被回收，
-  后续若完全转 OSS 存储需要补一条按远端列表回收的逻辑。
+`NERDCTL_IMPORT=1` 只向本机 containerd 导入；仅当实时 app/worker 的 nodeSelector 都
+固定到 `IMPORT_NODE`（默认 hostname）时允许执行。三节点分散 worker 必须走可拉取仓库。
 
-改动原则：
+部署清单：app 单副本仍使用 apk01 的旧包 PVC；Redis 单实例 PVC + AOF 并使用 Recreate，
+app/Redis 保留 apk01 的 nodeSelector。worker 三副本不挂 containerd.sock、不共享产物 PVC，
+使用 emptyDir 和每节点 hostPath nuwa 缓存，`SKIP_NUWA=1` 用于 app。
+**更改 app/Redis nodeSelector 前确认存储；不要让两个 Redis 实例同时写一份 AOF。**
 
-1. 不要在不了解现有队列/槽位/取消逻辑的情况下重构 worker。
-2. 不要删除用户已有的运行时数据或未提交改动。
-3. 修改后至少跑一遍第 10 节的检查。
-4. 大改前先确认是否需要，当前项目稳定优先。
+新 worker 与旧 worker 的执行权协议不同，发布本轮 worker 变更时应先等正在执行的任务结束，
+再切换 worker。不要让不识别 owner token 的旧镜像与新 worker 混跑同一批任务。
+
+## 12. 已知问题与修改原则
+
+未完成事项见 ISSUES，交付边界见 docs/ARTIFACT_DELIVERY.md：
+
+- Redis 仍是 apk01 单节点存储，不具备故障自动切换能力。
+- logs/app.log 尚无轮转；客户升级脚本仍需按现场核对。
+- 缺少 make.sh 的 patch 是否合法为空，需要上游数据契约，不能贸然按所有缺文件失败。
+- 真实 registry → OSS → 客户 Docker load 和 Kubernetes 发布仍需目标环境验收。
+
+修改时维持小范围、有回归的修正，不删除运行数据或已有未提交改动；保护失活 slot 清理、
+独立 attempt 目录和归档原子替换。完成代码改动后执行第 10 节检查。
 
 ## 13. 目录结构
 
 ```text
-.
-├── app.py                 # Flask API、任务状态、构建逻辑
-├── worker.py              # 队列消费、心跳、回收
-├── config.yaml            # Redis 配置
-├── dockerfile             # python:3.12-slim-bookworm + gunicorn
-├── entrypoint.sh          # 克隆 nuwa、生成 ossutil 配置
-├── requirements.txt       # Flask/gunicorn/redis/PyYAML
-├── templates/index.html   # 页面结构
-├── static/                # app.css / app.js / favicon
-├── bin/
-│   ├── get_patch_image_tag_list.sh
-│   ├── pull_save.sh
-│   ├── deepflow_patch_upgrade.sh
-│   ├── redeploy.sh
-│   ├── check_containerd.py
-│   ├── ossutil
-│   └── nerdctl
-├── apply/
-│   ├── maintenance-app-deployment.yaml
-│   └── persistent-volume.yaml
-├── tests/                 # 后端单测
-├── docs/                  # containerd runbook / 交付架构评估
-├── latest_image_list/     # 运行时镜像清单
-├── images/                # 构建临时目录
-├── upgrade_packages/      # 升级包产物
-├── logs/                  # app.log / task 日志
-├── .trash/                # OSS 版本缓存与脚本临时文件
-└── nuwa/                  # 运行时 git clone（不在仓库中）
+app.py / worker.py / image_refs.py
+config.yaml / dockerfile / entrypoint.sh
+templates/ / static/
+bin/                     # 构建、发布、同步与检查工具
+apply/                   # 部署和存储清单
+tests/                   # Python、Node 与可选真实 Redis 回归
+.github/workflows/       # Linux CI
+docs/                    # Review 快照、开发清单、交付说明、旧 containerd runbook
+images/ / latest_image_list/ / logs/ / .trash/ / upgrade_packages/  # 运行时数据
+nuwa/                    # 默认开发仓库目录；生产由 NUWA_DIR 指向节点缓存
 ```
+
+worker 发布使用 Recreate，执行所有权协议升级不可新旧混跑；发布前等待在途构建结束。

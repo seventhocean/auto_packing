@@ -1,350 +1,178 @@
-# 镜像交付与多节点架构评估
+# 镜像交付与多节点部署现状
 
-> 状态：方案评估，尚未实施  
-> 目标：在保持客户侧“下载压缩包、逐个 `docker load`”体验不变的前提下，
-> 降低当前方案对单台服务器、containerd 和本地文件的依赖，并为后续 3 节点部署做准备。
+> 更新日期：2026-10-29。本文件描述当前仓库实现、剩余边界和目标环境验收。
+> 原有 skopeo + OSS 方案已落到代码；不能再将整份方案标为“尚未实施”。
+> 代码修复和自动化回归不等同于已完成生产发布、OSS 与客户 Docker 验收。
 
-## 1. 背景与约束
+## 1. 交付约束
 
-当前系统已经能稳定产出升级包，但交付链路有几个强耦合：
+客户操作保持：下载 tar.gz、解压、逐个 docker load；包内仍包含镜像 tar、镜像清单和
+现场升级脚本。当前导出平台固定 linux/amd64，默认使用 docker-archive，未切换为 OCI。
 
-- 镜像拉取和保存依赖节点上的 `containerd.sock` 和 `nerdctl`。
-- `upgrade_packages/` 使用节点本地 hostPath PVC。
-- Redis 使用节点本地 PVC。
-- `nuwa` 通过 SSH key 克隆，OSS 通过容器内 `ossutil` 访问。
-- 客户只接受**压缩包**，并且习惯解压后逐个 `docker load`。
+服务规模为 1~2 个用户，稳定优先。现有 Web 入队、worker 串行消费、Redis 状态与
+执行权模型继续使用，不引入新队列框架或 registry 直推客户作为默认交付流程。
 
-因此，评估的重点不是“换一个更先进的工具”，而是在**不改变客户交付方式**的前提下，
-选择可靠性更高、节点依赖更少、后续多节点扩展更简单的实现。
-
-## 2. 当前实现与耦合点
-
-| 依赖 | 当前方式 | 单节点是否可用 | 多节点问题 |
-|---|---|---|---|
-| 镜像拉取/保存 | `nerdctl pull` + `nerdctl save` | 是 | 依赖节点 containerd，layer 受 namespace/GC 影响 |
-| 镜像存储 | 节点 containerd content store + 临时 tar | 是 | 每个节点独立缓存，无法共享 |
-| 升级包存储 | hostPath PVC，RWO | 是 | Pod 漂移到其他节点可能挂载失败 |
-| Redis | hostPath PVC，单实例 | 是 | Pod 漂移后数据不可用 |
-| GitLab | SSH key Secret | 是 | 每个 Pod 需要能访问 GitLab；SSH key 需持续维护 |
-| OSS | 容器内 `ossutil` + Secret | 是 | 无宿主机安装问题，但当前只用于版本列表 |
-| 下载 | Flask `send_file` 本地文件 | 是 | 多 app 副本必须共享同一份文件 |
-| 并发 | `max_concurrent_tasks=1` | 是 | 3 节点需要调大并做好调度 |
-
-真正和服务器强绑定的是 **containerd.sock**；`ossutil` 和 GitLab key 都在镜像/Secret 中，
-不需要每台宿主机安装。但 `containerd` 的本地缓存、GC、namespace 问题会放大到每个节点。
-
-## 3. 目标与非目标
-
-### 目标
-
-1. 客户侧交付物保持“一个压缩包 + 多个镜像 tar + 逐个 `docker load`”。
-2. worker 不再依赖节点 `containerd.sock`，可以调度到任意节点。
-3. 支持 3 个 worker 并行构建，且每个节点不要求安装 `ossutil`/配置 GitLab SSH key。
-4. 升级包不依赖单节点本地磁盘，可被多个 app 副本下载。
-5. 镜像来源可追溯：保留完整镜像引用，尽量记录 digest。
-6. 保持现有外层打包、升级脚本和客户操作方式不变。
-
-### 非目标
-
-- 不做镜像仓库的完整替代品。
-- 不要求客户必须能访问镜像仓库。
-- 不引入必须由客户安装的新工具。
-- 不在本阶段重写任务队列或前端。
-
-## 4. 可选方案
-
-### 方案 A：保留 nerdctl + 共享 RWX 存储
-
-- 每个节点一个 worker，继续挂载本机 `containerd.sock`。
-- `upgrade_packages` 改为 RWX（NFS/CephFS/Longhorn）。
-- Redis 改用网络存储或托管实例。
-- 镜像推 registry，或者在每个节点手动导入。
-
-**优点**：改动最小，`pull_save.sh` 不用动。  
-**缺点**：仍然依赖节点 containerd；跨 namespace、GC、镜像缓存问题依旧存在；
-多节点部署需要每个节点都有可用的 containerd 和足够磁盘。
-
-### 方案 B：skopeo 直接生成 docker-archive（推荐）
-
-把 `nerdctl pull + save` 替换为：
-
-```bash
-skopeo copy \
-  --override-os linux \
-  --override-arch amd64 \
-  --src-creds "$REGISTRY_USER:$REGISTRY_PASSWORD" \
-  docker://hub.deepflow.yunshan.net/dev/deepflow-agent:v6.6.6001 \
-  docker-archive:/work/images/deepflow-agent_v6.6.6001.tar:hub.deepflow.yunshan.net/dev/deepflow-agent:v6.6.6001
-```
-
-产物仍然是**每个镜像一个 docker-archive tar**，客户可以直接 `docker load`。
-外层仍然由现有逻辑打成 `.tar.gz`。
-
-**优点**：
-
-- 不需要 `containerd.sock`，worker 可以在任意节点运行。
-- 不经过 containerd content store，规避跨 namespace/GC 导致的 `content digest not found`。
-- 可以直接按平台导出（`--override-arch amd64`），避免多架构 layer 问题。
-- 保留完整镜像引用，客户 load 后 tag 与现在一致。
-- 不需要宿主机安装 `nerdctl`/`ossutil`，工具都在镜像里。
-
-**缺点**：
-
-- 需要把 `skopeo` 加入 worker 镜像。
-- 需要确认 registry 认证/TLS 配置。
-- 每个镜像仍要占用临时磁盘；外层 gzip 对已压缩镜像层收益有限，但客户要求压缩包，保留即可。
-
-### 方案 C：registry-to-registry 直接同步
-
-如果客户有可访问的镜像仓库，可以完全跳过 tar：
-
-```bash
-skopeo copy \
-  docker://source/deepflow-agent:v6.6.6001 \
-  docker://customer-registry/deepflow-agent:v6.6.6001
-```
-
-**优点**：交付物最小，客户不需要下载大包。  
-**缺点**：客户必须能访问仓库；很多售后场景不具备该条件。  
-**定位**：作为可选的高级交付方式，不作为默认路径。
-
-### 方案 D：OCI archive
-
-skopeo 也可以生成 `oci-archive`，但不建议作为默认交付格式：
-
-- 客户当前使用 `docker load`，对 OCI archive 的兼容性不如 docker-archive。
-- 现有升级脚本按 `*.tar` 遍历，docker-archive 更匹配。
-
-因此，**默认坚持 docker-archive**；OCI archive 只作为内部或未来工具链选项。
-
-## 5. 方案对比
-
-| 维度 | A: nerdctl + RWX | B: skopeo + OSS | C: registry 直推 |
-|---|---|---|---|
-| 客户压缩包/逐个 load | 保持 | 保持 | 不适用 |
-| 去掉 containerd.sock | 否 | **是** | 是 |
-| 多节点 worker 调度 | 受限 | **自由** | 自由 |
-| 规避 namespace/GC 问题 | 否 | **是** | 是 |
-| 需要客户仓库 | 否 | 否 | 是 |
-| 临时磁盘 | 需要 | 需要 | 很少 |
-| 运维复杂度 | 中 | 中 | 高（依赖客户环境） |
-| 推荐度 | 过渡方案 | **默认推荐** | 可选高级方案 |
-
-结论：**方案 B 最适合当前“给客户发压缩包”的现实约束**；方案 C 作为未来可选能力，
-不替代默认交付。
-
-## 6. 推荐目标架构
+## 2. 已落地的实现
 
 ```text
-Ingress / Service
-        │
-   app x2~3（无状态）
-        │
-   Redis（托管 / Sentinel）
-        │
-   worker x3（每节点一个，不再挂 containerd.sock）
-        │
-   skopeo ──► 每镜像 docker-archive tar
-        │
-   OSS（最终 .tar.gz、历史包、签名下载）
+Flask Web / SSE
+       │ POST 入队、状态观察
+       ▼
+Redis：queue / processing / owner slot / heartbeat
+       │
+worker x3（每进程串行，调度尽量分散）
+       ├─ nuwa 节点缓存 + OSS 版本列表 → patch 差异
+       ├─ custom → 已校验的镜像清单
+       ▼
+image_refs.py → skopeo → 每镜像 docker-archive → 原子 tar.gz
+                                                   │
+                                   任务/attempt 独立本地归档
+                                                   │
+                                          OSS 独立对象
+                                                   │
+                          app 下载入口 → 302 签名 URL
 ```
 
-关键点：
+| 项目 | 当前实现 | 仍存在的边界 |
+|---|---|---|
+| 镜像导出 | worker 使用 skopeo，固定平台；逐镜像临时文件后替换 | 客户 Docker 同版本 load 需要真实验收；未固定 digest |
+| 引用与文件名 | API/脚本共用解析；完整仓库/端口；去重；路径引用追加哈希 | 不支持 digest 和隐式 latest；内部仓库之外的私有认证需另行配置 |
+| 产物正确性 | 全部输入先校验；导出 TSV 与原清单逐项核对 | 有效非空文件检查不能替代客户实际导入验证 |
+| OSS 交付 | 上传成功后才完成；每次交付独立对象；失败保留归档 | emptyDir 无法跨 Pod 重建恢复 |
+| 下载 | 确认的对象签名；按钮直接导航；curl 跟随跳转 | bucket 权限、真实下载与网络仍需环境验收 |
+| 保留策略 | 本地和纯 OSS 合并候选，数量/容量/最近/年龄保护 | OSS 生命周期若另有配置需与应用策略协调 |
+| 配置 | config.yaml 真源，生成 ConfigMap，CI 检查漂移 | 修改后需同步并按发布流程使进程重启生效 |
+| 发布 | registry 分发；按容器名同步镜像；受限单节点 import | 未自动执行生产发布；所有目标节点必须可拉取镜像 |
+| 故障恢复 | 执行者 token、原子回收、原子日志、进程组取消/超时 | Redis 单节点故障与旧协议混跑不能由 AOF 解决 |
 
-- **worker 无状态**：只依赖镜像、registry、OSS、Redis；不依赖节点 containerd。
-- **app 无状态**：下载走 OSS 签名 URL，不再依赖本地 `upgrade_packages`。
-- **Redis 外置**：托管 Redis 最省事；自建 Sentinel 需要适配 app.py 的连接方式。
-- **镜像分发**：app/worker 镜像必须推 registry，不能只在单节点 `nerdctl load`。
-- **GitLab**：优先改为 HTTPS read-only token，减少 SSH key 维护；如果继续用 SSH，
-  Secret 挂载即可，不需要宿主机安装 key。
-- **OSS**：`ossutil` 继续放在镜像内，不需要宿主机安装。
+## 3. 产物与存储名称
 
-## 7. 交付物规范
-
-建议最终压缩包结构保持不变，同时增加清单和校验：
+逻辑包名保持客户可识别的格式：
 
 ```text
 deepflow_patch_v669_01_13.tar.gz
-└── deepflow_patch_v669_01_13/
-    ├── deepflow-agent_v6.6.6001.tar
-    ├── deepflow-server_v6.6.5617.tar
-    ├── patch_image_tag_list.txt
-    ├── manifest.json
-    ├── SHA256SUMS
-    └── deepflow_patch_upgrade.sh
+deepflow_patch_custom_<task_id>.tar.gz
 ```
 
-`manifest.json` 建议包含：
+包内结构：
 
-```json
-{
-  "package": "deepflow_patch_v669_01_13.tar.gz",
-  "created_at": "2026-10-26T12:00:00Z",
-  "source": {"current": "01-20250430-26798-BUG", "target": "13-20250528-4661-BUG"},
-  "platform": "linux/amd64",
-  "images": [
-    {
-      "ref": "hub.deepflow.yunshan.net/dev/deepflow-agent:v6.6.6001",
-      "digest": "sha256:...",
-      "size": 12345678,
-      "file": "deepflow-agent_v6.6.6001.tar"
-    }
-  ],
-  "sha256": "整包 sha256，可选"
-}
+```text
+deepflow_patch_v669_01_13/
+  deepflow-agent_v6.6.6001.tar
+  deepflow-server_v6.6.5617.tar
+  patch_image_tag_list.txt
+  deepflow_patch_upgrade.sh
 ```
 
-客户侧流程保持：
+默认 DeepFlow dev 仓库的单组件保留普通 tar 名；其他 namespace/registry 的同名镜像
+带引用哈希，防止 team-a/agent 与 team-b/agent 覆盖。导入方式仍是遍历所有 *.tar，
+不依赖从 tar 文件名重建镜像引用。
 
-```bash
-tar -xzf deepflow_patch_v669_01_13.tar.gz
-cd deepflow_patch_v669_01_13
+构建运行目录的 `image_exports.tsv` 包含完整引用和导出文件名，全部成功后原子发布，
+后端验证引用、文件唯一性及非空文件再归档。它是运行时核对依据；当前没有宣称已向客户
+交付正式 manifest.json、digest 或 SHA256SUMS，这些属于后续可选增强。
 
-# 可选校验
-sha256sum -c SHA256SUMS
+OSS 对象名和逻辑包名分开：task meta 的 `package_name` 为逻辑名，`oss_object_name`
+为带唯一后缀的远端文件名，`oss_uri` 只在确认上传成功后设置。同版本对的独立构建不再
+覆盖同一个对象；任务下载使用自己的对象，历史列表保留真实对象名。
 
-# 逐个导入
-for f in *.tar; do
-  docker load -i "$f"
-done
+## 4. 成功、上传失败与重试
 
-# 或使用包内升级脚本
-./deepflow_patch_upgrade.sh
-```
+1. OSS 模式先归档至 `.pending/<task_id>/<attempt>/`，独立于可下载的历史包根目录。
+2. 上传有上限和有限自动重试；成功写入完成状态后才公布 download_url，并可删除本地副本。
+3. 仍失败时，任务为交付错误，保留归档、没有成功下载入口，不把旧同名对象当作本次产物。
+4. 默认失败状态保留一小时。原 worker 在线且归档仍在时，可请求
+   `POST /build/<task_id>/retry-upload`，只上传已有文件，不重新导出镜像或归档。
+5. 上传重试进专属 worker 队列；原 worker 已离线或文件不可用时明确要求重新构建。
+   Pod 重建的 emptyDir 无法从新 worker 找回，不能把该功能描述成持久化失败恢复。
+6. 过期且已无任务状态的失败归档随后续保留策略执行回收，不删除仍被任务使用的文件。
 
-## 8. skopeo 关键命令
+短期任务下载入口默认 90 秒，OSS 签名有效期默认 900 秒；历史包在对象仍保留时可重新
+签名下载。签名本身不证明本次对象上传成功，任务下载需先有成功交付状态和对应 oss_uri。
 
-单镜像导出：
+## 5. worker 执行权与回收
 
-```bash
-skopeo copy \
-  --override-os linux \
-  --override-arch amd64 \
-  --src-creds "$REGISTRY_USER:$REGISTRY_PASSWORD" \
-  docker://hub.deepflow.yunshan.net/dev/deepflow-agent:v6.6.6001 \
-  docker-archive:/work/images/deepflow-agent_v6.6.6001.tar:hub.deepflow.yunshan.net/dev/deepflow-agent:v6.6.6001
-```
+slot 值是 worker/attempt token。Lua 原子检查容量、绑定执行权，重复消息不能把
+“相同 task_id 的 slot 已存在”当作自己的执行成功。状态、日志、slot 释放和取消清理
+校验执行者，失去执行权的旧尝试不能覆盖新尝试状态。
 
-固定 digest（避免 tag 漂移）：
+失活回收在 Redis 同一次 Lua 操作中检查心跳、移除对应旧执行者 slot、转移 processing
+消息。回收锁用于串行扫描；原子移动用于解决“入队成功但回包丢失”后的重试，不再依赖
+分开的 RPUSH 和 DELETE。保留失活 slot 清理是必要条件。
 
-```bash
-DIGEST=$(skopeo inspect \
-  --creds "$REGISTRY_USER:$REGISTRY_PASSWORD" \
-  docker://hub.deepflow.yunshan.net/dev/deepflow-agent:v6.6.6001 \
-  --format '{{.Digest}}')
+心跳默认 10 秒 / TTL 60 秒，展示在线阈值与 TTL 对齐。等槽位不因固定十分钟失败。
+每次构建使用独立 attempt 临时目录和日志，取消、超时、日志写入异常或执行权失效时
+结束子进程组，归档和上传也检查执行权与取消。
 
-skopeo copy \
-  --override-os linux --override-arch amd64 \
-  --src-creds "$REGISTRY_USER:$REGISTRY_PASSWORD" \
-  "docker://hub.deepflow.yunshan.net/dev/deepflow-agent@${DIGEST}" \
-  "docker-archive:/work/images/deepflow-agent_v6.6.6001.tar:hub.deepflow.yunshan.net/dev/deepflow-agent:v6.6.6001"
-```
+本轮协议变更不能和不识别 owner 的旧 worker 随意混跑。真实发布前先等旧执行任务结束，
+再切换 worker；生产发布和回滚步骤需把这一点作为执行条件。
 
-注意：
+## 6. 当前 Kubernetes 存储边界
 
-- `docker-archive:path:ref` 的最后一段决定客户 `docker load` 后看到的镜像名。
-- 不要用 `oci-archive` 作为默认客户交付格式。
-- 内网自签证书需要 `--src-tls-verify=false` 或配置 CA，建议优先配置 CA。
-- 每个镜像单独一个 tar，符合客户逐个 load 的习惯。
-
-## 9. 多节点部署要求
-
-### app
-
-- `replicas: 2~3`，用 topologySpread/anti-affinity 打散。
-- 不再需要 `containerd.sock`。
-- 下载走 OSS 签名 URL 时，不需要共享 `upgrade_packages` PVC。
-- Ingress 需要关闭 response buffering，并放宽 SSE 读超时。
-
-### worker
-
-- `replicas: 3`，每个节点一个，用 topologySpread 约束。
-- 去掉 `containerd.sock` 挂载（skopeo 方案）。
-- 需要临时磁盘；用 emptyDir 并设置 sizeLimit，或使用节点本地盘。
-- 需要访问 registry、OSS、GitLab/Redis。
-- `max_concurrent_tasks` 调到 2~3，先观察网络和磁盘，不建议直接 3 并发拉大镜像。
-
-### Redis
-
-- 推荐托管 Redis，app/worker 直接使用现有 host/port 配置，不需要改代码。
-- 自建 Sentinel 需要把 app.py 的 `redis.Redis` 改为 `redis.Sentinel`，并增加配置项。
-- 不要继续使用单节点 hostPath + AOF 作为 3 节点方案。
-
-### 镜像分发
-
-- `auto_packing:tag` 必须推 registry；`NERDCTL_IMPORT` 只适合单节点。
-- 每个节点都需要能拉取 app/worker 镜像。
-- 建议 `bin/redeploy.sh` 使用 `REGISTRY=...` 推送，而不是只在本机导入。
-
-### 存储
-
-- 推荐 OSS 存升级包，避免 RWX PVC。
-- 如果暂时不用 OSS，必须提供 RWX 存储给 `upgrade_packages`。
-- Redis 使用网络块存储或托管实例，不要放 NFS。
-
-## 10. 分阶段落地
-
-### 阶段 0：POC（1 天）
-
-1. 在一个普通 Pod/VM 里运行 skopeo，导出一个镜像到 docker-archive。
-2. 用客户同版本 Docker 执行 `docker load -i`，确认镜像名、tag、层完整。
-3. 对比现有的 `nerdctl save` 产物，确认升级脚本无需修改。
-
-### 阶段 1：替换单镜像导出
-
-1. Dockerfile 安装 skopeo。
-2. `pull_save.sh` 增加 `COPY_TOOL=skopeo` 分支，保留 nerdctl 回退。
-3. 保持输出文件名、外层打包、`patch_image_tag_list.txt` 和升级脚本不变。
-4. 跑现有 23 个测试 + 一个真实镜像的端到端验证。
-
-### 阶段 2：去除 containerd 依赖
-
-1. worker 去掉 `containerd.sock` 挂载。
-2. `max_concurrent_tasks` 调到 3，worker 副本 3，加 topologySpread。
-3. 验证每个节点都能独立完成一次构建。
-
-### 阶段 3：OSS 与无状态 app
-
-1. worker 打包完成后上传 OSS。
-2. task meta 记录 OSS object key；`/download` 返回签名 URL。
-3. `/existing-packages` 改为 OSS 列举，配置生命周期清理。
-4. app 扩到 2~3 副本，移除共享 `upgrade_packages` PVC。
-
-### 阶段 4：GitLab/Redis 收敛
-
-1. GitLab 改 HTTPS read-only token，或继续 Secret 挂载 SSH key（无需宿主机安装）。
-2. Redis 改托管或 Sentinel。
-3. 增加 package manifest/digest 校验。
-
-## 11. 风险与验证
-
-| 风险 | 应对 |
+| 角色 | 存储与调度 |
 |---|---|
-| skopeo 导出的 tar 客户 `docker load` 不兼容 | 阶段 0 用客户同版本 Docker 实测 |
-| 多架构镜像选错平台 | 固定 `--override-os linux --override-arch amd64` |
-| registry 自签证书/TLS | 配置 CA，临时可 `--src-tls-verify=false` |
-| tag 被覆盖 | 先 inspect 取 digest，再按 digest 复制 |
-| 3 并发打满网络/磁盘 | 先 2 并发，监控节点磁盘和 registry 带宽 |
-| OSS 上传/下载成本 | 使用生命周期清理，控制保留天数 |
-| app 多副本下载不一致 | 走 OSS 签名 URL，或 RWX 共享存储 |
-| Redis 单点 | 托管 Redis 或 Sentinel；AOF/PVC 不能解决节点漂移 |
-| 镜像分发遗漏 | 用 registry 推送；不要依赖单节点 import |
-| V6 同版本对包名冲突 | 保持原子替换；必要时在包名中加入 task id |
+| app | 单副本，仍挂 apk01 的旧包 PVC，nodeSelector 固定 apk01；SKIP_NUWA=1 |
+| worker | 三副本，topologySpread 尽量分散；产物 emptyDir 20Gi；无 containerd.sock |
+| nuwa | 每节点 hostPath 缓存，通过 NUWA_DIR 指定；浅克隆，克隆/pull 共用 flock |
+| Redis | 单实例、apk01 本地 PVC + AOF、Recreate；仍是单节点故障点 |
 
-验收标准：
+worker 的 `REQUIRE_OSS_STORAGE=1` 防止独立产物目录误配置为 local 后端。
+app 的历史 containerd socket 挂载仍在清单中，但新 worker 主流程不再依赖它。
+删除 app 历史挂载、扩展 app 副本、外置 Redis 属于后续独立变更。
 
-- 同一个镜像用 skopeo 导出的 tar 能被客户 `docker load`，镜像名/tag 与现在一致。
-- 包内每个 `.tar` 可单独加载，升级脚本仍可遍历执行。
-- 3 个 worker 在 3 个节点上并发构建，均不需要 `containerd.sock`。
-- 任一 app 副本都能生成/返回同一个包的下载地址。
-- 节点故障后 Redis/worker 恢复，任务能回收或重试。
-- `default` namespace 在各节点保持为空（如果仍保留 nerdctl 回退）。
+修改 app/Redis nodeSelector 之前必须确认存储可达性；Recreate 防止两个 Redis 实例
+同时写一份 AOF，但不提供节点故障自动切换。三个 worker 能跨节点不等于服务已高可用。
 
-## 12. 结论
+## 7. 配置与镜像分发
 
-- **客户交付形态不变**：仍然是一个 `.tar.gz`，里面是每个镜像的 docker-archive tar。
-- **默认推荐方案 B**：skopeo 直接生成 docker-archive，外层继续用现有 tar.gz 打包。
-- **多节点关键不是安装 ossutil/SSH key**，而是去掉对节点 containerd 的依赖、把升级包放到 OSS、
-  把 Redis 外置，并保证每个节点能拉取 app/worker 镜像。
-- **方案 C（registry 直推）** 适合有仓库访问能力的客户，作为可选模式，不替代离线压缩包。
-- 建议先做阶段 0/1 的 POC，验证客户 `docker load` 兼容性，再进入多节点改造。
+业务配置只维护 `config.yaml`，生成/检查部署 ConfigMap：
+
+```bash
+python bin/sync_manifest.py
+python bin/sync_manifest.py --check
+```
+
+发布机需要 Python 3/PyYAML、Docker 和 kubectl。多节点使用可被所有目标节点拉取的仓库：
+
+```bash
+REGISTRY=registry.example.com/team ./bin/redeploy.sh
+```
+
+脚本同步完整 ConfigMap，按 app/worker 容器名称更新任意原镜像前缀，连续发布后清单
+仍保留最新 tag。直接应用已同步清单与脚本发布的业务配置来源一致。
+
+本机 import 只允许实时 app/worker 都固定在导入节点时执行，IMPORT_NODE 默认 hostname；
+不满足就拒绝，不能只把镜像导入 apk01 后让新 worker 去 apk02/03 调度。
+首次部署仍需先准备 Secret/PVC、推送业务镜像，再同步镜像并 apply；同步工具不构建或推送镜像。
+
+## 8. 保留策略
+
+保留策略对本地包和纯 OSS 对象共同计算数量与容量，同名的本地/远端对象合并为一个候选。
+默认最多 40 个或 60GiB，同时保护最新至少 3 个、30 分钟内的新对象和当前交付对象。
+回收使用 Redis 锁；远端列举异常时停止，不能用部分列表计算保护范围。
+远端删除失败时保留候选，dry_run 只报告而不删除。
+
+运行前需确认 OSS 前缀属于本工具管理范围，避免把其他业务对象混入候选。已有 OSS
+生命周期配置如需沿用，应与应用保留策略一并核对；本轮未自动修改 bucket 生命周期。
+
+## 9. 检查、目标环境验收与后续方向
+
+`bash bin/check.sh` 运行普通回归和配置检查。可选 TEST_REDIS_URL 只连接本地可丢弃
+Redis，使用随机前缀验证真实 Lua、队列和过期行为。Linux CI 同时运行临时 Redis 集成
+与镜像构建。自动化测试数量以当前检查输出为准，避免文档与用例数再次漂移。
+
+生产发布前仍需目标环境验证：
+
+- 每个节点可以拉取业务镜像，并独立完成一次构建。
+- 真实 registry 导出 tar 后在客户同版本 Docker 上逐个 load，镜像名/tag/数量正确。
+- 两个不同路径的同名镜像均存在；同版本对同时构建的对象不互相覆盖。
+- OSS 上传失败不公布成功，原 worker 在线可仅重试上传；离线/重建则明确不可恢复。
+- 任务下载、历史列表、浏览器下载和复制 curl 命令都获得正确包。
+- 纯 OSS 保留策略和保护规则实际符合预期，取消/进程退出/worker 失活没有遗留执行。
+- 发布前旧任务结束，配置生效，连续发布和回滚的镜像/状态协议一致。
+
+尚未实施的方向按需求独立推进：Redis 外置或故障切换、app 完全去本地历史卷、多副本
+Web、镜像 digest 固定与客户校验清单、日志轮转、通用现场升级脚本。registry-to-registry
+直推客户和 OCI archive 可另做可选模式，不替代当前压缩包交付。
+
+worker 发布采用 Recreate 以隔离执行协议升级；发布前应排空进行中的构建。

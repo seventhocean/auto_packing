@@ -1,749 +1,247 @@
 # auto_packing
 
-`auto_packing` 是一个面向 DeepFlow 补丁升级场景的自动打包服务。当前项目已经从“单进程内直接执行任务”的轻量模式，演进为“Flask Web + Redis 队列 + 独立 Worker”的异步构建架构，用于统一完成以下工作：
+DeepFlow 补丁包构建与分发工具。Web 提交任务，Redis 保存状态与队列，独立 worker
+导出镜像、生成升级包并交付到 OSS。客户收到的仍是一个 tar.gz，解压后逐个 docker load。
+当前服务面向 1~2 个内部用户，以稳定和可恢复为优先。
 
-- 提供 Web 工作台，支持 V6 与 V7 两种构建模式。
-- 从 OSS 获取可选补丁版本列表。
-- 根据版本差异或手工镜像清单生成 `patch_image_tag_list.txt`。
-- 拉取镜像并保存为本地 `.tar` 文件。
-- 组装升级包 `tar.gz`。
-- 提供实时进度、日志、临时下载入口和历史升级包下载。
+## 当前架构
 
-## 1. 当前项目的真实架构
+```text
+浏览器 → Flask/gunicorn → Redis 队列 → worker x3
+  ↑          │                          ├─ patch：OSS 版本列表 + nuwa 差异
+  │ SSE/状态 │                          ├─ custom：手工镜像清单
+  │          │                          └─ skopeo → docker-archive → tar.gz → OSS
+  └──────────┴────────────── 下载入口 → OSS 签名 URL
+```
 
-### 1.1 运行角色
+| 文件 | 主要职责 |
+|---|---|
+| app.py | Flask API、SSE、任务/日志协议、归档、OSS 交付与保留策略 |
+| worker.py | 串行消费、执行权、心跳、原子回收、原 worker 上传重试 |
+| image_refs.py | 共用的镜像引用解析、去重与文件命名 |
+| templates/index.html + static/ | 工作台界面、任务恢复、镜像编辑与历史包列表 |
+| bin/get_patch_image_tag_list.sh | 从 nuwa 对应版本线生成差异清单 |
+| bin/pull_save.sh | 整批校验后导出镜像并生成导出核对清单 |
+| bin/sync_manifest.py | 将业务配置和镜像同步到部署清单，支持只读漂移检查 |
+| bin/redeploy.sh | 构建、分发镜像、同步配置并等待 app/worker rollout |
 
-- `app.py`
-  - Flask 应用入口。
-  - 提供页面、REST API、SSE 实时推送。
-  - 负责任务入队、状态读写、下载接口、已有升级包列表接口。
-- `worker.py`
-  - 独立后台消费者。
-  - 从 Redis 队列取任务并执行实际构建。
-  - 维护心跳，并回收失活 worker 遗留的 processing 队列任务。
-- Redis
-  - 任务状态存储。
-  - 构建队列和 processing 队列。
-  - 并发槽位计数。
-  - 日志缓存。
-- Shell 脚本
-  - `bin/get_patch_image_tag_list.sh`：V6 模式下根据补丁版本差异生成镜像清单。
-  - `bin/pull_save.sh`：登录仓库、拉取镜像、保存为 tar。
-  - `bin/deepflow_patch_upgrade.sh`：打到升级包中的部署端升级脚本。
+`mode=patch` 支持 6.4.9、6.5.9、6.6.9、7.0.9、7.1.9 五条版本线；`mode=custom`
+接受手工镜像列表。内部 task_type 的 v6/v7 为历史兼容命名，分别对应这两种构建方式。
 
-### 1.2 与旧实现相比的重要变化
+## 开发与检查
 
-- 不再依赖 `Semaphore(3)` 这类进程内并发控制。
-- 当前并发控制由 Redis 中的 `task:<id>:slot` 和 `max_concurrent_tasks` 配置驱动；`builds:active` 仅作为观测值。
-- Web 进程与构建执行已经解耦，Web 只负责入队和状态查询，真正构建由 `worker.py` 执行。
-- 任务状态和日志不再只存在内存里，而是保存在 Redis，便于多副本部署。
-- 前端界面已改为双模式工作台：
-  - `V6 Patch`：自动计算补丁差异。
-  - `V7 Image List`：手工输入镜像列表直接打包。
+需要 Python 3.12、Node.js；真实构建另需 Redis、OSS、nuwa、镜像仓库以及对应工具访问。
+普通自动化回归不访问业务外部服务，也不需要业务凭据。
 
-## 2. 核心流程
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+bash bin/check.sh
+```
 
-### 2.1 V6 构建流程
+统一检查包括 Python 回归、Python 编译、逐个 Shell 语法、前端 Node 状态回归和部署
+ConfigMap 漂移检查。外部工具回归通过临时替身执行，未模拟 OSS 调用会导致测试失败。
+FakeRedis 支持测试需要的 TTL/列表/原子协议行为。
 
-V6 模式的目标是：给定当前补丁版本和目标补丁版本，自动找出中间 patch 的镜像差异并打包。
+可选的真实 Redis 回归仅允许连接可丢弃的本机实例：
 
-执行顺序如下：
+```bash
+TEST_REDIS_URL=redis://127.0.0.1:6379/15 bash bin/check.sh
+```
 
-1. 前端调用 `POST /build`，JSON body 为 `{"series":"v6","current":"<current>","target":"<target>"}`，拿到 `task_id`。
-2. `app.py` 生成唯一 `task_id`，初始化任务状态为 `queued`，并把任务写入 Redis 队列；前端随后通过 `GET /build?task_id=<task_id>` 订阅 SSE。
-3. `worker.py` 从 Redis 队列取出任务，等待并发槽位可用。
-4. worker 调用 `run_build_task(task_id, current_version, target_version)`。
-5. 为该任务创建独立临时目录：
-   - `images/<current>_to_<target>_<task_id>/`
-6. 执行 `bin/get_patch_image_tag_list.sh`：
-   - 先 `git pull` 更新本地 `nuwa/` 仓库。
-   - 从 `.trash/oss_patch_version.txt` 中读取后端刚写入的 OSS 补丁列表。
-   - 计算当前版本到目标版本之间的 patch 差集。
-   - 遍历 `nuwa/6.6/6.6.9/<patch>/make.sh`，提取镜像与 tag。
-   - 生成当前任务专属 `patch_image_tag_list.txt`。
-7. 执行 `bin/pull_save.sh -d <task_dir> -f <patch_list>`：
-   - 登录镜像仓库。
-   - 逐条拉取镜像。
-   - 保存为多个 `.tar` 文件。
-8. 打包输出：
-   - `.tar` 镜像文件
-   - `patch_image_tag_list.txt`
-   - `bin/deepflow_patch_upgrade.sh`
-9. 产物写入 `upgrade_packages/`，文件名格式：
-   - `deepflow_patch_v669_<current_patch_seq>_<target_patch_seq>.tar.gz`
-10. 更新任务状态为 `complete`，通过 SSE 推送给前端。
-11. 删除任务临时镜像目录和临时任务日志。
+测试使用随机 key 前缀，只清理自身数据，不运行 flushdb。不要指向业务 Redis。
+GitHub Actions 的 `.github/workflows/check.yml` 在 Linux 上运行相同检查入口、临时
+Redis 集成测试及 Docker 镜像构建；真实 registry/OSS/客户 Docker 链路单独验收。
 
-### 2.2 V7 构建流程
-
-V7 模式不依赖 OSS 版本差异，而是直接使用用户手工输入的镜像清单。
-
-执行顺序如下：
-
-1. 前端调用 `POST /build`，JSON body 为 `{"series":"v7","images":["<image>", ...]}`，拿到 `task_id`。
-2. `app.py` 把镜像列表写入 Redis 队列；前端随后通过 `GET /build?task_id=<task_id>` 订阅 SSE。
-3. `worker.py` 取任务后执行 `run_build_task_v7(task_id, images)`。
-4. worker 直接把用户提交的镜像条目写入任务专属 `patch_image_tag_list.txt`。
-5. 后续拉取、保存、打包逻辑与 V6 基本一致。
-6. 产物命名为：
-   - `deepflow_patch_v7_<task_id>.tar.gz`
-
-### 2.3 实时状态流
-
-前端不是轮询 `/task-status/<task_id>`，而是通过 `/build` 返回的 SSE 流持续接收状态。
-
-任务状态字段主要包括：
-
-- `status`
-  - `queued`
-  - `progress`
-  - `complete`
-  - `error`
-- `percent`
-- `message`
-- `complete`
-- `error`
-- `download_url`
-- `package_path`
-- `package_name`
-- `package_size_mb`
-- `download_expire_at`
-- `logs`
-- `cancelled`（任务被用户取消时为 `true`）
-
-## 3. Redis 设计
-
-### 3.1 配置来源
-
-Redis 默认配置在 `app.py` 的 `DEFAULT_CONFIG` 中，运行时会再加载：
-
-- `config.yaml`
-- 环境变量 `REDIS_PASSWORD`
-
-当前仓库内 `config.yaml` 默认值为：
+本地启动时，新建 `/tmp/auto-packing-local.yaml`，至少设置：
 
 ```yaml
 redis:
-  host: maintenance-redis.getpatch.svc.cluster.local
+  host: 127.0.0.1
   port: 6379
-  db: 0
   password: ""
-  key_prefix: auto_packing
-  success_ttl_seconds: 7200
-  failure_ttl_seconds: 3600
-  download_ttl_seconds: 90
-  max_logs: 2000
-  max_concurrent_tasks: 1
+package_storage:
+  backend: local
 ```
 
-### 3.2 Redis 中存的是什么
-
-- 任务元信息
-  - `auto_packing:task:<task_id>:meta`
-- 任务日志列表
-  - `auto_packing:task:<task_id>:logs`
-- 任务占用槽位标记
-  - `auto_packing:task:<task_id>:slot`
-- 当前活跃构建数
-  - `auto_packing:builds:active`
-- 构建队列
-  - `auto_packing:build:queue`
-- worker processing 队列
-  - `auto_packing:build:processing:<worker_id>`
-- worker 心跳
-  - `auto_packing:worker:<worker_id>:heartbeat`
-
-### 3.3 并发控制与回收
-
-- 每个 worker 真正开始执行前，会调用 `try_acquire_build_slot()`。
-- 槽位以 `task:<id>:slot` 为准：先 `SET NX` 抢占，再统计现有 slot 数量；超过 `max_concurrent_tasks` 时释放并继续排队。
-- slot 带 6 小时 TTL 兜底；失活回收时会删除对应任务的 slot，避免阻塞后续任务。
-- `builds:active` 仅作为观测值，由实际 slot 数量同步。
-- 每个 worker 进程串行处理任务，实际并发上限为 `min(max_concurrent_tasks, worker 副本数)`；单节点部署下配置为 1，同一时刻只执行一个构建；其余任务保持排队，避免并行拉镜像把本机磁盘和网络打满。
-- worker 通过 `heartbeat_loop()` 每 10 秒写一次心跳，TTL 为 60 秒（避免 Redis 短暂抖动导致任务被误回收）。
-- 另一个 `reclaim_loop()` 每 30 秒扫描一次 processing 队列：
-  - 若某个 worker 的心跳不存在，则把其 processing 队列中的任务重新放回 build queue。
-
-这意味着项目支持：
-
-- 多 worker 副本并发消费。
-- worker 异常退出后的任务回收。
-- 状态在 Web 重启后仍可继续读取。
-
-## 4. 目录与职责
-
-### 4.1 主目录
-
-- `app.py`
-  - Web 服务、接口、任务状态管理、SSE、打包主逻辑。
-- `worker.py`
-  - Redis 队列消费者。
-- `config.yaml`
-  - Redis 配置。
-- `entrypoint.sh`
-  - 容器启动入口，负责准备目录、拉取 `nuwa`、生成 `.ossutilconfig`。
-- `dockerfile`
-  - 容器镜像构建文件。
-- `requirements.txt`
-  - Python 依赖。
-- `AGENTS.md`
-  - 通用 AI/开发助手指南：架构、命令、约束、已知问题入口。
-- `ISSUES.md`
-  - 当前问题清单与已完成优化摘要。
-- `docs/`
-  - 运维与架构手册：containerd 处理手册、镜像交付与多节点评估。
-
-### 4.2 业务目录
-
-- `bin/`
-  - 关键脚本和二进制：
-  - `get_patch_image_tag_list.sh`
-  - `pull_save.sh`
-  - `deepflow_patch_upgrade.sh`
-  - `redeploy.sh`
-  - `check_containerd.py`
-  - `ossutil`
-  - `nerdctl`
-- `templates/`
-  - 前端页面模板。
-- `static/`
-  - `app.css`、`app.js`、`favicon.ico`（图标使用内联 SVG）。
-- `latest_image_list/`
-  - 默认镜像清单输出目录。
-- `images/`
-  - 每个任务的临时镜像 tar 工作目录。
-- `upgrade_packages/`
-  - 最终升级包目录。
-- `logs/`
-  - `app.log` 与任务运行日志。
-- `.trash/`
-  - 临时文件和 OSS 补丁版本缓存。
-- `apply/`
-  - Kubernetes 部署清单。
-- `tests/`
-  - 后端单元测试（`python -m unittest tests.test_app_logic`）。
-- `docs/`
-  - 运维与架构手册：`CONTAINERD_RUNBOOK.md`、`ARTIFACT_DELIVERY.md`。
-
-### 4.3 运行时依赖目录
-
-- `nuwa/`
-  - 不在仓库中提交，运行时由 `entrypoint.sh` 自动克隆。
-  - V6 模式生成镜像差异强依赖该目录。
-
-## 5. API 说明
-
-### 5.1 页面
-
-- `GET /`
-  - 返回工作台页面。
-- `GET /health`
-  - 轻量健康检查，返回 Redis 连通状态；K8s 探针使用。
-
-### 5.2 版本列表
-
-- `GET /versions?series=v6`
-  - 从 OSS 读取补丁列表。
-  - 仅 `v6` 已接入。
-  - 同时返回 `package_name_template`，前端用它匹配“已有同名升级包”，避免硬编码包名前缀。
-- `GET /versions?series=v7`
-  - 当前返回 `501`，属于占位逻辑。
-
-返回数据中的版本项包含：
-
-- `value`
-- `display`
-- `seq_num`
-- `date`
-
-### 5.3 启动构建
-
-- `POST /build`
-  - V6：`{"series":"v6","current":"<v>","target":"<v>"}`
-  - V7：`{"series":"v7","images":["<img>", ...]}`
-  - 只入队并返回 `task_id`，不承载 SSE。
-- `GET /build?task_id=<task_id>&since=<seq>`
-  - 返回 `text/event-stream`，观察任务进度。
-  - 重连只重放日志，不会重复创建任务；前端把 `task_id` 写入 URL，刷新后可恢复。
-
-兼容旧调用：`GET /build?series=v6&current=&target=` 与 `GET /build?series=v7&images=` 仍会入队并直接返回 SSE，但新代码不应再使用。
-
-### 5.4 任务状态查询
-
-- `GET /task-status/<task_id>`
-  - 支持 `?since=<seq>` 只返回该日志游标之后的新日志。
-
-### 5.5 取消任务
-
-- `POST /build/<task_id>/cancel`
-  - 对排队中或执行中的任务提交取消请求。
-  - 执行中的构建会在 1 秒内检测到取消并终止整个进程组。
-  - 任务最终状态为 `error + cancelled=true`，前端显示“已取消”。
-
-### 5.6 下载
-
-- `GET /download/<task_id>`
-  - 下载本次刚生成的包。
-  - 会检查任务状态和 `download_expire_at`。
-- `GET /tasks/overview`
-  - 任务中心数据：进行中任务、最近完成任务，以及 Worker 在线、队列长度、并发槽位和磁盘余量。
-  - 响应带 `Cache-Control: no-store`，前端每 5 秒轮询。
-- `GET /existing-packages`
-  - 列出 `upgrade_packages/` 中已有包，按修改时间倒序。
-- `GET /download-existing/<filename>`
-  - 下载历史包。
-  - 内部会做文件名合法性校验，避免路径穿越。
-
-## 6. 前端页面逻辑
-
-当前前端只有一个页面：`templates/index.html`，但不是简单表单，已经演进成完整工作台。样式与逻辑分别拆分到 `static/app.css`、`static/app.js`。
-
-### 6.1 页面分区
-
-- 顶部 Header 区
-  - `h1` 标题。
-  - V6 / V7 单选式分段切换（支持键盘方向键）。
-- 左侧工作区
-  - V6：当前版本 → 目标版本双列选择。
-  - V7：镜像清单输入与实时校验。
-  - 构建卡：实时进度条、状态、可折叠日志、取消按钮。
-  - 任务中心：进行中/最近完成任务、Worker 状态、队列、并发与磁盘余量。
-  - 完成后可直接下载升级包，或返回任务中心。
-  - 刷新页面后通过 URL 中的 `task_id` 自动恢复任务。
-- 右侧资源区
-  - 已有升级包列表。
-  - 搜索与下载。
-
-### 6.2 V6 交互逻辑
-
-- 页面加载时自动请求 `/versions?series=v6`。
-- 当前版本使用可搜索下拉：输入关键字过滤，支持方向键 + 回车选择。
-- 目标版本只列出 `seq_num` 大于当前版本的项目。
-- 选择两个版本后，表单下方显示“将跨越 N 个 patch”。
-- 若 `upgrade_packages/` 中已存在同名包，会提示并给出直接下载链接。
-- 按钮禁用条件：
-  - 未选当前版本。
-  - 未选目标版本。
-  - 正在构建中。
-
-### 6.3 V7 交互逻辑
-
-- 用户通过镜像胶囊输入框逐条添加，或使用“批量编辑 / 粘贴”弹窗一次粘贴多行。
-- 支持换行、逗号、中文逗号、分号、空格分隔。
-- 实时校验 `name:tag` 格式（支持 registry 域名路径），自动去重并提示非法行。
-- 存在非法行时构建按钮禁用，避免把脏数据写入镜像清单。
-- 注意：当前校验不支持带端口的 registry（如 `registry:5000/image:tag`）。
-
-注意：
-
-- 前端推荐格式是：
-  - `deepflow-agent_tag: v6.6.5617`
-  - `deepflow-server_tag: v6.6.5617`
-- 但实际提交给后端时，是以分隔符切成单条字符串数组再传递。
-- 后端不会再次做严格语法校验，真正格式兼容主要依赖 `pull_save.sh` 的解析规则。
-
-### 6.4 日志显示逻辑
-
-- 每条日志带单调递增的 `seq` 游标。
-- SSE 连接支持 `?since=<seq>`，只推送该游标之后的新日志，避免每秒重复传输全量列表。
-- 前端记录 `lastLogSeq`，断线重连时带上该游标，既不会重复也不会漏日志。
-- 日志面板按到达顺序追加，并保留 `ERROR/WARNING` 级别样式。
-
-## 7. Shell 脚本逻辑
-
-### 7.1 `bin/get_patch_image_tag_list.sh`
-
-职责：
-
-- 拉取最新 `nuwa` 仓库。
-- 读取 `.trash/oss_patch_version.txt`。
-- 计算从当前 patch 到目标 patch 之间的差集。
-- 从 `nuwa/6.6/6.6.9/<patch>/make.sh` 中提取 `:v6.6` 镜像行。
-- 生成最终的 `patch_image_tag_list.txt`。
-
-输出格式类似：
-
-```text
-deepflow-server_tag: v6.6.5617
-pcap_tag: v6.6.220
-```
-
-脚本特点：
-
-- 只支持 `6.6 / 6.6.9` 这条目录结构，属于强耦合实现。
-- 依赖 OSS 列表缓存文件先由后端刷新好。
-- 执行前会强制 `git pull --ff-only`，失败时重试 3 次。
-
-### 7.2 `bin/pull_save.sh`
-
-职责：
-
-- 登录 `hub.deepflow.yunshan.net`。
-- 读取镜像列表文件或直接处理命令行镜像。
-- 拉取镜像。
-- 保存为 `.tar`。
-
-支持两种镜像列表格式：
-
-- `name_tag: vX.Y.Z`
-- `name: vX.Y.Z`
-
-当前实现要点：
-
-- 默认容器工具是 `nerdctl -n k8s.io`（用 bash 数组保存，支持 `-c "nerdctl -n k8s.io"` 这种带参数的写法）。
-- 也支持 `-c docker` 切换。
-- 仓库前缀默认是 `hub.deepflow.yunshan.net/dev/`。
-- 仓库登录、镜像拉取、保存失败时都会重试 3 次。
-- 镜像操作默认使用 `k8s.io` namespace；历史 namespace 残留问题见 [`docs/CONTAINERD_RUNBOOK.md`](./docs/CONTAINERD_RUNBOOK.md)。
-- 产出的 tar 文件名格式：
-  - `<image_name>_<tag>.tar`
-
-### 7.3 `bin/deepflow_patch_upgrade.sh`
-
-该脚本不会在服务端执行，而是作为升级包内容的一部分交付给使用方。
-
-主要能力：
-
-- 导入 `.tar` 镜像。
-- 推送镜像到目标仓库。
-- 备份并修改 `values.yaml`、`values-custom.yaml`。
-- 执行 DeepFlow 组件升级。
-- 检查升级后的镜像版本。
-- 回滚配置并重新部署。
-
-它默认面向某套固定部署环境，内部写死了：
-
-- `container_cmd="docker"`
-- `values_yaml=/usr/local/deepflow/templates/values.yaml`
-- `target_registry=hubmgt-uat.paic.com.cn/deepflow`
-- 一组固定组件名单
-
-所以这个脚本是“随包交付的运维脚本”，不是一个通用升级器。
-
-## 8. 输出产物
-
-### 8.1 V6 输出包
-
-文件名：
-
-```text
-deepflow_patch_v669_<from_patch_seq>_<to_patch_seq>.tar.gz
-```
-
-例如：
-
-```text
-deepflow_patch_v669_01_13.tar.gz
-```
-
-### 8.2 V7 输出包
-
-文件名：
-
-```text
-deepflow_patch_v7_<task_id>.tar.gz
-```
-
-### 8.3 包内容
-
-每个升级包内通常包含：
-
-- 若干镜像 tar 文件
-- `patch_image_tag_list.txt`
-- `deepflow_patch_upgrade.sh`
-
-打包时使用了：
+在两个终端使用同一配置启动：
 
 ```bash
-tar -czf ... --transform 's|.*/||' --transform 's|.*|<包名>/&|'
+APP_CONFIG_PATH=/tmp/auto-packing-local.yaml python app.py
+APP_CONFIG_PATH=/tmp/auto-packing-local.yaml python worker.py
 ```
 
-因此解压后会得到一个与包名同名的目录，所有文件位于该目录内（不再散落在当前目录）。打包先写入临时文件，完成后原子替换目标包，避免下载到半成品。
+页面位于 8000 端口。只有 Web 没有 worker 时，任务能入队但不会执行。
+普通检查可在 macOS 运行；仓库附带的 ossutil/nerdctl 为 Linux 二进制，真实构建推荐使用
+项目容器或目标 Linux 环境。真实运行仍需要准备工具配置与外部服务访问权限。
 
-## 9. 生命周期与清理策略
+## 业务配置与部署真源
 
-### 9.1 任务状态保留
-
-- 成功任务状态保留：
-  - `success_ttl_seconds = 7200`
-- 失败任务状态保留：
-  - `failure_ttl_seconds = 3600`
-
-### 9.2 临时下载链接
-
-- `/download/<task_id>` 对应的临时下载有效期为：
-  - `download_ttl_seconds = 90`
-
-注意：
-
-- 90 秒过后，并不是文件会被删除。
-- 文件仍可能存在于 `upgrade_packages/`。
-- 只是“按任务下载”入口会失效。
-- 用户仍可通过 `/existing-packages` 和 `/download-existing/<filename>` 下载历史包。
-
-### 9.3 任务临时文件
-
-任务结束后会清理：
-
-- `images/<task_dir>/`
-- `logs/task_<task_id>.log`
-
-不会清理：
-
-- `upgrade_packages/` 中已生成的升级包
-- `logs/app.log`
-
-## 10. 启动方式
-
-### 10.1 本地直接运行
-
-先准备：
-
-- Python 3.12（与容器镜像一致；Flask 3.1 要求 3.9+）
-- Redis 可访问
-- `nuwa/` 仓库访问能力
-- `ossutil` 配置
-- `nerdctl` 或 `docker`
-
-安装依赖：
+`config.yaml` 是业务配置真源，`APP_CONFIG_PATH` 可覆盖运行时路径，`REDIS_PASSWORD`
+覆盖文件中的 Redis 密码。修改仓库配置后执行：
 
 ```bash
-pip install -r requirements.txt
+python bin/sync_manifest.py
+python bin/sync_manifest.py --check
 ```
 
-启动 Web：
+同步工具只操作本地文件，需要 Python 3 和 PyYAML。不要分别手工维护 config.yaml 和
+部署清单 ConfigMap；CI 会检查两者漂移。redeploy 也会同步完整业务配置。
 
-```bash
-python app.py
+当前仓库配置的关键值：
+
+| 配置 | 当前值与含义 |
+|---|---|
+| redis.max_concurrent_tasks | 3，上限还受可用 worker 数限制 |
+| success_ttl_seconds / failure_ttl_seconds | 成功状态 7200s / 失败状态 3600s |
+| download_ttl_seconds | 任务下载入口有效 90s，过期仍可从保留的历史对象下载 |
+| package_storage.backend | oss；仅本机开发或确实共享目录的部署可使用 local |
+| presign_seconds / upload_timeout_seconds | OSS 签名 900s / 单次上传上限 3600s |
+| delete_local_after_upload | true；确认交付并写入完成状态后删除本地副本 |
+| package_retention | 最多 40 个、60GiB；至少保留最新 3 个、30 分钟内的新包和当前产物 |
+
+独立 emptyDir worker 设置 `REQUIRE_OSS_STORAGE=1`，配置误回退 local 会拒绝启动。
+OSS 保留策略包含纯远端对象；远端列举失败时停止回收，防止以不完整候选集误删。
+`dry_run=true` 可只报告候选；`POST /packages/cleanup` 触发即时回收。
+
+常用环境变量另见 AGENTS 第 9 节。OSS 凭据为 `OSS_ACCESS_KEY_ID`、
+`OSS_ACCESS_KEY_SECRET`、`OSS_ENDPOINT` 和 `OSS_REGION`，entrypoint 生成私有工具配置。
+不要把生成的 `.ossutilconfig` 或运行时数据加入版本库。
+
+## 构建、失败恢复与下载
+
+1. 页面或 API 通过 `POST /build` 创建任务。Web 只入队，不在请求中执行构建。
+2. worker 从 Redis 移入自己的 processing 队列，原子获得带 worker/attempt 的执行权。
+3. patch 模式刷新 OSS 对应版本线缓存，从 nuwa 生成镜像差异；custom 模式使用镜像清单。
+4. `image_refs.py` 校验全部引用、补默认仓库、去重。脚本用 skopeo 生成每镜像一个
+   docker-archive，后端核对 `image_exports.tsv`，不允许漏镜像后成功。
+5. 临时归档生成后使用 os.replace 原子发布。OSS 模式先保留在任务/attempt 独立
+   `.pending` 路径，上传独立对象后才公布成功与下载入口。
+6. 交付后执行保留策略；任务临时镜像、列表和日志按执行尝试清理。
+
+镜像输入示例：
+
+```text
+deepflow-agent:v7.1.1
+team-a/agent:v7.1.1
+hub.deepflow.yunshan.net/dev/deepflow-server:v6.6.5550
+registry.example.com:5000/team/image:_release-1
 ```
 
-启动 Worker：
+支持带端口 registry，tag 最长 128 字符；仓库路径小写，不支持 digest 引用或隐式 latest。
+默认仓库单组件仍使用原来的 `name_tag.tar` 文件名，其他路径或仓库追加引用哈希，防止
+team-a/agent 和 team-b/agent 互相覆盖。旧 `name_tag: tag` 生成清单仍可读。
 
-```bash
-python worker.py
+逻辑包名：
+
+- patch：`deepflow_patch_v<版本线代码>_<from>_<to>.tar.gz`。
+- custom：`deepflow_patch_custom_<task_id>.tar.gz`。
+
+OSS 实际对象名独立存于 `oss_object_name`，带唯一后缀，逻辑包名存于 `package_name`。
+相同版本对的任务不会覆盖彼此对象，任务下载使用该任务已确认上传的对象；历史列表展示
+实际对象名。包内仍包含顶层目录、镜像 tar、patch_image_tag_list.txt 和客户升级脚本。
+运行时导出核对清单不等同于已提供正式 digest/SHA256 客户校验文件。
+
+上传自动有限重试后仍失败时，任务为错误状态，无成功下载入口；已完成归档留在原 worker。
+失败状态默认保留一小时，原 worker 在线且归档仍在时，可在任务中心点击“重试上传”，
+或调用 `POST /build/<task_id>/retry-upload`。重试仅上传已有包，无需重新拉镜像。
+Pod 重建、worker 失活、状态过期或本地包丢失后，需要重新构建；emptyDir 不是持久恢复存储。
+
+默认镜像拉取上限两小时、归档半小时。拉取、归档、上传的异常/超时/取消/执行权失效均会
+终止进程组。恢复期间旧执行者不能覆盖新任务状态或释放新槽位，重复消息不能共享执行权。
+回收检查失活、删除旧 slot、转移消息使用同一次 Redis Lua 操作，响应丢失重试不会重复入队。
+
+下载按钮直接导航应用下载入口，OSS 后端跳转到签名 URL，不进行跨域 HEAD 检查。
+“复制 curl”命令跟随重定向并检测 HTTP 错误。90 秒任务入口窗口与 OSS 的 900 秒签名
+期限是两层机制，历史包只在保留策略尚未删除时可用。
+
+## API
+
+```json
+{"mode":"patch","channel":"7.1.9","current":"01-...","target":"03-..."}
 ```
 
-如果只启动 `app.py` 而不启动 `worker.py`：
+```json
+{"mode":"custom","images":["deepflow-agent:v7.1.1"]}
+```
 
-- 页面能打开
-- 任务能入队
-- 但不会真正执行
+两种请求均发往 `POST /build`，成功返回 task_id。后续统一使用已有任务观察入口，
+避免 SSE 重连创建新任务。
 
-### 10.2 容器方式
+| 路由 | 方法 | 用途 |
+|---|---|---|
+| / / /health | GET | 页面 / Redis 健康检查 |
+| /channels / /versions?channel=7.1.9 | GET | 版本线 / OSS patch 列表 |
+| /build?task_id=...&since=... | GET | SSE 增量日志与状态 |
+| /task-status/<id>?since=... | GET | 状态查询 |
+| /tasks/overview | GET | 进行中与最近完成任务 |
+| /build/<id>/cancel | POST | 排队或执行阶段取消 |
+| /build/<id>/retry-upload | POST | 原 worker 仅重试上传 |
+| /download/<id> | GET | 本次交付产物，受任务入口窗口限制 |
+| /existing-packages | GET | 合并本地与远端历史列表 |
+| /download-existing/<filename> | GET | 历史对象或本地文件下载 |
+| /packages/cleanup | POST | 按当前保留策略回收 |
 
-项目提供：
+旧 series=v6/v7 和 GET 创建接口保留兼容；新调用使用 mode/channel 与 POST。
 
-- `dockerfile`
-- `entrypoint.sh`
+## 前端状态
 
-构建：
+模式和版本线在构建期间锁定，任务 id 写入 URL，刷新可恢复。SSE 重试耗尽后保持当前
+任务锁定，使用有超时的状态请求轮询确认；观察连接失败不会直接变成“可新建”。
+确认终态后才能结束观察，任务中心请求挂住也不会永久阻断后续刷新。
+日志游标只推进到实际返回的序号，靠近底部时自动跟随。普通失败重试回填参数，上传失败
+的重试则直接请求原 worker 上传归档。
+
+## 容器与 Kubernetes 发布
 
 ```bash
 docker build -f dockerfile -t auto_packing:latest .
+REGISTRY=registry.example.com/team ./bin/redeploy.sh
 ```
 
-运行 Web 容器示例：
+发布机需安装 Python 3/PyYAML、Docker、kubectl。脚本创建唯一 tag、推送仓库、同步完整
+ConfigMap 与 app/worker 镜像并等待滚动更新；重复发布可正确更新已有 registry 前缀镜像。
+
+清单首次部署需预先准备 Namespace、PVC 和必要 Secret，并将可被所有目标节点拉取的
+业务镜像写入清单：
 
 ```bash
-docker run -p 8000:8000 \
-  -e OSS_ACCESS_KEY_ID=... \
-  -e OSS_ACCESS_KEY_SECRET=... \
-  -e OSS_ENDPOINT=... \
-  -e REDIS_PASSWORD=... \
-  auto_packing:latest
+python bin/sync_manifest.py --image registry.example.com/team/auto_packing:20261029-example
+python bin/sync_manifest.py --check
+kubectl apply -f apply/maintenance-app-deployment.yaml
 ```
 
-如果需要独立跑 worker，可基于同一镜像执行：
+该同步命令不会构建或推送镜像，首次部署前需自行完成镜像分发与存储准备。
+`NERDCTL_IMPORT=1 ./bin/redeploy.sh` 仅适用于实时 app/worker 都通过 nodeSelector 固定
+到本机节点的单节点部署；`IMPORT_NODE` 默认 hostname。多节点 worker 不能仅导入一个节点。
 
-```bash
-docker run \
-  -e OSS_ACCESS_KEY_ID=... \
-  -e OSS_ACCESS_KEY_SECRET=... \
-  -e OSS_ENDPOINT=... \
-  -e REDIS_PASSWORD=... \
-  auto_packing:latest python worker.py
-```
+当前清单的实际存储边界：
 
-### 10.3 `entrypoint.sh` 做了什么
+| 角色 | 当前部署 |
+|---|---|
+| app | 单副本，旧历史包 PVC，固定 apk01；不克隆 nuwa |
+| worker | 三副本、尽量跨节点；skopeo，无 containerd.sock；产物 emptyDir 20Gi |
+| nuwa 缓存 | 每节点 hostPath；浅克隆，克隆/pull 共用文件锁 |
+| Redis | 单副本、apk01 PVC + AOF、Recreate；仍是单节点故障点 |
 
-容器启动时：
+业务镜像安装 skopeo，保留 archive 旧回退；entrypoint 从 Secret/环境生成 OSS 配置，
+app 设置 SKIP_NUWA=1，worker 通过 NUWA_DIR 使用节点缓存。app 的历史 socket 挂载仍在
+清单中，但新 worker 不依赖节点 containerd。
 
-1. 创建 `/app/bin`、`/app/logs`、`/app/.trash`、`/app/latest_image_list`
-2. 若 `/app/nuwa` 不存在，则从 GitLab 克隆
-3. 若提供 OSS 环境变量，则生成 `/app/bin/.ossutilconfig`
-4. 最后执行传入命令
+本轮 worker owner 协议变更发布前，应等待旧任务结束再切换 worker，避免不同协议混跑。
+改 app/Redis 的 nodeSelector 前先确认存储，不能让两个 Redis 实例并写一份 AOF。
 
-### 10.4 发布/更新镜像
+## 继续开发与已知边界
 
-推荐使用 `bin/redeploy.sh`。它会为每次发布生成唯一 tag（时间戳 + git 短 hash），构建后更新 `maintenance-app` / `maintenance-worker` 两个 Deployment，避免 `:latest` + `IfNotPresent` 命中节点旧镜像。
+先读 [AGENTS.md](AGENTS.md) 和 [ISSUES.md](ISSUES.md)。完整审查证据见
+[Review 快照](docs/PROJECT_REVIEW_2026-10-29.md)，当前实施进度见
+[开发清单](docs/DEVELOPMENT_CHECKLIST.md)，交付现状见
+[ARTIFACT_DELIVERY.md](docs/ARTIFACT_DELIVERY.md)。
 
-```bash
-# 镜像直接导入本机 k8s.io containerd
-NERDCTL_IMPORT=1 ./bin/redeploy.sh
+保留的约束包括 Redis 单节点、仓库凭据策略、日志轮转缺失、客户升级脚本定制、上游空
+patch/缺 make.sh 数据契约，以及真实 registry → OSS → 客户 Docker load 与生产发布验收。
+当前不需要更换队列框架或重写前端；修改应小范围并保持对应故障回归。
 
-# 或者推送到镜像仓库
-REGISTRY=registry.example.com ./bin/redeploy.sh
-```
-
-脚本依赖 `docker` 和 `kubectl`，默认命名空间 `getpatch`。如果镜像已通过其他方式分发到节点，也可以直接运行 `./bin/redeploy.sh`，脚本会提示确认镜像存在。
-
-脚本默认还会：
-
-- 用仓库里的 `config.yaml` 同步更新 `maintenance-app-config` ConfigMap（不会重置 Deployment 的镜像 tag）。
-- 把 `apply/maintenance-app-deployment.yaml` 中两个 `auto_packing:` 镜像 tag 更新为本次发布 tag。**发布后请提交这个 YAML 变更**，否则下次用旧 YAML `kubectl apply` 会回退镜像。
-
-不需要同步配置或 YAML 时，可以设置 `SYNC_CONFIG=0` / `UPDATE_MANIFEST=0`。
-
-镜像 tag 现在固化在清单中，日常发布建议继续使用 `bin/redeploy.sh`；直接 `kubectl apply -f apply/maintenance-app-deployment.yaml` 也会使用清单里固定的 tag。
-
-## 11. Kubernetes 部署说明
-
-`apply/maintenance-app-deployment.yaml` 已经体现出当前推荐部署模型：
-
-- 一个 `maintenance-app` Deployment
-  - 提供 Web/API/SSE
-- 一个 `maintenance-worker` Deployment
-  - 负责后台构建
-- 一个 `maintenance-redis` Deployment
-  - 提供 Redis
-- 一个 `maintenance-svc`
-  - 暴露 Web 服务
-
-### 11.1 关键点
-
-- app 与 worker 使用同一个镜像，tag 固化在清单中（由 `bin/redeploy.sh` 自动更新，具体值以清单为准）
-- worker 通过 `args: ["python", "worker.py"]` 启动
-- Redis 密码通过 Secret 注入
-- app / worker 都依赖：
-  - `OSS_ACCESS_KEY_ID`
-  - `OSS_ACCESS_KEY_SECRET`
-  - `OSS_ENDPOINT`
-  - `APP_CONFIG_PATH`
-- 通过 `hostPath` 挂载 `/run/containerd/containerd.sock`，供 `nerdctl` 使用
-- app / worker 默认 `CONTAINERD_NAMESPACE=k8s.io`，避免镜像操作误用 `default` namespace
-- 通过 PVC 挂载 `/app/upgrade_packages`
-- Redis 使用独立 PVC + AOF（`appendonly yes`），Pod 重建后任务队列和状态不会丢失
-
-### 11.2 当前清单里的实际持久化情况
-
-当前 K8s 清单显式持久化了：
-
-- `/app/upgrade_packages`（升级包）
-- `/data`（Redis AOF 数据）
-
-这意味着：
-
-- 已生成升级包会保留在 PVC 上。
-- Redis 重启/Pod 重建后，任务状态、队列和日志仍可恢复。
-- `images/`、`logs/`、`latest_image_list/` 默认仍在容器文件系统内。
-- Pod 重建后，运行中的临时文件和本地日志不会保留。
-
-如果希望进一步增强可观测性与恢复能力，建议额外挂载：
-
-- `/app/logs`
-- `/app/images`
-- `/app/latest_image_list`
-- 视情况缓存 `/app/nuwa`
-
-## 12. 依赖与约束
-
-### 12.1 Python 依赖
-
-当前 `requirements.txt` 里包含：
-
-- Flask 3.1.0
-- gunicorn 23.0.0
-- redis 5.2.1
-- PyYAML 6.0.2
-
-容器基础镜像为 `python:3.12-slim-bookworm`，默认使用 Gunicorn 启动。
-
-### 12.2 外部依赖
-
-- Redis
-- GitLab `nuwa` 仓库
-- 阿里 OSS
-- DeepFlow 镜像仓库
-- `nerdctl` 或 `docker`
-- `tar`
-
-### 12.3 当前实现中的强耦合点
-
-- V6 的 `get_patch_image_tag_list.sh` 写死了 `6.6 / 6.6.9` 路径结构。
-- 只处理 `:v6.6` 镜像行。
-- `/versions` 只支持 `series=v6`。
-- 前端虽然叫 V7，但服务端本质上只是“手工镜像列表打包模式”。
-- `deepflow_patch_upgrade.sh` 内目标环境、目标仓库、组件列表大量写死。
-
-## 13. 已知风险与注意事项
-
-### 13.1 安全与凭据
-
-当前仓库中存在明显需要继续治理的点：
-
-- `bin/pull_save.sh` 中写死了镜像仓库登录用户名和密码。
-- `apply/maintenance-app-deployment.yaml` 中示例 Secret 含明文 Redis 密码。
-
-这些内容说明该仓库当前更偏内部工具形态，不适合作为公开安全基线。
-
-### 13.2 可移植性
-
-项目不是开箱即用的通用产品，运行依赖较强的内部环境约束：
-
-- GitLab 地址固定
-- 镜像仓库固定
-- OSS 路径固定
-- `nuwa` 目录结构固定
-- 目标升级脚本面向固定安装路径
-
-### 13.3 测试覆盖不足
-
-仓库有 `tests/` 目录和基础单元测试，但还没有 CI 流水线，shell 脚本和端到端构建仍以人工验证为主。
-
-### 13.4 containerd namespace 一致性
-
-- containerd 的 content 元数据按 namespace 隔离，历史遗留的 `default` 镜像可能导致
-  `nerdctl save` 报 `content digest ... not found`。
-- worker 已通过 `CONTAINERD_NAMESPACE=k8s.io` 固定默认 namespace。
-- 只读巡检：
-  ```bash
-  python3 bin/check_containerd.py
-  ```
-- 现象、应急修复和清理规范见 [`docs/CONTAINERD_RUNBOOK.md`](./docs/CONTAINERD_RUNBOOK.md)。
-
-## 14. 推荐的阅读顺序
-
-如果要继续维护这个项目，建议按下面顺序读代码：
-
-1. `app.py`
-   - 先理解配置、Redis key、任务状态结构、接口定义。
-2. `worker.py`
-   - 再理解队列消费、心跳、回收与并发控制。
-3. `templates/index.html` + `static/app.js`
-   - 理解前端如何发起任务、恢复任务和消费 SSE。
-4. `bin/get_patch_image_tag_list.sh`
-   - 理解 V6 的 patch 差异来源。
-5. `bin/pull_save.sh`
-   - 理解镜像拉取与保存。
-6. `bin/deepflow_patch_upgrade.sh`
-   - 理解最终交付物如何被使用。
-7. `apply/maintenance-app-deployment.yaml`
-   - 理解线上部署形态。
-8. `AGENTS.md`
-   - 通用 AI/开发助手指南，包含架构速览、命令、环境变量、修改约束。
-9. `ISSUES.md`
-   - 当前已知问题与已完成优化摘要。
-10. `docs/CONTAINERD_RUNBOOK.md`
-    - containerd 跨 namespace 问题的巡检、应急修复与清理规范。
-11. `docs/ARTIFACT_DELIVERY.md`
-    - 镜像交付格式、skopeo 方案与 3 节点部署评估。
-
-## 15. 一句话总结当前项目逻辑
-
-当前 `auto_packing` 的本质不是单纯“打包脚本集合”，而是一个围绕 DeepFlow 升级包生成流程构建的异步任务平台：
-
-- Web 负责发起任务和展示结果
-- Redis 负责排队、限流、状态与日志缓存
-- worker 负责实际构建
-- shell 脚本负责差异计算、镜像拉取和升级交付
-- `upgrade_packages/` 负责沉淀可复用的历史升级包
+发布中的 worker 使用 `Recreate` 策略，避免执行所有权协议的新旧实现混跑。
+发布前先等待进行中的构建结束；脚本会显式同步该策略，因为仅更新镜像不会应用 YAML 中的策略变更。

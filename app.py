@@ -10,11 +10,14 @@ import signal
 import threading
 import uuid
 import calendar
+from contextlib import contextmanager
+import tempfile
 from flask import Flask, request, Response, jsonify, send_file, abort, render_template, redirect # type: ignore
 import traceback
 from urllib.parse import quote, unquote
 import yaml # type: ignore
 import redis # type: ignore
+from image_refs import DEFAULT_REPOSITORY, normalize_image_ref, normalize_images
 
 # 初始化Flask应用
 app = Flask(__name__, static_folder='static', static_url_path='/static')
@@ -199,6 +202,8 @@ APP_CONFIG = load_app_config()
 REDIS_CONFIG = APP_CONFIG['redis']
 RETENTION_CONFIG = APP_CONFIG['retention']
 STORAGE_CONFIG = APP_CONFIG['package_storage']
+if os.environ.get('REQUIRE_OSS_STORAGE') == '1' and STORAGE_CONFIG['backend'] != 'oss':
+    raise ValueError('独立 worker 产物目录要求 package_storage.backend=oss')
 redis_client = redis.Redis(
     host=REDIS_CONFIG['host'],
     port=REDIS_CONFIG['port'],
@@ -252,6 +257,107 @@ def worker_heartbeat_key(worker_id):
     return f"{REDIS_CONFIG['key_prefix']}:worker:{worker_id}:heartbeat"
 
 
+def build_upload_queue_key(worker_id):
+    return f"{REDIS_CONFIG['key_prefix']}:build:upload:{worker_id}"
+
+
+class TaskLeaseLost(Exception):
+    """当前执行尝试已被回收；旧执行者必须停止发布状态和清理共享文件。"""
+
+
+_execution_local = threading.local()
+
+
+@contextmanager
+def execution_context(task_id, owner_token):
+    previous = getattr(_execution_local, 'execution', None)
+    _execution_local.execution = (task_id, owner_token)
+    try:
+        yield
+    finally:
+        _execution_local.execution = previous
+
+
+def get_task_owner(task_id):
+    execution = getattr(_execution_local, 'execution', None)
+    return execution[1] if execution and execution[0] == task_id else None
+
+
+def assert_task_owned(task_id, owner_token=None):
+    owner = owner_token or get_task_owner(task_id)
+    if owner and redis_client.get(task_slot_key(task_id)) != owner:
+        raise TaskLeaseLost(f"任务[{task_id}]执行权已失效")
+
+
+# Each script checks the execution token and mutates data in the same Redis turn.
+# A recovered worker cannot overwrite the new attempt between a check and write.
+_WRITE_TASK_STATUS = """-- write_task_status_v1
+if ARGV[1] ~= '' and redis.call('GET', KEYS[1]) ~= ARGV[1] then return -1 end
+redis.call('SET', KEYS[2], ARGV[2])
+local ttl = tonumber(ARGV[3])
+if ttl > 0 then
+  for i = 2, #KEYS do redis.call('EXPIRE', KEYS[i], ttl) end
+else
+  for i = 3, #KEYS do redis.call('PERSIST', KEYS[i]) end
+end
+return 1
+"""
+
+_APPEND_TASK_LOG = """-- append_task_log_v1
+if ARGV[1] ~= '' and redis.call('GET', KEYS[1]) ~= ARGV[1] then return -1 end
+if redis.call('EXISTS', KEYS[2]) == 0 then return 0 end
+local entry = cjson.decode(ARGV[2])
+entry.seq = redis.call('INCR', KEYS[3])
+redis.call('RPUSH', KEYS[4], cjson.encode(entry))
+redis.call('LTRIM', KEYS[4], -tonumber(ARGV[3]), -1)
+local ttl = redis.call('TTL', KEYS[2])
+if ttl >= 0 then
+  ttl = math.max(ttl, 1)
+  redis.call('EXPIRE', KEYS[3], ttl)
+  redis.call('EXPIRE', KEYS[4], ttl)
+else
+  redis.call('PERSIST', KEYS[3])
+  redis.call('PERSIST', KEYS[4])
+end
+return entry.seq
+"""
+
+_TASK_CLEANUP = """-- task_cleanup_v1
+if ARGV[1] ~= '' and redis.call('GET', KEYS[1]) ~= ARGV[1] then return -1 end
+for i = 2, #KEYS do redis.call('EXPIRE', KEYS[i], tonumber(ARGV[2])) end
+return 1
+"""
+
+_COMPARE_DELETE = """-- compare_delete_v1
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+return redis.call('DEL', KEYS[1])
+"""
+
+_CLEAR_CANCEL = """-- clear_task_cancel_v1
+if ARGV[1] ~= '' and redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+return redis.call('DEL', KEYS[2])
+"""
+
+_ACQUIRE_SLOT = """-- acquire_build_slot_v1
+if #KEYS == 3 and not redis.call('LPOS', KEYS[3], ARGV[5]) then return -1 end
+local existing = redis.call('GET', KEYS[1])
+if existing then
+  if existing == ARGV[1] then return 1 end
+  return 0
+end
+local slots = redis.call('KEYS', ARGV[4])
+if #slots >= tonumber(ARGV[2]) then return 0 end
+redis.call('SET', KEYS[1], ARGV[1], 'EX', tonumber(ARGV[3]))
+redis.call('SET', KEYS[2], #slots + 1)
+return 1
+"""
+
+
+def clear_task_cancel(task_id):
+    redis_client.eval(_CLEAR_CANCEL, 2, task_slot_key(task_id), task_cancel_key(task_id),
+                      get_task_owner(task_id) or '')
+
+
 def get_task_status(task_id, include_logs=True, since_seq=0):
     status_json = redis_client.get(task_meta_key(task_id))
     if not status_json:
@@ -266,8 +372,10 @@ def get_task_status(task_id, include_logs=True, since_seq=0):
             entries = [entry for entry in entries if entry.get('seq', 0) > since_seq]
         status['logs'] = entries
 
-        last_seq = redis_client.get(task_log_seq_key(task_id))
-        status['log_seq'] = int(last_seq) if last_seq else (entries[-1].get('seq', 0) if entries else 0)
+        # Only acknowledge entries actually returned. A concurrent append after
+        # LRANGE must remain visible on the next request, rather than advancing
+        # the client cursor to a sequence it has never received.
+        status['log_seq'] = max([since_seq] + [entry.get('seq', 0) for entry in entries])
     return status
 
 
@@ -295,6 +403,7 @@ def is_build_cancelled(task_id):
 
 
 def _raise_if_cancelled(task_id):
+    assert_task_owned(task_id)
     if is_build_cancelled(task_id):
         raise BuildCancelled("构建已被用户取消")
 
@@ -302,11 +411,12 @@ def _raise_if_cancelled(task_id):
 def set_task_status(task_id, status, ttl_seconds=None):
     status_to_store = dict(status)
     status_to_store.pop('logs', None)
-    redis_client.set(task_meta_key(task_id), json.dumps(status_to_store, ensure_ascii=False))
-    if ttl_seconds:
-        redis_client.expire(task_meta_key(task_id), ttl_seconds)
-        redis_client.expire(task_logs_key(task_id), ttl_seconds)
-        redis_client.expire(task_log_seq_key(task_id), ttl_seconds)
+    result = redis_client.eval(
+        _WRITE_TASK_STATUS, 4, task_slot_key(task_id), task_meta_key(task_id),
+        task_logs_key(task_id), task_log_seq_key(task_id), get_task_owner(task_id) or '',
+        json.dumps(status_to_store, ensure_ascii=False), int(ttl_seconds or 0))
+    if result == -1:
+        raise TaskLeaseLost(f"任务[{task_id}]执行权已失效")
 
 
 def update_task_status(task_id, updates, ttl_seconds=None):
@@ -326,24 +436,25 @@ def mark_task_cancelled(task_id):
         "message": "构建已取消",
         "complete": True,
         "error": True,
-        "cancelled": True
+        "cancelled": True,
+        "upload_retry_available": False,
+        "download_url": None,
+        "download_expire_at": None
     }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
 
 
 def append_task_log(task_id, timestamp, level, content):
-    if not redis_client.exists(task_meta_key(task_id)):
-        return
-
-    # seq 单调递增：日志被 ltrim 后，客户端仍可用它做稳定的增量游标
-    seq = redis_client.incr(task_log_seq_key(task_id))
     log_entry = json.dumps({
-        'seq': seq,
         'timestamp': timestamp,
         'level': level,
         'content': content
     }, ensure_ascii=False)
-    redis_client.rpush(task_logs_key(task_id), log_entry)
-    redis_client.ltrim(task_logs_key(task_id), -REDIS_CONFIG['max_logs'], -1)
+    result = redis_client.eval(
+        _APPEND_TASK_LOG, 4, task_slot_key(task_id), task_meta_key(task_id),
+        task_log_seq_key(task_id), task_logs_key(task_id), get_task_owner(task_id) or '',
+        log_entry, REDIS_CONFIG['max_logs'])
+    if result == -1:
+        raise TaskLeaseLost(f"任务[{task_id}]执行权已失效")
 
 
 def initialize_task_status(task_id, message, task_type=None, extra=None):
@@ -370,9 +481,12 @@ def initialize_task_status(task_id, message, task_type=None, extra=None):
 
 
 def schedule_task_cleanup(task_id, delay_seconds):
-    redis_client.expire(task_meta_key(task_id), delay_seconds)
-    redis_client.expire(task_logs_key(task_id), delay_seconds)
-    redis_client.expire(task_log_seq_key(task_id), delay_seconds)
+    result = redis_client.eval(
+        _TASK_CLEANUP, 4, task_slot_key(task_id), task_meta_key(task_id),
+        task_logs_key(task_id), task_log_seq_key(task_id), get_task_owner(task_id) or '',
+        delay_seconds)
+    if result == -1:
+        raise TaskLeaseLost(f"任务[{task_id}]执行权已失效")
 
 
 def _count_active_slots():
@@ -381,30 +495,24 @@ def _count_active_slots():
     return sum(1 for _ in redis_client.scan_iter(match=slot_pattern))
 
 
-def try_acquire_build_slot(task_id):
-    """抢占构建槽位。
-
-    采用「先写 task slot，再统计 slot 总数」的方式，slot key 本身就是锁：
-    - 同一任务重复获取（如失活回收后重跑）直接视为已持有，避免重复计数；
-    - 不再依赖独立的 builds:active 做准入判断，异常退出不会造成永久泄漏；
-    - slot 带 TTL 兜底，极端情况下也能自动释放。
-    """
-    slot_key = task_slot_key(task_id)
-    if not redis_client.set(slot_key, "1", nx=True, ex=SLOT_TTL_SECONDS):
-        return True
-
-    active_count = _count_active_slots()
-    if active_count > REDIS_CONFIG['max_concurrent_tasks']:
-        redis_client.delete(slot_key)
-        return False
-
-    # 仅用于观测/展示，不再作为准入依据
-    redis_client.set(active_builds_key(), active_count)
-    return True
+def try_acquire_build_slot(task_id, owner_token=None, processing_key=None, raw_payload=None):
+    """原子限流并绑定执行尝试；只有相同 token 的重试视为幂等。"""
+    owner = owner_token or get_task_owner(task_id) or 'legacy'
+    keys = [task_slot_key(task_id), active_builds_key()]
+    if processing_key is not None:
+        keys.append(processing_key)
+    result = redis_client.eval(
+        _ACQUIRE_SLOT, len(keys), *keys, owner,
+        REDIS_CONFIG['max_concurrent_tasks'], SLOT_TTL_SECONDS,
+        f"{REDIS_CONFIG['key_prefix']}:task:*:slot", raw_payload or '')
+    if result == -1:
+        raise TaskLeaseLost(f"任务[{task_id}]队列执行权已失效")
+    return bool(result)
 
 
-def release_build_slot(task_id):
-    if redis_client.delete(task_slot_key(task_id)):
+def release_build_slot(task_id, owner_token=None):
+    owner = owner_token or get_task_owner(task_id) or 'legacy'
+    if redis_client.eval(_COMPARE_DELETE, 1, task_slot_key(task_id), owner):
         redis_client.set(active_builds_key(), _count_active_slots())
 
 
@@ -489,8 +597,10 @@ def _create_v7_build_task(images):
     })
 
 
-def _is_worker_online(max_age_seconds=30):
+def _is_worker_online(max_age_seconds=None):
     """通过 worker 心跳判断是否有可用的构建进程。"""
+    if max_age_seconds is None:
+        max_age_seconds = int(os.environ.get('WORKER_HEARTBEAT_TTL_SECONDS', 60))
     now = int(time.time())
     try:
         for key in redis_client.scan_iter(match=worker_heartbeat_key('*')):
@@ -544,6 +654,9 @@ def get_tasks_overview(recent_limit=5):
             "cancelled": bool(status.get("cancelled")),
             "package_name": status.get("package_name"),
             "download_url": status.get("download_url"),
+            "oss_object_name": status.get("oss_object_name"),
+            "upload_failed": bool(status.get("upload_failed")),
+            "upload_retry_available": bool(status.get("upload_retry_available")),
         }
         if item["complete"]:
             recent.append(item)
@@ -592,98 +705,98 @@ def _clean_shell_line(line):
     line = _strip_ansi(line).strip()
     return _SHELL_TS_RE.sub('', line)
 
-def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIMEOUT_SECONDS):
-    """用 Popen 逐行读取子脚本输出，过滤 ANSI 码，实时写入 Redis 日志。
+def _kill_process_group(proc):
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
-    策略：
-    1. 所有输出写入 Redis 日志（按 max_logs 截断），前端可看到完整拉取过程
-    2. 所有输出完整写入本地文件（排查问题时查看）
-    3. 超时后强杀子进程，避免镜像拉取卡死导致任务永久占用槽位
-    4. 每秒检查取消标记，用户取消后终止整个进程组
-    """
+
+def _run_cancellable(task_id, cmd, timeout, stdout=None, env=None):
+    """有界执行归档/上传等命令；错误、取消、失去执行权均清理整个进程组。"""
     _raise_if_cancelled(task_id)
-    proc = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        universal_newlines=True,
-        bufsize=1,  # 行缓冲
-        start_new_session=True  # 独立进程组，超时可连同子进程一起终止
-    )
+    proc = subprocess.Popen(cmd, stdout=stdout if stdout is not None else subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True, env=env,
+                            start_new_session=True)
+    deadline = time.monotonic() + timeout
+    output = None
+    try:
+        while True:
+            _raise_if_cancelled(task_id)
+            if time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired(cmd, timeout)
+            try:
+                if stdout is None:
+                    output, _ = proc.communicate(timeout=min(0.25, max(0.01, deadline-time.monotonic())))
+                else:
+                    proc.wait(timeout=min(0.25, max(0.01, deadline-time.monotonic())))
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        _raise_if_cancelled(task_id)
+        return subprocess.CompletedProcess(cmd, proc.returncode, output)
+    except BaseException:
+        _kill_process_group(proc)
+        proc.wait(timeout=5)
+        raise
+    finally:
+        if proc.stdout is not None:
+            proc.stdout.close()
+
+
+def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIMEOUT_SECONDS):
+    """流式记录脚本输出；所有退出路径都终止或回收整个进程组。"""
+    _raise_if_cancelled(task_id)
+    owner = get_task_owner(task_id)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, bufsize=1, start_new_session=True)
     timed_out = threading.Event()
-    cancelled = threading.Event()
     finished = threading.Event()
-    cancel_stop = threading.Event()
+    monitor_error = []
 
-    def _kill_group():
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except OSError:
-            pass
-
-    def _kill_on_timeout():
-        if finished.is_set():
-            return
-        # 只有主进程仍在运行时才判定超时，避免竞态误报
-        if proc.poll() is None:
-            timed_out.set()
-        # 杀掉整个进程组：只杀 bash 的话，nerdctl 等子进程可能继续持有 stdout，
-        # 导致 readline 永远等不到 EOF，超时逻辑失效。
-        _kill_group()
-
-    def _watch_cancel():
-        while not cancel_stop.wait(1):
-            if is_build_cancelled(task_id):
-                cancelled.set()
-                _kill_group()
+    def monitor():
+        deadline = time.monotonic() + timeout
+        while not finished.wait(0.2):
+            try:
+                assert_task_owned(task_id, owner)
+                if is_build_cancelled(task_id):
+                    raise BuildCancelled("构建已被用户取消")
+                if time.monotonic() >= deadline:
+                    timed_out.set()
+                    _kill_process_group(proc)
+                    return
+            except Exception as exc:
+                monitor_error.append(exc)
+                _kill_process_group(proc)
                 return
 
-    timer = threading.Timer(timeout, _kill_on_timeout)
-    timer.daemon = True
-    timer.start()
-    threading.Thread(target=_watch_cancel, daemon=True).start()
-
+    watcher = threading.Thread(target=monitor, daemon=True)
+    watcher.start()
     try:
         for line in iter(proc.stdout.readline, ''):
-            # 完整清理：去 ANSI 码 + 去脚本自带时间戳
             clean = _clean_shell_line(line)
             if not clean:
                 continue
-
-            # 所有输出完整写入本地文件
             with open(task_log_path, 'a', encoding='utf-8') as f:
                 f.write(clean + '\n')
-
             lower = clean.lower()
-
-            # 全部输出都写入 Redis 日志（最多保留 max_logs 条），便于前端排查问题
-            level = "ERROR" if ('error' in lower or 'failed' in lower or '错误' in lower) else "INFO"
-            append_task_log(
-                task_id,
-                time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()),
-                level,
-                clean
-            )
+            level = "ERROR" if any(x in lower for x in ('error', 'failed', '错误')) else "INFO"
+            append_task_log(task_id, time.strftime('%Y-%m-%d %H:%M:%S'), level, clean)
+        # 监听器继续保护 wait，直到进程真正退出。
+        proc.wait()
+    except BaseException:
+        _kill_process_group(proc)
+        proc.wait(timeout=5)
+        raise
     finally:
         finished.set()
-        cancel_stop.set()
-        timer.cancel()
-        try:
-            proc.stdout.close()
-        except OSError:
-            pass
-        proc.wait()
-
-    if cancelled.is_set():
-        error_msg = "构建已被用户取消"
-        write_log(error_msg, level="WARNING", task_id=task_id)
-        raise BuildCancelled(error_msg)
-
+        watcher.join(timeout=1)
+        proc.stdout.close()
+    if monitor_error:
+        raise monitor_error[0]
     if timed_out.is_set():
-        error_msg = f"命令执行超时（{timeout}秒），已强制终止：{' '.join(cmd)}"
-        write_log(error_msg, level="ERROR", task_id=task_id)
-        raise TimeoutError(error_msg)
-
+        raise TimeoutError(f"命令执行超时（{timeout}秒），已强制终止进程组")
+    _raise_if_cancelled(task_id)
     return proc.returncode
 
 
@@ -697,7 +810,10 @@ def write_log(content, level="INFO", task_id=None):
     print(log_line.strip())
 
     if task_id:
-        append_task_log(task_id, timestamp, level, content)
+        try:
+            append_task_log(task_id, timestamp, level, content)
+        except TaskLeaseLost:
+            pass  # 旧执行者可以写本地诊断，但不能污染新执行者的 Redis 日志
 
 def update_progress(task_id, new_percent, message, level="INFO"):
     """更新任务进度。直接跳到目标百分比，不做逐 1% 的中间写入。"""
@@ -889,85 +1005,67 @@ def _package_entries():
 
 
 def cleanup_old_packages(keep_name=None):
-    """按保留策略回收升级包，避免只增不删把盘吃满。
-
-    从最旧的开始删，直到同时满足「数量 <= max_count」且「总大小 <= max_total_gb」。
-    三重保护：
-      1. 最近 min_keep 个永远保留；
-      2. 年龄小于 min_age_minutes 的一律不动（可能正在下载或刚交付）；
-      3. 本次刚构建的包（keep_name）永远不动。
-    """
+    """回收本地与纯 OSS 产物；序列化执行并始终保护最近和新生成的包。"""
     cfg = RETENTION_CONFIG
-    summary = {
-        "enabled": cfg["enabled"],
-        "deleted": [],
-        "freed_bytes": 0,
-        "kept": 0,
-        "total_bytes": 0,
-        "reason": "",
-    }
-    if not cfg["enabled"]:
-        summary["reason"] = "保留策略未启用"
+    summary = {'enabled': cfg['enabled'], 'deleted': [], 'freed_bytes': 0,
+               'kept': 0, 'total_bytes': 0, 'reason': ''}
+    if not cfg['enabled']:
+        summary['reason'] = '保留策略未启用'
         return summary
-
-    entries = _package_entries()
-    total = sum(e["size"] for e in entries)
-    summary["kept"] = len(entries)
-    summary["total_bytes"] = total
-
-    limit_bytes = int(cfg["max_total_gb"] * (1024 ** 3))
-    min_keep = max(int(cfg["min_keep"]), 1)
-    min_age_seconds = int(cfg["min_age_minutes"]) * 60
-    now = time.time()
-
-    remaining = len(entries)
-    for entry in reversed(entries):          # 最旧的先处理
-        if remaining <= min_keep:
-            break
-        if remaining <= cfg["max_count"] and total <= limit_bytes:
-            break
-        if keep_name and entry["name"] == keep_name:
-            continue
-        if now - entry["mtime"] < min_age_seconds:
-            continue
-
-        if cfg["dry_run"]:
-            summary["deleted"].append(entry["name"] + "（dry-run，未删除）")
-            total -= entry["size"]
-            remaining -= 1
-            continue
-
-        try:
-            os.remove(entry["path"])
-        except OSError as exc:
-            write_log(f"升级包清理失败：{entry['name']}（{exc}）", level="WARNING")
-            continue
-
-        # 本地删掉后同步清 OSS 上的同名对象，避免"本地没了远端还占着"
+    token = uuid.uuid4().hex
+    lock = f"{REDIS_CONFIG['key_prefix']}:packages:cleanup:lock"
+    if not redis_client.set(lock, token, nx=True, ex=120):
+        summary['reason'] = '另一个回收正在执行'
+        return summary
+    try:
+        entries = {e['name']: dict(e, remote=False) for e in _package_entries()}
         if oss_enabled():
-            delete_oss_package(entry["name"])
-
-        summary["deleted"].append(entry["name"])
-        summary["freed_bytes"] += entry["size"]
-        total -= entry["size"]
-        remaining -= 1
-
-    summary["kept"] = remaining
-    summary["total_bytes"] = max(total, 0)
-
-    if summary["deleted"]:
-        write_log(
-            "升级包清理：删除 {} 个，释放 {:.2f} GB；剩余 {} 个 / {:.2f} GB".format(
-                len(summary["deleted"]),
-                _format_gb(summary["freed_bytes"]),
-                summary["kept"],
-                _format_gb(summary["total_bytes"]),
-            ),
-            level="INFO",
-        )
-    elif not summary["reason"]:
-        summary["reason"] = "未达到清理阈值"
-    return summary
+            # 列举失败时停止，避免以不完整列表计算 min_keep 并误删。
+            for remote in list_oss_packages(strict=True):
+                local = entries.get(remote['name'], {})
+                entries[remote['name']] = dict(remote, path=local.get('path'), remote=True,
+                    mtime=max(remote['mtime'], local.get('mtime', 0)))
+        entries = sorted(entries.values(), key=lambda e: e['mtime'], reverse=True)
+        total, remaining = sum(e['size'] for e in entries), len(entries)
+        protected = {e['name'] for e in entries[:max(1, cfg['min_keep'])]}
+        protected.add(keep_name)
+        now = time.time()
+        for entry in reversed(entries):
+            # 超过锁租约必须停止，不能与新的回收执行者重叠。
+            if redis_client.get(lock) != token:
+                summary['reason'] = '回收锁已失效，停止本次回收'
+                break
+            if remaining <= cfg['max_count'] and total <= int(cfg['max_total_gb'] * 1024**3):
+                break
+            if entry['name'] in protected or now-entry['mtime'] < cfg['min_age_minutes']*60:
+                continue
+            if not cfg['dry_run']:
+                if entry.get('remote') and not delete_oss_package(entry['name']):
+                    continue
+                if entry.get('path'):
+                    try:
+                        os.remove(entry['path'])
+                    except OSError as exc:
+                        write_log(f"本地升级包回收失败：{exc}", level='WARNING')
+                        continue
+            summary['deleted'].append(entry['name'] + ('（dry-run，未删除）' if cfg['dry_run'] else ''))
+            summary['freed_bytes'] += entry['size']
+            total -= entry['size']
+            remaining -= 1
+        summary['kept'], summary['total_bytes'] = remaining, total
+        summary['reason'] = summary['reason'] or ('已完成回收' if summary['deleted'] else '未达到清理阈值或受保留保护')
+        # 仅回收已过期、且不再执行的上传失败副本；从不碰运行中的归档。
+        pending = os.path.join(UPGRADE_PACKAGE_DIR, '.pending')
+        for path in glob.glob(os.path.join(pending, '*', '*', '*.tar.gz')):
+            if now - os.path.getmtime(path) < REDIS_CONFIG['failure_ttl_seconds']:
+                continue
+            task_id = os.path.relpath(path, pending).split(os.sep)[0]
+            status = get_task_status(task_id, include_logs=False)
+            if not status and not cfg['dry_run']:
+                _remove_local_package(path)
+        return summary
+    finally:
+        redis_client.eval(_COMPARE_DELETE, 1, lock, token)
 
 
 # -------------------------- 升级包存储后端（local / OSS） --------------------------
@@ -1002,7 +1100,7 @@ def _run_ossutil(args, timeout_seconds):
 def upload_package_to_oss(local_path, package_name, task_id=None):
     """上传升级包到 OSS，成功返回 URI；失败返回 None。
 
-    上传失败不抛异常：本地文件仍在，构建结果不受影响，只在日志里记 ERROR。
+    上传失败返回 None，由交付阶段保留本地包并报告可重试失败。
     """
     if not oss_enabled():
         return None
@@ -1013,7 +1111,11 @@ def upload_package_to_oss(local_path, package_name, task_id=None):
     uri = package_oss_uri(package_name)
     started = time.time()
     try:
-        result = _run_ossutil(["cp", "-f", local_path, uri], STORAGE_CONFIG['upload_timeout_seconds'])
+        result = _run_cancellable(
+            task_id, [OSS_FILE, '-c', OSS_CONFIG, 'cp', '-f', local_path, uri],
+            STORAGE_CONFIG['upload_timeout_seconds'])
+    except (BuildCancelled, TaskLeaseLost):
+        raise
     except subprocess.TimeoutExpired:
         write_log(f"OSS 上传超时（{STORAGE_CONFIG['upload_timeout_seconds']}s）：{package_name}",
                   level="ERROR", task_id=task_id)
@@ -1027,8 +1129,12 @@ def upload_package_to_oss(local_path, package_name, task_id=None):
                   level="ERROR", task_id=task_id)
         return None
 
-    write_log("OSS 上传完成：{}（{:.1f}s）→ {}".format(package_name, time.time() - started, uri),
-              task_id=task_id)
+    _raise_if_cancelled(task_id)
+    try:
+        write_log("OSS 上传完成：{}（{:.1f}s）→ {}".format(package_name, time.time() - started, uri),
+                  task_id=task_id)
+    except Exception as exc:
+        print(f'OSS 上传已完成，写入诊断失败：{exc}')
     return uri
 
 
@@ -1046,7 +1152,7 @@ def _oss_time_to_epoch(text):
         return 0
 
 
-def list_oss_packages():
+def list_oss_packages(strict=False):
     """列举 OSS 上的升级包；任何失败都返回空列表（不影响本地列表展示）。"""
     if not oss_enabled():
         return []
@@ -1054,13 +1160,19 @@ def list_oss_packages():
     try:
         result = _run_ossutil(["ls", base_uri], STORAGE_CONFIG['oss_timeout_seconds'])
     except subprocess.TimeoutExpired:
+        if strict:
+            raise
         write_log("OSS 列举超时", level="WARNING")
         return []
     except Exception as exc:
+        if strict:
+            raise
         write_log(f"OSS 列举异常：{exc}", level="WARNING")
         return []
 
     if result.returncode != 0:
+        if strict:
+            raise RuntimeError("OSS 列举失败，停止回收")
         write_log("OSS 列举失败：" + (result.stdout or '')[-300:], level="WARNING")
         return []
 
@@ -1068,9 +1180,11 @@ def list_oss_packages():
     for line in (result.stdout or '').splitlines():
         match = _OSS_LS_LINE_RE.match(line.strip())
         if not match:
+            if strict and '.tar.gz' in line:
+                raise RuntimeError('OSS 列举格式无法识别，停止回收')
             continue
         name = match.group('uri').rsplit('/', 1)[-1]
-        if not name.endswith('.tar.gz'):
+        if not name.endswith('.tar.gz') or match.group('uri') != package_oss_uri(name):
             continue
         packages.append({
             "name": name,
@@ -1165,38 +1279,33 @@ def validate_package_filename(filename):
     return True, file_path_abs
 
 
-def _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path):
-    """先打包到临时文件，再原子替换为目标包。
-
-    这样下载方永远不会读到写了一半的包，也能避免上一次同名包在写入过程中被破坏。
-    """
+def _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path, task_id=None):
+    """用暂存链接兼容 GNU/BSD tar，仍通过临时包和原子替换发布。"""
     tmp_path = f"{upgrade_path}.{uuid.uuid4().hex[:8]}.tmp"
+    names = [os.path.basename(path) for path in files_to_pack]
+    if len(set(names)) != len(names):
+        raise ValueError("归档文件名冲突，拒绝生成不完整升级包")
     try:
-        with open(task_log_path, 'a', encoding='utf-8') as f:
-            subprocess.run(
-                [
-                    "tar", "-czf", tmp_path,
-                    "--transform", r"s|.*/||",             # 第一步：去掉文件路径前缀
-                    "--transform", f"s|.*|{os.path.basename(upgrade_path).rsplit('.tar.gz', 1)[0]}/&|",  # 第二步：加上目录前缀
-                    *files_to_pack
-                ],
-                check=True,
-                stdout=f,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                timeout=ARCHIVE_TIMEOUT_SECONDS
-            )
-
-        if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-            raise Exception(f"打包失败：升级包{upgrade_path}不存在或为空文件")
-
+        with tempfile.TemporaryDirectory(prefix='packing-archive-') as stage:
+            prefix = os.path.basename(upgrade_path).removesuffix('.tar.gz')
+            folder = os.path.join(stage, prefix)
+            os.mkdir(folder)
+            for src, name in zip(files_to_pack, names):
+                os.symlink(os.path.abspath(src), os.path.join(folder, name))
+            # -h 解引用暂存链接；包内是普通文件，保持原来的顶层目录结构。
+            cmd = ['tar', '-czhf', tmp_path, '-C', stage,
+                   *[f'{prefix}/{name}' for name in names]]
+            with open(task_log_path, 'a', encoding='utf-8') as f:
+                result = _run_cancellable(task_id, cmd, ARCHIVE_TIMEOUT_SECONDS, stdout=f,
+                                          env=dict(os.environ, COPYFILE_DISABLE='1'))
+            result.check_returncode()
+        if not os.path.isfile(tmp_path) or os.path.getsize(tmp_path) == 0:
+            raise RuntimeError("打包失败：升级包为空或不存在")
+        _raise_if_cancelled(task_id)
         os.replace(tmp_path, upgrade_path)
     finally:
         if os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
+            os.remove(tmp_path)
 
 
 def _prepare_upgrade_script(channel, target_version, task_image_dir, task_id):
@@ -1237,14 +1346,141 @@ def _prepare_upgrade_script(channel, target_version, task_image_dir, task_id):
     return dst, filled
 
 
+class UploadFailed(Exception):
+    """镜像归档已完成，但尚未成功交付到 OSS。"""
+
+
+def _verify_image_exports(task_image_dir, list_path):
+    with open(list_path, encoding='utf-8') as f:
+        expected = list(dict.fromkeys(normalize_image_ref(line, legacy=True)
+                        for line in f if line.strip() and not line.lstrip().startswith('#')))
+    manifest = os.path.join(task_image_dir, 'image_exports.tsv')
+    exported = {}
+    with open(manifest, encoding='utf-8') as f:
+        for line in f:
+            ref, name = line.rstrip('\n').split('\t')
+            if ref in exported or os.path.basename(name) != name or not name.endswith('.tar'):
+                raise ValueError('镜像导出清单存在重复或非法文件')
+            path = os.path.join(task_image_dir, name)
+            if not os.path.isfile(path) or os.path.islink(path) or os.path.getsize(path) == 0:
+                raise ValueError('镜像导出缺少有效 tar 文件：' + name)
+            exported[ref] = path
+    if set(exported) != set(expected) or len(set(exported.values())) != len(exported):
+        raise ValueError('镜像导出与请求清单不一致，拒绝生成不完整升级包')
+    return [exported[ref] for ref in expected]
+
+
+def _remove_local_package(path):
+    os.remove(path)
+    pending = os.path.realpath(os.path.join(UPGRADE_PACKAGE_DIR, '.pending')) + os.sep
+    if os.path.realpath(path).startswith(pending):
+        # 仅删除已空的 attempt/task 目录，保留 .pending 根目录。
+        directory = os.path.dirname(path)
+        while os.path.realpath(directory).startswith(pending):
+            try:
+                os.rmdir(directory)
+            except OSError:
+                break
+            directory = os.path.dirname(directory)
+
+
+def _package_output_path(task_id, package_name, attempt):
+    if not oss_enabled():
+        return os.path.join(UPGRADE_PACKAGE_DIR, package_name)
+    pending = os.path.join(UPGRADE_PACKAGE_DIR, '.pending', task_id, attempt)
+    os.makedirs(pending, exist_ok=True)
+    return os.path.join(pending, package_name)
+
+
+def _complete_package(task_id, path, package_name, image_count, object_name=None):
+    _raise_if_cancelled(task_id)
+    size = os.path.getsize(path)
+    owner = get_task_owner(task_id)
+    worker_id = owner.rsplit(':', 1)[0] if owner else None
+    # 每个任务/尝试使用独立对象，旧任务和同版本对的包不会覆盖本次交付。
+    object_name = object_name or (os.path.basename(path).removesuffix('.tar.gz') +
+                                 '_' + uuid.uuid4().hex[:12] + '.tar.gz')
+    update_task_status(task_id, {
+        'package_path': path, 'package_name': package_name, 'oss_object_name': object_name,
+        'artifact_worker_id': worker_id, 'image_count': image_count,
+        'package_size_mb': round(size / 1024 / 1024, 2),
+        'download_url': None, 'download_expire_at': None, 'oss_uri': None,
+    })
+    uri = None
+    if oss_enabled():
+        update_progress(task_id, 93, '上传升级包到 OSS')
+        for attempt in range(3):
+            _raise_if_cancelled(task_id)
+            uri = upload_package_to_oss(path, object_name, task_id=task_id)
+            if uri:
+                break
+            if attempt < 2:
+                write_log(f'OSS 上传失败，重试 {attempt + 2}/3（保留已完成归档）',
+                          level='WARNING', task_id=task_id)
+                time.sleep(0.5)
+        _raise_if_cancelled(task_id)
+        if not uri:
+            update_task_status(task_id, {
+                'status': 'error', 'complete': True, 'error': True, 'upload_failed': True,
+                'upload_retry_available': bool(worker_id),
+                'message': '升级包已生成，但 OSS 上传失败；可在原 worker 在线时重试上传',
+            }, ttl_seconds=REDIS_CONFIG['failure_ttl_seconds'])
+            raise UploadFailed('OSS 上传失败，已保留本地归档')
+    _raise_if_cancelled(task_id)
+    message = f'构建成功！生成TAR.GZ升级包（{image_count}个镜像+2个文件）'
+    update_task_status(task_id, {
+        'status': 'complete', 'percent': 100, 'message': message,
+        'complete': True, 'error': False, 'cancelled': False,
+        'upload_failed': False, 'upload_retry_available': False,
+        'download_url': f'/download/{task_id}', 'oss_uri': uri,
+        'package_format': 'tar.gz',
+        'download_expire_at': int(time.time()) + REDIS_CONFIG['download_ttl_seconds'],
+    }, ttl_seconds=REDIS_CONFIG['success_ttl_seconds'])
+    # 先发布持久化完成状态，再删除本地副本；Redis 写入失败时仍可重试交付。
+    if uri and STORAGE_CONFIG.get('delete_local_after_upload'):
+        try:
+            _remove_local_package(path)
+        except OSError as exc:
+            print(f'删除已上传的本地副本失败：{exc}')
+    try:
+        write_log(message, task_id=task_id)
+    except Exception as exc:
+        print(f'交付已完成，写入完成日志失败：{exc}')
+    try:
+        cleanup_old_packages(keep_name=object_name if uri else package_name)
+    except Exception as exc:
+        print(f'交付已完成，升级包回收失败：{exc}')
+
+
+def run_upload_retry(task_id):
+    status = get_task_status(task_id, include_logs=False)
+    path = (status or {}).get('package_path') or ''
+    pending_root = os.path.realpath(os.path.join(UPGRADE_PACKAGE_DIR, '.pending')) + os.sep
+    if not os.path.realpath(path).startswith(pending_root) or not os.path.isfile(path):
+        update_task_status(task_id, {'upload_retry_available': False})
+        raise RuntimeError('保留的升级包已丢失，请重新构建')
+    try:
+        _complete_package(task_id, path, status['package_name'], status.get('image_count', 0),
+                          status.get('oss_object_name'))
+    except UploadFailed:
+        pass  # 交付阶段已记录可重试失败
+    except BuildCancelled:
+        mark_task_cancelled(task_id)
+    finally:
+        clear_task_cancel(task_id)
+        if not get_task_owner(task_id):
+            release_build_slot(task_id)
+
+
 def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT_CHANNEL):
     """核心构建任务：执行构建list脚本→拉取镜像→打包TAR.GZ格式升级包"""
     if channel_key not in CHANNELS:
         channel_key = DEFAULT_CHANNEL
     channel = CHANNELS[channel_key]
+    attempt_id = uuid.uuid4().hex[:12]
     try:
         # 创建任务专属目录（用版本+任务ID命名，确保唯一性，避免文件冲突）
-        task_dir_name = f"{current_version}_to_{target_version}_{task_id}"
+        task_dir_name = f"{current_version}_to_{target_version}_{task_id}_{attempt_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
         # 确保任务目录存在（不存在则创建，存在则清空历史残留）
         if os.path.exists(task_image_dir):
@@ -1252,10 +1488,10 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
         os.makedirs(task_image_dir, exist_ok=True)
 
         # 为每个任务生成独立的镜像列表文件路径，避免并发竞争
-        task_patch_list_path = os.path.join(LATEST_LIST_DIR, f"patch_image_tag_list_{task_id}.txt")
+        task_patch_list_path = os.path.join(LATEST_LIST_DIR, f"patch_image_tag_list_{task_id}_{attempt_id}.txt")
 
         # 创建任务专属日志文件（记录脚本详细输出，避免实时刷屏）
-        task_log_path = os.path.join(LOG_DIR, f"task_{task_id}.log")
+        task_log_path = os.path.join(LOG_DIR, f"task_{task_id}_{attempt_id}.log")
 
         try:
             write_log(f"任务[{task_id}]启动：版本线 {channel_key}，升级 {current_version} → {target_version}", task_id=task_id)
@@ -1303,15 +1539,12 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
                 "OSS_PATCH_LIST_FILE": _oss_versions_tmp_path(channel_key),
             })
             with open(task_log_path, 'a', encoding='utf-8') as f:
-                subprocess.run(
-                    ["/bin/bash", PATCH_LIST_SCRIPT_PATH, current_version, target_version, task_patch_list_path],
-                    check=True,
-                    env=script_env,
-                    stdout=f,  # 捕获标准输出
-                    stderr=subprocess.STDOUT, # 标准错误合并到标准输出
-                    universal_newlines=True,
-                    timeout=600  # git pull + nuwa grep, 10 分钟上限
-                )
+                result = _run_cancellable(
+                    task_id, ['/bin/bash', PATCH_LIST_SCRIPT_PATH, current_version,
+                              target_version, task_patch_list_path],
+                    600, stdout=f, env=script_env)
+                result.check_returncode()
+
             
             update_progress(task_id, 25, "验证镜像列表生成结果")
             # 验证脚本执行结果：必须生成patch_image_tag_list.txt
@@ -1348,11 +1581,8 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
             if rc != 0:
                 raise Exception(f"镜像拉取脚本执行失败，退出码 {rc}")
 
-            # 验证镜像拉取结果：任务目录必须有.tar文件
-            tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
-            if not tar_files:
-                raise Exception(f"镜像拉取失败：任务目录{task_image_dir}无任何.tar镜像文件")
-            
+            tar_files = _verify_image_exports(task_image_dir, task_patch_list_path)
+
             update_progress(task_id, 65, f"镜像拉取完成，共拉取 {len(tar_files)} 个")
             write_log(f"镜像拉取成功！共拉取{len(tar_files)}个镜像", task_id=task_id)
 
@@ -1396,59 +1626,22 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
             upgrade_package = channel["package_template"].format(
                 current=current_patch_version, target=target_patch_version
             )
-            upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
+            upgrade_path = _package_output_path(task_id, upgrade_package, attempt_id)
 
             # 打包TAR.GZ升级包（两步 transform：先去路径前缀，再加目录前缀）
-            _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path)
+            _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path, task_id=task_id)
             
             update_progress(task_id, 90, "验证升级包完整性")
             # 验证包大小
             package_size = os.path.getsize(upgrade_path)
             write_log(f"升级包大小：{package_size/1024/1024:.2f}MB", task_id=task_id)
 
-            # 上传到 OSS（仅 backend=oss）：失败不影响构建结果，本地文件仍可下载
-            oss_uri = None
-            if oss_enabled():
-                update_progress(task_id, 93, "上传升级包到 OSS")
-                oss_uri = upload_package_to_oss(upgrade_path, upgrade_package, task_id=task_id)
-                # 已确认上云后再删本地，保证任何时候都至少有一份可下载
-                if oss_uri and STORAGE_CONFIG.get('delete_local_after_upload'):
-                    try:
-                        os.remove(upgrade_path)
-                        write_log(f"本地副本已删除（已上传 OSS）：{upgrade_package}", task_id=task_id)
-                    except OSError as exc:
-                        write_log(f"删除本地副本失败：{exc}", level="WARNING", task_id=task_id)
+            _complete_package(task_id, upgrade_path, upgrade_package, len(tar_files))
 
-            # 清理临时文件
-            update_progress(task_id, 95, "清理临时文件")
-            write_log(f"临时文件清理完成", task_id=task_id)
-
-            # 任务完成：更新状态并记录日志
-            update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）")
-            update_task_status(task_id, {
-                "status": "complete",
-                "percent": 100,
-                "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）",
-                "complete": True,
-                "error": False,
-                "download_url": f"/download/{task_id}",
-                "package_path": upgrade_path,
-                "package_name": upgrade_package,
-                "package_format": "tar.gz",  # 标记包格式，便于前端显示
-                "oss_uri": oss_uri,
-                "package_size_mb": round(package_size/1024/1024, 2),  # 包大小（MB）
-                "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
-            })
-            write_log(f"任务[{task_id}]完全结束：{current_version}→{target_version}升级包构建完成，请在90秒内下载升级包", task_id=task_id)
-
-            # 构建成功后再回收旧包：失败的构建不应该动历史产物
-            try:
-                cleanup_old_packages(keep_name=upgrade_package)
-            except Exception as cleanup_exc:
-                write_log(f"升级包清理异常（不影响本次构建）：{cleanup_exc}", level="WARNING")
-
-            schedule_task_cleanup(task_id, REDIS_CONFIG['success_ttl_seconds'])
-
+        except TaskLeaseLost:
+            raise
+        except UploadFailed:
+            pass  # 本地归档保留，交付阶段已记录失败状态
         except BuildCancelled:
             mark_task_cancelled(task_id)
             write_log(f"任务[{task_id}]已取消", level="WARNING", task_id=task_id)
@@ -1496,20 +1689,22 @@ def run_build_task(task_id, current_version, target_version, channel_key=DEFAULT
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
     finally:
-        redis_client.delete(task_cancel_key(task_id))
-        release_build_slot(task_id)
+        clear_task_cancel(task_id)
+        if not get_task_owner(task_id):
+            release_build_slot(task_id)
 
 def run_build_task_v7(task_id, images):
     """自定义镜像构建任务：按用户给定镜像清单→拉取镜像→打包TAR.GZ格式升级包"""
+    attempt_id = uuid.uuid4().hex[:12]
     try:
-        task_dir_name = f"v7_{task_id}"
+        task_dir_name = f"v7_{task_id}_{attempt_id}"
         task_image_dir = os.path.join(IMAGE_TAR_ROOT, task_dir_name)
         task_patch_list_path = os.path.join(task_image_dir, "patch_image_tag_list.txt")
         if os.path.exists(task_image_dir):
             shutil.rmtree(task_image_dir)
         os.makedirs(task_image_dir, exist_ok=True)
 
-        task_log_path = os.path.join(LOG_DIR, f"task_{task_id}.log")
+        task_log_path = os.path.join(LOG_DIR, f"task_{task_id}_{attempt_id}.log")
 
         try:
             write_log(f"任务[{task_id}]启动：V7镜像构建，数量={len(images)}", task_id=task_id)
@@ -1530,7 +1725,9 @@ def run_build_task_v7(task_id, images):
             update_progress(task_id, 12, "生成V7镜像列表文件")
             with open(task_patch_list_path, 'w', encoding='utf-8') as f:
                 for image in images:
-                    f.write(f"{image}\n")
+                    # 客户定制升级脚本会补默认仓库；保留原有短名清单契约。
+                    package_ref = image.removeprefix(DEFAULT_REPOSITORY)
+                    f.write(f"{package_ref}\n")
             write_log(f"V7镜像列表写入完成：{task_patch_list_path}", task_id=task_id)
 
             update_progress(task_id, 25, "镜像拉取清单生成完成，准备拉取镜像文件")
@@ -1545,9 +1742,7 @@ def run_build_task_v7(task_id, images):
             if rc != 0:
                 raise Exception(f"镜像拉取脚本执行失败，退出码 {rc}")
 
-            tar_files = glob.glob(os.path.join(task_image_dir, "*.tar"))
-            if not tar_files:
-                raise Exception(f"镜像拉取失败：任务目录{task_image_dir}无任何.tar镜像文件")
+            tar_files = _verify_image_exports(task_image_dir, task_patch_list_path)
 
             update_progress(task_id, 60, f"镜像拉取完成，共拉取 {len(tar_files)} 个")
             write_log(f"镜像拉取成功！共拉取{len(tar_files)}个镜像", task_id=task_id)
@@ -1561,55 +1756,20 @@ def run_build_task_v7(task_id, images):
 
             update_progress(task_id, 75, "开始打包TAR.GZ升级包")
             upgrade_package = f"deepflow_patch_custom_{task_id}.tar.gz"
-            upgrade_path = os.path.join(UPGRADE_PACKAGE_DIR, upgrade_package)
+            upgrade_path = _package_output_path(task_id, upgrade_package, attempt_id)
 
-            _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path)
+            _create_upgrade_archive(files_to_pack, upgrade_path, task_log_path, task_id=task_id)
 
             update_progress(task_id, 90, "验证升级包完整性")
             package_size = os.path.getsize(upgrade_path)
             write_log(f"升级包大小：{package_size/1024/1024:.2f}MB", task_id=task_id)
 
-            # 上传到 OSS（仅 backend=oss）：失败不影响构建结果，本地文件仍可下载
-            oss_uri = None
-            if oss_enabled():
-                update_progress(task_id, 93, "上传升级包到 OSS")
-                oss_uri = upload_package_to_oss(upgrade_path, upgrade_package, task_id=task_id)
-                # 已确认上云后再删本地，保证任何时候都至少有一份可下载
-                if oss_uri and STORAGE_CONFIG.get('delete_local_after_upload'):
-                    try:
-                        os.remove(upgrade_path)
-                        write_log(f"本地副本已删除（已上传 OSS）：{upgrade_package}", task_id=task_id)
-                    except OSError as exc:
-                        write_log(f"删除本地副本失败：{exc}", level="WARNING", task_id=task_id)
+            _complete_package(task_id, upgrade_path, upgrade_package, len(tar_files))
 
-            update_progress(task_id, 95, "清理临时文件")
-            write_log(f"临时文件清理完成", task_id=task_id)
-
-            update_progress(task_id, 100, f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）")
-            update_task_status(task_id, {
-                "status": "complete",
-                "percent": 100,
-                "message": f"构建成功！生成TAR.GZ升级包（{len(tar_files)}个镜像+2个文件）",
-                "complete": True,
-                "error": False,
-                "download_url": f"/download/{task_id}",
-                "package_path": upgrade_path,
-                "package_name": upgrade_package,
-                "package_format": "tar.gz",
-                "oss_uri": oss_uri,
-                "package_size_mb": round(package_size/1024/1024, 2),
-                "download_expire_at": int(time.time()) + REDIS_CONFIG['download_ttl_seconds']
-            })
-            write_log(f"任务[{task_id}]完全结束：V7升级包构建完成，请在90秒内下载升级包", task_id=task_id)
-
-            # 构建成功后再回收旧包：失败的构建不应该动历史产物
-            try:
-                cleanup_old_packages(keep_name=upgrade_package)
-            except Exception as cleanup_exc:
-                write_log(f"升级包清理异常（不影响本次构建）：{cleanup_exc}", level="WARNING")
-
-            schedule_task_cleanup(task_id, REDIS_CONFIG['success_ttl_seconds'])
-
+        except TaskLeaseLost:
+            raise
+        except UploadFailed:
+            pass  # 本地归档保留，交付阶段已记录失败状态
         except BuildCancelled:
             mark_task_cancelled(task_id)
             write_log(f"任务[{task_id}]已取消", level="WARNING", task_id=task_id)
@@ -1645,8 +1805,9 @@ def run_build_task_v7(task_id, images):
                 except Exception as log_e:
                     write_log(f"任务临时日志清理失败：{str(log_e)}", level="WARNING", task_id=task_id)
     finally:
-        redis_client.delete(task_cancel_key(task_id))
-        release_build_slot(task_id)
+        clear_task_cancel(task_id)
+        if not get_task_owner(task_id):
+            release_build_slot(task_id)
 
 
 # -------------------------- Flask路由 --------------------------
@@ -1763,7 +1924,14 @@ def api_download_existing(filename):
         abort(403, description=error_msg)
 
     # OSS 后端：优先用签名 URL 直接跳转（本地没有该文件也能下载）
+    remote_exists = False
     if oss_enabled():
+        try:
+            remote_exists = _run_ossutil(['stat', package_oss_uri(filename)],
+                                         STORAGE_CONFIG['oss_timeout_seconds']).returncode == 0
+        except Exception:
+            pass
+    if remote_exists:
         url = presign_package_url(filename)
         if url:
             write_log(f"已有升级包下载（OSS 签名跳转）：文件名={filename}")
@@ -1891,9 +2059,10 @@ def api_build_post():
             images = data.get('images', [])
             if not isinstance(images, list) or not images:
                 return jsonify({"success": False, "message": "缺少必要参数：images 不能为空"}), 400
-            images = [img.strip() for img in images if isinstance(img, str) and img.strip()]
-            if not images:
-                return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
+            try:
+                images = normalize_images(images)
+            except ValueError as exc:
+                return jsonify({'success': False, 'message': str(exc)}), 400
             task_id = _create_v7_build_task(images)
         elif mode == 'patch':
             channel_key = resolve_channel(data.get('channel') or series)
@@ -1914,6 +2083,58 @@ def api_build_post():
         return jsonify({"success": False, "message": f"任务入队失败：{str(e)}"}), 500
 
     return jsonify({"success": True, "task_id": task_id})
+
+
+_RETRY_UPLOAD = """-- retry_upload_v1
+local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local task = cjson.decode(raw)
+if not task.complete or not task.upload_failed or not task.upload_retry_available
+   or task.cancelled or task.artifact_worker_id ~= ARGV[1] then return -1 end
+if redis.call('EXISTS', KEYS[2]) == 0 then return -2 end
+if redis.call('EXISTS', KEYS[7]) == 1 then return -3 end
+task.status = 'queued'
+task.complete = false
+task.error = false
+task.percent = 90
+task.message = '等待原 worker 重试上传，无需重新拉取镜像'
+task.download_url = cjson.null
+task.download_expire_at = cjson.null
+task.updated_at = tonumber(ARGV[3])
+redis.call('DEL', KEYS[3])
+redis.call('PERSIST', KEYS[5])
+redis.call('PERSIST', KEYS[6])
+redis.call('SET', KEYS[1], cjson.encode(task))
+redis.call('LPUSH', KEYS[4], ARGV[2])
+return 1
+"""
+
+
+@app.route('/build/<task_id>/retry-upload', methods=['POST'])
+def api_retry_upload(task_id):
+    status = get_task_status(task_id, include_logs=False)
+    if not status:
+        return jsonify(success=False, message='任务不存在或已过期'), 404
+    if not oss_enabled():
+        return jsonify(success=False, message='当前未启用 OSS 存储'), 409
+    worker_id = status.get('artifact_worker_id')
+    if not worker_id:
+        return jsonify(success=False, message='该任务无法重试上传'), 409
+    payload = json.dumps({'task_id': task_id, 'task_type': status['task_type'],
+                          'action': 'retry_upload'})
+    result = redis_client.eval(_RETRY_UPLOAD, 7,
+        task_meta_key(task_id), worker_heartbeat_key(worker_id), task_cancel_key(task_id),
+        build_upload_queue_key(worker_id), task_logs_key(task_id), task_log_seq_key(task_id),
+        task_slot_key(task_id), worker_id, payload, int(time.time()))
+    if result == 0:
+        return jsonify(success=False, message='任务不存在或已过期'), 404
+    if result == -2:
+        return jsonify(success=False, message='原 worker 已离线，本地升级包不可恢复，请重新构建'), 409
+    if result == -3:
+        return jsonify(success=False, message='原构建正在结束，请稍后重试上传'), 409
+    if result != 1:
+        return jsonify(success=False, message='该任务无法重试上传或已经在执行'), 409
+    return jsonify(success=True, task_id=task_id)
 
 
 @app.route('/build/<task_id>/cancel', methods=['POST'])
@@ -1984,6 +2205,10 @@ def api_build():
             images = [img.strip() for img in v7_images.split(',') if img.strip()]
             if not images:
                 return jsonify({"success": False, "message": "镜像列表为空，请输入有效镜像名称"}), 400
+            try:
+                images = normalize_images(images)
+            except ValueError as exc:
+                return jsonify({'success': False, 'message': str(exc)}), 400
             task_id = _create_v7_build_task(images)
         else:
             channel_key = resolve_channel(request.args.get('channel') or series)
@@ -2070,8 +2295,8 @@ def api_download(task_id):
         return jsonify({"success": False, "message": error_msg}), 410
 
     # OSS 后端：优先签名 URL 跳转，避免依赖本机文件
-    if oss_enabled():
-        url = presign_package_url(task_status['package_name'])
+    if oss_enabled() and task_status.get('oss_uri'):
+        url = presign_package_url(task_status.get('oss_object_name') or task_status['package_name'])
         if url:
             write_log(f"新构建包下载（OSS 签名跳转）：任务ID={task_id}，文件名={task_status['package_name']}")
             return redirect(url, code=302)
