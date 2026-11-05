@@ -15,6 +15,69 @@ from tests.fake_redis import FakeRedis
 import worker
 
 
+
+class FriendlyDownloadNameTest(unittest.TestCase):
+    """OSS 对象名带唯一后缀，但交付给使用者的文件名必须是友好名。"""
+
+    def setUp(self):
+        self.original = dict(ap.STORAGE_CONFIG)
+        ap.STORAGE_CONFIG.update({
+            'backend': 'oss', 'oss_bucket': 'publicshare-unsafe',
+            'oss_prefix': 'tmp/auto_packing/packages/',
+            'presign_seconds': 900, 'oss_timeout_seconds': 120,
+            'upload_timeout_seconds': 3600,
+        })
+
+        def restore():
+            ap.STORAGE_CONFIG.clear()
+            ap.STORAGE_CONFIG.update(self.original)
+
+        self.addCleanup(restore)
+        self.calls = []
+        original_run = ap._run_ossutil
+
+        def fake_run(args, timeout):
+            self.calls.append(list(args))
+            return type('R', (), {'returncode': 0,
+                                  'stdout': 'https://example.com/x?sig=1\n'})
+
+        ap._run_ossutil = fake_run
+        self.addCleanup(lambda: setattr(ap, '_run_ossutil', original_run))
+
+    def test_strips_unique_suffix(self):
+        self.assertEqual(
+            ap.friendly_package_name('deepflow_patch_v719_108_109_a1b2c3d4e5f6.tar.gz'),
+            'deepflow_patch_v719_108_109.tar.gz')
+
+    def test_keeps_plain_name(self):
+        self.assertEqual(
+            ap.friendly_package_name('deepflow_patch_v719_108_109.tar.gz'),
+            'deepflow_patch_v719_108_109.tar.gz')
+
+    def test_custom_package_suffix_stripped(self):
+        self.assertEqual(
+            ap.friendly_package_name('deepflow_patch_custom_build_7_1_0123456789ab.tar.gz'),
+            'deepflow_patch_custom_build_7_1.tar.gz')
+
+    def test_presign_adds_content_disposition(self):
+        ap.presign_package_url('deepflow_patch_v719_108_109_a1b2c3d4e5f6.tar.gz',
+                               download_name='deepflow_patch_v719_108_109.tar.gz')
+        args = self.calls[-1]
+        self.assertIn('--query-param', args)
+        joined = ' '.join(args)
+        self.assertIn('response-content-disposition=attachment;', joined)
+        self.assertIn('filename="deepflow_patch_v719_108_109.tar.gz"', joined)
+
+    def test_presign_without_name_has_no_query_param(self):
+        ap.presign_package_url('deepflow_patch_v719_108_109_a1b2c3d4e5f6.tar.gz')
+        self.assertNotIn('--query-param', self.calls[-1])
+
+    def test_download_name_quote_is_sanitized(self):
+        ap.presign_package_url('x_a1b2c3d4e5f6.tar.gz', download_name='a"b\\c.tar.gz')
+        joined = ' '.join(self.calls[-1])
+        self.assertNotIn('a"b', joined)
+
+
 class PackageDeliveryTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='packing-delivery-')
@@ -111,7 +174,9 @@ class PackageDeliveryTest(unittest.TestCase):
         with patch.object(ap, 'presign_package_url', return_value='https://example.invalid/object') as sign:
             response = self.client.get('/download/task')
         self.assertEqual(response.status_code, 302)
-        sign.assert_called_once_with(finished['oss_object_name'])
+        # 对象名用于定位，download_name 用于浏览器保存时的友好文件名
+        sign.assert_called_once_with(finished['oss_object_name'],
+                                     download_name=finished['package_name'])
         self.assertNotEqual(finished['oss_object_name'], finished['package_name'])
 
     def test_retry_upload_rejects_dead_original_worker(self):

@@ -1188,6 +1188,7 @@ def list_oss_packages(strict=False):
             continue
         packages.append({
             "name": name,
+            "display": friendly_package_name(name),
             "size": int(match.group('size')),
             "mtime": _oss_time_to_epoch(match.group('date')),
             "source": "oss",
@@ -1196,17 +1197,37 @@ def list_oss_packages(strict=False):
     return packages
 
 
-def presign_package_url(package_name, expires_seconds=None):
-    """生成 OSS 预签名下载 URL；失败返回 None。"""
+# 交付对象名带 _<12位hex> 后缀保证唯一，下载时再还原成友好的文件名。
+_OBJECT_SUFFIX_RE = re.compile(r'_[0-9a-f]{12}\.tar\.gz$')
+
+
+def friendly_package_name(object_name, fallback=None):
+    """把 deepflow_patch_x_1a2b3c4d5e6f.tar.gz 还原成 deepflow_patch_x.tar.gz。"""
+    if not object_name:
+        return fallback or object_name
+    stripped = _OBJECT_SUFFIX_RE.sub('.tar.gz', object_name)
+    return stripped if stripped != object_name else (fallback or object_name)
+
+
+def presign_package_url(package_name, expires_seconds=None, download_name=None):
+    """生成 OSS 预签名下载 URL；失败返回 None。
+
+    download_name 会作为 response-content-disposition 一起签名，浏览器保存时
+    用友好文件名，而不是 OSS 上带唯一后缀的对象名。
+    """
     if not oss_enabled() or not package_name:
         return None
     seconds = int(expires_seconds or STORAGE_CONFIG['presign_seconds'])
     uri = package_oss_uri(package_name)
+    args = ["presign", uri, "--expires-duration", "{}s".format(seconds)]
+    if download_name:
+        # 去掉可能破坏头部/签名的字符，只留文件名本身
+        safe = re.sub(r'["\r\n\\]', '', os.path.basename(download_name))
+        if safe:
+            args += ["--query-param",
+                     'response-content-disposition=attachment;filename="{}"'.format(safe)]
     try:
-        result = _run_ossutil(
-            ["presign", uri, "--expires-duration", "{}s".format(seconds)],
-            STORAGE_CONFIG['oss_timeout_seconds'],
-        )
+        result = _run_ossutil(args, STORAGE_CONFIG['oss_timeout_seconds'])
     except subprocess.TimeoutExpired:
         write_log(f"OSS 签名超时：{package_name}", level="WARNING")
         return None
@@ -1932,7 +1953,7 @@ def api_download_existing(filename):
         except Exception:
             pass
     if remote_exists:
-        url = presign_package_url(filename)
+        url = presign_package_url(filename, download_name=friendly_package_name(filename))
         if url:
             write_log(f"已有升级包下载（OSS 签名跳转）：文件名={filename}")
             return redirect(url, code=302)
@@ -2296,7 +2317,8 @@ def api_download(task_id):
 
     # OSS 后端：优先签名 URL 跳转，避免依赖本机文件
     if oss_enabled() and task_status.get('oss_uri'):
-        url = presign_package_url(task_status.get('oss_object_name') or task_status['package_name'])
+        url = presign_package_url(task_status.get('oss_object_name') or task_status['package_name'],
+                                  download_name=task_status['package_name'])
         if url:
             write_log(f"新构建包下载（OSS 签名跳转）：任务ID={task_id}，文件名={task_status['package_name']}")
             return redirect(url, code=302)
