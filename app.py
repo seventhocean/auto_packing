@@ -2084,6 +2084,20 @@ def api_build_post():
                 images = normalize_images(images)
             except ValueError as exc:
                 return jsonify({'success': False, 'message': str(exc)}), 400
+            # 本环境只保证能拉默认仓库；外部 registry 需要单独的 DNS/网络/凭据。
+            # 与其让构建跑到拉取阶段 DNS 超时重试三次才失败，不如入队前说清楚。
+            external = [ref for ref in images if not ref.startswith(DEFAULT_REPOSITORY)]
+            allow_external = str(data.get('allow_external_registry', '')).lower() in ('1', 'true', 'yes')
+            if external and not allow_external:
+                return jsonify({
+                    'success': False,
+                    'message': (
+                        '以下镜像不在默认仓库 {}，本环境默认无法解析外部仓库，构建会在拉取阶段失败。'
+                        '请改用内网镜像地址（同一镜像通常在内网仓库有备份）；'
+                        '确需拉取外部仓库时，请确认网络与凭据可用后带上 allow_external_registry=true 重新提交。'
+                    ).format(DEFAULT_REPOSITORY),
+                    'external_images': external,
+                }), 400
             task_id = _create_v7_build_task(images)
         elif mode == 'patch':
             channel_key = resolve_channel(data.get('channel') or series)
@@ -2230,6 +2244,20 @@ def api_build():
                 images = normalize_images(images)
             except ValueError as exc:
                 return jsonify({'success': False, 'message': str(exc)}), 400
+            # 本环境只保证能拉默认仓库；外部 registry 需要单独的 DNS/网络/凭据。
+            # 与其让构建跑到拉取阶段 DNS 超时重试三次才失败，不如入队前说清楚。
+            external = [ref for ref in images if not ref.startswith(DEFAULT_REPOSITORY)]
+            allow_external = str(data.get('allow_external_registry', '')).lower() in ('1', 'true', 'yes')
+            if external and not allow_external:
+                return jsonify({
+                    'success': False,
+                    'message': (
+                        '以下镜像不在默认仓库 {}，本环境默认无法解析外部仓库，构建会在拉取阶段失败。'
+                        '请改用内网镜像地址（同一镜像通常在内网仓库有备份）；'
+                        '确需拉取外部仓库时，请确认网络与凭据可用后带上 allow_external_registry=true 重新提交。'
+                    ).format(DEFAULT_REPOSITORY),
+                    'external_images': external,
+                }), 400
             task_id = _create_v7_build_task(images)
         else:
             channel_key = resolve_channel(request.args.get('channel') or series)
