@@ -220,6 +220,43 @@ redis_client = redis.Redis(
 )
 redis_client.ping()
 
+# 节点 NotReady 抖动、或 Redis 被 AOF fsync 阻塞时，TCP 连接会被重置（104 Connection reset by peer）。
+# redis-py 的 retry_on_timeout 只覆盖超时，不覆盖 ConnectionError，一次瞬时错误就足以让
+# 几十分钟的构建判死（2026-11-12 15:15 apk01 节点抖动即为此）。这里在客户端层统一做有限重试。
+_REDIS_TRANSIENT_ERRORS = (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError)
+
+
+class _RetryingRedis:
+    """对 Redis 调用做有限重试，连接被重置时丢弃旧连接并重新建连。"""
+
+    def __init__(self, client, attempts=3, base_delay=0.2):
+        self._client = client
+        self._attempts = attempts
+        self._base_delay = base_delay
+
+    def __getattr__(self, name):
+        attr = getattr(self._client, name)
+        if not callable(attr):
+            return attr
+
+        def wrapped(*args, **kwargs):
+            for attempt in range(1, self._attempts + 1):
+                try:
+                    return attr(*args, **kwargs)
+                except _REDIS_TRANSIENT_ERRORS:
+                    if attempt == self._attempts:
+                        raise
+                    time.sleep(self._base_delay * (2 ** (attempt - 1)))
+                    try:
+                        self._client.connection_pool.disconnect()
+                    except Exception:
+                        pass
+
+        return wrapped
+
+
+redis_client = _RetryingRedis(redis_client)
+
 
 def task_meta_key(task_id):
     return f"{REDIS_CONFIG['key_prefix']}:task:{task_id}:meta"
@@ -756,6 +793,7 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
 
     def monitor():
         deadline = time.monotonic() + timeout
+        redis_failures = 0
         while not finished.wait(0.2):
             try:
                 assert_task_owned(task_id, owner)
@@ -763,6 +801,14 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
                     raise BuildCancelled("构建已被用户取消")
                 if time.monotonic() >= deadline:
                     timed_out.set()
+                    _kill_process_group(proc)
+                    return
+                redis_failures = 0
+            except _REDIS_TRANSIENT_ERRORS as exc:
+                # 连续 10s 拿不到 Redis 才判死；短暂抖动只跳过本轮巡检，不中断拉取。
+                redis_failures += 1
+                if redis_failures >= 50:
+                    monitor_error.append(exc)
                     _kill_process_group(proc)
                     return
             except Exception as exc:
@@ -781,7 +827,11 @@ def _run_and_stream(task_id, cmd, task_log_path, log_prefix="", timeout=PULL_TIM
                 f.write(clean + '\n')
             lower = clean.lower()
             level = "ERROR" if any(x in lower for x in ('error', 'failed', '错误')) else "INFO"
-            append_task_log(task_id, time.strftime('%Y-%m-%d %H:%M:%S'), level, clean)
+            try:
+                append_task_log(task_id, time.strftime('%Y-%m-%d %H:%M:%S'), level, clean)
+            except _REDIS_TRANSIENT_ERRORS:
+                # 日志暂时写不进 Redis 不该中断镜像拉取，本地 task 日志文件已经落盘。
+                pass
         # 监听器继续保护 wait，直到进程真正退出。
         proc.wait()
     except BaseException:
